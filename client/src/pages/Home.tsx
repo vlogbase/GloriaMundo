@@ -1,42 +1,25 @@
-import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FcGoogle } from "react-icons/fc";
 import { SiSlack } from "react-icons/si";
-import { supabase } from "@/lib/supabase";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Home() {
   const [, setLocation] = useLocation();
 
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        setLocation("/chat");
+  const signInWithProvider = async (provider: 'google' | 'slack') => {
+    try {
+      const response = await apiRequest('POST', '/api/auth/signin', { provider });
+      const data = await response.json();
+
+      // Redirect to the OAuth URL provided by the backend
+      if (data.url) {
+        window.location.href = data.url;
       }
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [setLocation]);
-
-  const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/chat`,
-      },
-    });
-  };
-
-  const signInWithSlack = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "slack",
-      options: {
-        redirectTo: `${window.location.origin}/chat`,
-      },
-    });
+    } catch (error) {
+      console.error("Sign in error:", error);
+    }
   };
 
   return (
@@ -49,7 +32,7 @@ export default function Home() {
           <Button
             variant="outline"
             className="w-full"
-            onClick={signInWithGoogle}
+            onClick={() => signInWithProvider('google')}
           >
             <FcGoogle className="mr-2 h-5 w-5" />
             Sign in with Google
@@ -57,7 +40,7 @@ export default function Home() {
           <Button
             variant="outline"
             className="w-full"
-            onClick={signInWithSlack}
+            onClick={() => signInWithProvider('slack')}
           >
             <SiSlack className="mr-2 h-5 w-5 text-[#4A154B]" />
             Sign in with Slack

@@ -6,11 +6,35 @@ import { getChatCompletion, type ChatMessage } from "./services/search1api";
 import { generateEmbedding, findSimilarMessages } from "./services/embeddings";
 import { insertChatSchema, insertMessageSchema } from "@shared/schema";
 import { ZodError } from "zod";
+import { supabase } from "./services/supabase";
 
 export async function registerRoutes(app: Express) {
   const httpServer = createServer(app);
 
-  // Auth middleware for all /api routes
+  // Auth routes
+  app.post("/api/auth/signin", async (req, res) => {
+    const { provider } = req.body;
+    if (!provider || !['google', 'slack'].includes(provider)) {
+      return res.status(400).json({ error: "Invalid provider" });
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${req.protocol}://${req.get('host')}/chat`,
+        },
+      });
+
+      if (error) throw error;
+      res.json(data);
+    } catch (error) {
+      console.error("Sign in error:", error);
+      res.status(500).json({ error: "Authentication failed" });
+    }
+  });
+
+  // Auth middleware for all other /api routes
   app.use("/api", authMiddleware);
 
   // Chat routes
