@@ -1,4 +1,3 @@
-
 import { Router, Route } from "wouter";
 import { SidebarProvider } from "@/components/Sidebar";
 import Index from "./pages/Index";
