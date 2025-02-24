@@ -1,5 +1,5 @@
 import { Router, Route } from "wouter";
-import { SidebarProvider } from "@/components/Sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import Index from "./pages/Index";
 import NotFound from "./pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
