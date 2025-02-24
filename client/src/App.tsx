@@ -1,23 +1,19 @@
-// src/App.tsx
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SidebarProvider } from "@/components/Sidebar"; // SidebarProvider is exported from your Sidebar file
+
+import { Router, Route } from "wouter";
+import { SidebarProvider } from "@/components/Sidebar";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import { Toaster } from "@/components/ui/toaster"; // Optional: To display toast messages
+import { Toaster } from "@/components/ui/toaster";
 
 function App() {
   return (
-    <BrowserRouter>
-      {/* Wrap the application with SidebarProvider so that Sidebar context is available */}
+    <Router>
       <SidebarProvider>
-        {/* Optionally include a global toaster */}
         <Toaster />
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Route path="/" component={Index} />
+        <Route component={NotFound} />
       </SidebarProvider>
-    </BrowserRouter>
+    </Router>
   );
 }
 
