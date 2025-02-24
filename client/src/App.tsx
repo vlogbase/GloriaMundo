@@ -2,7 +2,7 @@
 import { Router, Route } from "wouter";
 import { SidebarProvider } from "@/components/Sidebar";
 import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import NotFound from "./pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 
 function App() {
