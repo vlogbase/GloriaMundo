@@ -102,7 +102,7 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
           </div>
           
           <p className="mb-4">
-            GloriaMundo uses the powerful Perplexity API with the sonar-reasoning model to help you explore and discover the wonders of our world. Ask me anything and let's embark on a journey of discovery together!
+            Curiosity meets clarity. GloriaMundo: the conversational agent that transforms questions into adventures.
           </p>
           
           <div className="space-y-4 mt-6">

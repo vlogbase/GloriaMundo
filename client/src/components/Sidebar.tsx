@@ -13,7 +13,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { formatDistanceToNow } from "date-fns";
-import { Plus, Globe, Trash2, Settings, X } from "lucide-react";
+import { Plus, Globe, Trash2, X } from "lucide-react";
 import { Conversation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -49,14 +49,16 @@ export const Sidebar = ({
       
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 md:relative md:z-0 md:h-screen flex flex-col w-64 bg-white border-r border-border transition-transform duration-300 md:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 md:relative md:z-0 md:h-screen flex flex-col w-64 bg-background border-r border-border transition-transform duration-300 md:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-4 border-b border-border flex items-center justify-between">
-          <h1 className="font-semibold text-xl text-primary flex items-center">
-            <Globe className="mr-2 text-secondary h-5 w-5" />
-            GloriaMundo
-          </h1>
+          <Link href="/">
+            <h1 className="font-semibold text-xl text-primary flex items-center cursor-pointer">
+              <Globe className="mr-2 text-secondary h-5 w-5" />
+              GloriaMundo
+            </h1>
+          </Link>
           <Button variant="ghost" size="icon" onClick={onNewConversation}>
             <Plus className="h-5 w-5" />
           </Button>
@@ -105,15 +107,6 @@ export const Sidebar = ({
         
         {/* Bottom actions */}
         <div className="p-4 border-t border-border space-y-2">
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start" 
-            onClick={() => {}}
-          >
-            <Settings className="mr-2 h-5 w-5" />
-            <span>Settings</span>
-          </Button>
-          
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button 

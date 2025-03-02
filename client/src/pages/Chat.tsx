@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ChatMessage } from "@/components/ChatMessage";
@@ -10,8 +10,24 @@ import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
-import { Menu, Globe, Sparkles } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
+import { Menu, Globe, Sparkles, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
+
+// Theme toggle component
+const ThemeToggle = () => {
+  const { theme, toggleTheme } = useTheme();
+  
+  return (
+    <Button variant="ghost" size="icon" onClick={toggleTheme}>
+      {theme === 'light' ? (
+        <Moon className="h-5 w-5" />
+      ) : (
+        <Sun className="h-5 w-5" />
+      )}
+    </Button>
+  );
+};
 
 export default function Chat() {
   // Get the conversation ID from the URL if available
@@ -109,17 +125,17 @@ export default function Chat() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile header */}
-        <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-white">
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-background">
           <Button variant="ghost" size="icon" onClick={toggleMobileSidebar}>
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="font-semibold text-lg text-primary flex items-center">
-            <Globe className="mr-2 text-secondary h-5 w-5" />
-            GloriaMundo
-          </h1>
-          <Button variant="ghost" size="icon" onClick={handleNewConversation}>
-            <Globe className="h-5 w-5 text-primary" />
-          </Button>
+          <Link href="/">
+            <h1 className="font-semibold text-lg text-primary flex items-center cursor-pointer">
+              <Globe className="mr-2 text-secondary h-5 w-5" />
+              GloriaMundo
+            </h1>
+          </Link>
+          <ThemeToggle />
         </div>
         
         {/* Chat messages area */}
