@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { ChatInput } from "@/components/ChatInput";
 import { Welcome } from "@/components/Welcome";
 import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
 import { Menu, Globe, Sparkles } from "lucide-react";
@@ -16,6 +17,9 @@ export default function Chat() {
   // Get the conversation ID from the URL if available
   const [match, params] = useRoute("/conversation/:id");
   const conversationId = match ? parseInt(params.id) : undefined;
+  
+  // State to track whether to show the PWA install banner
+  const [showPwaBanner, setShowPwaBanner] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { 
@@ -49,6 +53,21 @@ export default function Chat() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+  
+  // Effect to show PWA install banner after first AI response
+  useEffect(() => {
+    // Check if we have at least one AI response in the messages
+    const hasAiResponse = messages.some(m => m.role === 'assistant');
+    
+    if (hasAiResponse && !showPwaBanner) {
+      // Set a small delay before showing the banner so it appears after the user has read the response
+      const timer = setTimeout(() => {
+        setShowPwaBanner(true);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [messages, showPwaBanner]);
   
   const handleSendMessage = async (content: string) => {
     if (!activeConversationId) {
@@ -219,6 +238,9 @@ export default function Chat() {
           isLoading={isLoadingResponse} 
         />
       </div>
+      
+      {/* PWA Install Banner - Show after first AI response */}
+      <PwaInstallBanner show={showPwaBanner} />
     </div>
   );
 }
