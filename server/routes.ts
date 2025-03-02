@@ -164,6 +164,18 @@ Format your responses using markdown for better readability.`,
           citations: null,
         });
         
+        // Update the conversation title even without API key
+        const conversation = await storage.getConversation(conversationId);
+        if (conversation && conversation.title === "New Conversation") {
+          // Generate a basic title based on the content
+          const words = content.split(' ');
+          const shortTitle = words.length > 5 
+            ? words.slice(0, 5).join(' ') + '...'
+            : content;
+          
+          await storage.updateConversationTitle(conversationId, shortTitle);
+        }
+        
         return res.json({
           userMessage,
           assistantMessage
@@ -214,14 +226,60 @@ Format your responses using markdown for better readability.`,
           citations: data.citations || null,
         });
 
-        // If this is the first message in the conversation, update the title
+        // If this is the first message in the conversation, generate a better title using Perplexity
         const conversation = await storage.getConversation(conversationId);
         if (conversation && conversation.title === "New Conversation") {
-          // Generate a title based on the first user message
-          await storage.updateConversationTitle(
-            conversationId, 
-            content.length > 30 ? content.substring(0, 30) + "..." : content
-          );
+          try {
+            // Generate a descriptive title from the user's first message
+            const titleMessages = [
+              {
+                role: "system",
+                content: "Your task is to create a short, descriptive title (max 5 words) for a conversation that starts with the user message below. Make the title descriptive, concise, and engaging. Do not use quotes or punctuation in the title. Just return the title and nothing else."
+              },
+              {
+                role: "user",
+                content: content
+              }
+            ];
+            
+            const titleResponse = await fetch(PERPLEXITY_API_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${PERPLEXITY_API_KEY}`
+              },
+              body: JSON.stringify({
+                model: PERPLEXITY_MODEL,
+                messages: titleMessages,
+                temperature: 0.3,
+                top_p: 0.9,
+                max_tokens: 10,
+                stream: false
+              })
+            });
+            
+            if (titleResponse.ok) {
+              const titleData = await titleResponse.json();
+              const generatedTitle = titleData.choices[0].message.content
+                .replace(/^["']|["']$/g, '') // Remove any quotes
+                .replace(/[.!?]$/, ''); // Remove ending punctuation
+              
+              await storage.updateConversationTitle(conversationId, generatedTitle);
+            } else {
+              // Fallback to truncated user message if API call fails
+              await storage.updateConversationTitle(
+                conversationId, 
+                content.length > 30 ? content.substring(0, 30) + "..." : content
+              );
+            }
+          } catch (error) {
+            console.error('Error generating title:', error);
+            // Fallback to truncated user message
+            await storage.updateConversationTitle(
+              conversationId, 
+              content.length > 30 ? content.substring(0, 30) + "..." : content
+            );
+          }
         }
 
         res.json({

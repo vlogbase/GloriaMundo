@@ -95,8 +95,24 @@
 
 /* Make sure text adapts properly on small screens */
 @media (max-width: 640px) {
+  .suggestion-button {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
   .suggestion-button span {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    padding-right: 1.5rem !important;
+    width: 100%;
+    word-break: break-word;
+  }
+  
+  .suggestion-content {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 }
 
