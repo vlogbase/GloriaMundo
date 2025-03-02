@@ -187,18 +187,7 @@ export default function Chat() {
                 <ChatMessage key={message.id} message={message} />
               ))}
               
-              {/* AdSense display after a set of messages */}
-              {messages.length > 0 && messages.length % 6 === 0 && !isLoadingResponse && (
-                <div className="max-w-4xl mx-auto mt-4 mb-6 py-4 border-t border-b border-gray-100">
-                  <p className="text-sm text-muted-foreground mb-2 text-center">Sponsored Content</p>
-                  <AdSense 
-                    adSlot="5678901234" 
-                    adFormat="auto" 
-                    style={{ display: 'block', maxHeight: '150px' }}
-                    className="rounded-md overflow-hidden"
-                  />
-                </div>
-              )}
+
               
               {/* Loading indicator for AI response */}
               {isLoadingResponse && (
