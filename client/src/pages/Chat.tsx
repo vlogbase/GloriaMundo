@@ -22,6 +22,7 @@ export default function Chat() {
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
   const { 
     isMobileSidebarOpen, 
     toggleMobileSidebar, 
@@ -47,9 +48,16 @@ export default function Chat() {
     }
   }, [conversationId, loadConversation]);
   
-  // Auto-scroll to bottom when messages change
+  // Scroll behavior when messages change
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (messages.length > 0 && latestMessageRef.current) {
+      // Scroll to the top of the latest message
+      latestMessageRef.current.scrollIntoView({ 
+        behavior: "smooth", 
+        block: "start" // Ensures we scroll to the top of the element
+      });
+    } else if (messagesEndRef.current) {
+      // If there are no messages yet, scroll to the bottom
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
@@ -202,9 +210,15 @@ export default function Chat() {
             </div>
           ) : (
             <>
-              {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
+              {messages.map((message, index) => {
+                // Add ref to the latest message (usually AI's message)
+                const isLatestMessage = index === messages.length - 1 && message.role === 'assistant';
+                return (
+                  <div key={message.id} ref={isLatestMessage ? latestMessageRef : undefined}>
+                    <ChatMessage message={message} />
+                  </div>
+                );
+              })}
               
 
               
