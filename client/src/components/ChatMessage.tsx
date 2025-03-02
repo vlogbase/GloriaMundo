@@ -18,7 +18,7 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
   return (
     <>
       <motion.div 
-        className="max-w-4xl mx-auto flex gap-4"
+        className="w-full max-w-4xl mx-auto flex gap-4 px-1 sm:px-0"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
@@ -84,7 +84,7 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
       
       {/* Add AdSense below each AI response */}
       {!isUser && (
-        <div className="max-w-4xl mx-auto mt-3 mb-6">
+        <div className="w-full max-w-4xl mx-auto mt-3 mb-6 px-1 sm:px-0">
           <AdSense 
             adSlot="5678901234" 
             adFormat="auto" 

@@ -84,7 +84,7 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
   
   return (
     <motion.div 
-      className="max-w-4xl mx-auto"
+      className="w-full max-w-4xl mx-auto px-1 sm:px-0"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
