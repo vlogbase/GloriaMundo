@@ -11,3 +11,68 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Typing indicator animation */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+}
+
+.typing-indicator span {
+  animation-duration: 1.5s;
+  animation-iteration-count: infinite;
+  animation-name: bounce;
+  display: inline-block;
+}
+
+.typing-indicator span.delay-150 {
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span.delay-300 {
+  animation-delay: 0.3s;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Joyful explore animation */
+.explore-animation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.explore-text {
+  animation: wave 2s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-3px) rotate(1deg);
+  }
+  75% {
+    transform: translateY(3px) rotate(-1deg);
+  }
+}

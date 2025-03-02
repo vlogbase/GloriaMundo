@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Globe, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface WelcomeProps {
   onSuggestionClick: (suggestion: string) => void;
@@ -27,20 +27,11 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
   };
   
   // Reset clicked suggestion when loading is complete
-  if (!isLoading && clickedSuggestion) {
-    setClickedSuggestion(null);
-  }
-  
-  // Sparkle animation configuration
-  const sparkleAnimation = { 
-    scale: [0.5, 1.2, 1],
-    opacity: [0, 1, 0.8],
-    transition: { 
-      duration: 1.5,
-      repeat: Infinity, 
-      repeatType: "loop" as const
+  useEffect(() => {
+    if (!isLoading && clickedSuggestion) {
+      setClickedSuggestion(null);
     }
-  };
+  }, [isLoading, clickedSuggestion]);
   
   return (
     <motion.div 
@@ -81,24 +72,20 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
                   
                   {/* Joyful loading indicator with sparkles */}
                   {isThisClicked && (
-                    <div className="absolute right-3 flex items-center space-x-1">
+                    <div className="absolute right-3 flex items-center space-x-1 explore-animation">
                       <motion.div
-                        initial={{ scale: 0.5, opacity: 0 }}
-                        animate={sparkleAnimation}
+                        animate={{ 
+                          scale: [0.8, 1.2, 0.8],
+                          opacity: [0.5, 1, 0.5],
+                          transition: { duration: 1.5, repeat: Infinity }
+                        }}
                         className="text-primary"
                       >
                         <Sparkles size={16} />
                       </motion.div>
-                      <motion.div 
-                        animate={{ 
-                          scale: [1, 1.2, 1],
-                          rotate: [0, 5, 0, -5, 0],
-                          transition: { duration: 1.5, repeat: Infinity } 
-                        }}
-                        className="text-primary"
-                      >
+                      <div className="explore-text text-primary">
                         <span className="text-sm">Exploring...</span>
-                      </motion.div>
+                      </div>
                     </div>
                   )}
                 </Button>
