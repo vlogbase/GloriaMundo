@@ -44,6 +44,28 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
           ) : (
             <div className="markdown">
               <MarkdownRenderer>{message.content}</MarkdownRenderer>
+              
+              {/* Display citations if available */}
+              {message.citations && message.citations.length > 0 && (
+                <div className="mt-4 border-t pt-3 text-sm">
+                  <h4 className="font-medium mb-2 text-primary">Sources:</h4>
+                  <div className="space-y-1">
+                    {message.citations.map((citation, index) => (
+                      <div key={index} className="flex gap-2">
+                        <span className="text-muted-foreground">[{index + 1}]</span>
+                        <a 
+                          href={citation} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline truncate"
+                        >
+                          {citation}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </Card>
