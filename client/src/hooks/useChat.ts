@@ -72,11 +72,11 @@ export const useChat = () => {
       
       const data = await response.json();
       
-      // Replace the optimistic user message with the real one and add assistant message
+      // We already added the user message optimistically - just replace it with the real one and add assistant message
       setMessages((prev) => 
         prev
-          .filter(msg => msg.id !== tempUserMessage.id)
-          .concat([data.userMessage, data.assistantMessage])
+          .map(msg => msg.id === tempUserMessage.id ? data.userMessage : msg)
+          .concat([data.assistantMessage])
       );
     } catch (error) {
       console.error("Error sending message:", error);
