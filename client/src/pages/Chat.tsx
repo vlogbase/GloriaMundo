@@ -103,7 +103,10 @@ export default function Chat() {
               </div>
             </div>
           ) : messages.length === 0 ? (
-            <Welcome onSuggestionClick={handleSuggestionClick} />
+            <Welcome 
+              onSuggestionClick={handleSuggestionClick} 
+              isLoading={isLoadingResponse} 
+            />
           ) : (
             <>
               {messages.map((message) => (

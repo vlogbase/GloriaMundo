@@ -1,19 +1,46 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Globe } from "lucide-react";
+import { Globe, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { useState } from "react";
 
 interface WelcomeProps {
   onSuggestionClick: (suggestion: string) => void;
+  isLoading?: boolean;
 }
 
-export const Welcome = ({ onSuggestionClick }: WelcomeProps) => {
+export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) => {
+  const [clickedSuggestion, setClickedSuggestion] = useState<string | null>(null);
+  
   const suggestions = [
     "Tell me about the most recent scientific discovery",
     "What are the seven wonders of the natural world?",
     "Explain quantum computing to a 10-year-old",
     "Show me beautiful places to visit in Japan"
   ];
+  
+  const handleSuggestionClick = (suggestion: string) => {
+    if (isLoading || clickedSuggestion) return; // Prevent multiple clicks
+    
+    setClickedSuggestion(suggestion);
+    onSuggestionClick(suggestion);
+  };
+  
+  // Reset clicked suggestion when loading is complete
+  if (!isLoading && clickedSuggestion) {
+    setClickedSuggestion(null);
+  }
+  
+  // Sparkle animation configuration
+  const sparkleAnimation = { 
+    scale: [0.5, 1.2, 1],
+    opacity: [0, 1, 0.8],
+    transition: { 
+      duration: 1.5,
+      repeat: Infinity, 
+      repeatType: "loop" as const
+    }
+  };
   
   return (
     <motion.div 
@@ -39,16 +66,44 @@ export const Welcome = ({ onSuggestionClick }: WelcomeProps) => {
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
-            {suggestions.map((suggestion, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                className="h-auto py-3 px-4 bg-white hover:bg-gray-50 justify-start text-left"
-                onClick={() => onSuggestionClick(suggestion)}
-              >
-                <span className="font-medium">{suggestion}</span>
-              </Button>
-            ))}
+            {suggestions.map((suggestion, index) => {
+              const isThisClicked = clickedSuggestion === suggestion;
+              
+              return (
+                <Button
+                  key={index}
+                  variant="outline"
+                  className={`h-auto py-3 px-4 bg-white hover:bg-gray-50 justify-start text-left relative overflow-hidden ${isThisClicked ? 'border-primary border-2' : ''}`}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  disabled={isLoading}
+                >
+                  <span className="font-medium">{suggestion}</span>
+                  
+                  {/* Joyful loading indicator with sparkles */}
+                  {isThisClicked && (
+                    <div className="absolute right-3 flex items-center space-x-1">
+                      <motion.div
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={sparkleAnimation}
+                        className="text-primary"
+                      >
+                        <Sparkles size={16} />
+                      </motion.div>
+                      <motion.div 
+                        animate={{ 
+                          scale: [1, 1.2, 1],
+                          rotate: [0, 5, 0, -5, 0],
+                          transition: { duration: 1.5, repeat: Infinity } 
+                        }}
+                        className="text-primary"
+                      >
+                        <span className="text-sm">Exploring...</span>
+                      </motion.div>
+                    </div>
+                  )}
+                </Button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
