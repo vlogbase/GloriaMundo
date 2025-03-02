@@ -105,7 +105,7 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
             GloriaMundo uses the powerful Perplexity API with the sonar-reasoning model to help you explore and discover the wonders of our world. Ask me anything and let's embark on a journey of discovery together!
           </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
+          <div className="space-y-4 mt-6">
             {displayedSuggestions.map((suggestion, index) => {
               const isThisClicked = clickedSuggestion === suggestion;
               
@@ -113,30 +113,47 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
                 <Button
                   key={index}
                   variant="outline"
-                  className={`h-auto py-3 px-4 bg-white hover:bg-gray-50 justify-start text-left relative overflow-hidden ${isThisClicked ? 'border-primary border-2' : ''}`}
+                  className={`suggestion-button w-full h-auto py-4 px-5 bg-white hover:bg-gray-50 justify-start text-left relative 
+                             overflow-visible shadow-sm transition-all duration-200 
+                             ${isThisClicked 
+                               ? 'border-primary border-2 bg-primary/5' 
+                               : 'hover:shadow hover:border-primary/40'}`}
                   onClick={() => handleSuggestionClick(suggestion)}
                   disabled={isLoading}
                 >
-                  <span className="font-medium">{suggestion}</span>
-                  
-                  {/* Joyful loading indicator with sparkles */}
-                  {isThisClicked && (
-                    <div className="absolute right-3 flex items-center space-x-1 explore-animation">
-                      <motion.div
-                        animate={{ 
-                          scale: [0.8, 1.2, 0.8],
-                          opacity: [0.5, 1, 0.5],
-                          transition: { duration: 1.5, repeat: Infinity }
-                        }}
-                        className="text-primary"
-                      >
-                        <Sparkles size={16} />
-                      </motion.div>
-                      <div className="explore-text text-primary">
-                        <span className="text-sm">Exploring...</span>
+                  <div className="flex justify-between w-full items-center">
+                    <span className="suggestion-content font-medium text-sm md:text-base pr-6">{suggestion}</span>
+                    
+                    {/* Joyful loading indicator with sparkles */}
+                    {isThisClicked ? (
+                      <div className="flex-shrink-0 flex items-center space-x-1 explore-animation">
+                        <motion.div
+                          animate={{ 
+                            scale: [0.8, 1.2, 0.8],
+                            opacity: [0.5, 1, 0.5]
+                          }}
+                          transition={{ 
+                            duration: 1.5, 
+                            repeat: Infinity 
+                          }}
+                          className="text-primary"
+                        >
+                          <Sparkles size={16} />
+                        </motion.div>
+                        <div className="explore-text text-primary hidden sm:block">
+                          <span className="text-sm">Exploring...</span>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        whileHover={{ opacity: 1 }}
+                        className="text-primary/60"
+                      >
+                        <Globe size={14} />
+                      </motion.div>
+                    )}
+                  </div>
                 </Button>
               );
             })}
