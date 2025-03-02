@@ -210,20 +210,20 @@ export default function Chat() {
               
               {/* Loading indicator for AI response */}
               {isLoadingResponse && (
-                <div className="w-full max-w-4xl mx-auto flex gap-4 px-1 sm:px-0">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-primary to-secondary flex-shrink-0 flex items-center justify-center text-white">
-                    <Globe size={14} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="bg-white p-4 rounded-lg shadow-sm rounded-tl-none inline-block">
-                      <div className="flex space-x-1">
-                        <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-0"></div>
-                        <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-150"></div>
-                        <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-300"></div>
-                      </div>
+                <motion.div 
+                  className="w-full max-w-4xl mx-auto px-4 sm:px-6"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="w-full">
+                    <div className="flex space-x-1 py-2">
+                      <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-0"></div>
+                      <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-150"></div>
+                      <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-300"></div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
               
               {/* Auto-scroll anchor */}
