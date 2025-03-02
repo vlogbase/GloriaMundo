@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Download, Globe } from 'lucide-react';
+import { X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
+import Logo from './Logo';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -85,17 +86,14 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
           className="fixed bottom-4 left-4 right-4 z-50"
         >
           <Card className="p-4 bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20 shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-white">
-                <Globe className="h-5 w-5" />
-              </div>
-              
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm">Install GloriaMundo</h3>
-                <p className="text-xs text-muted-foreground">Add to your home screen for a better experience</p>
-              </div>
-              
-              <div className="flex gap-2">
+            <div className="flex flex-col gap-3">
+              {/* Header with logo and close button */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Logo size={36} />
+                  <h3 className="font-semibold">GloriaMundo</h3>
+                </div>
+                
                 <Button 
                   variant="ghost" 
                   size="icon"
@@ -104,15 +102,22 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
                 >
                   <X className="h-4 w-4" />
                 </Button>
-                
+              </div>
+              
+              {/* Tagline */}
+              <p className="text-sm text-muted-foreground">
+                Curiosity meets clarity. GloriaMundo: the conversational agent that transforms questions into adventures.
+              </p>
+              
+              {/* Install button */}
+              <div className="flex justify-end">
                 <Button 
                   variant="default" 
-                  size="sm"
                   onClick={handleInstallClick}
                   className="bg-primary hover:bg-primary/90 text-white"
                 >
                   <Download className="h-4 w-4 mr-1" />
-                  Install
+                  Install App
                 </Button>
               </div>
             </div>
