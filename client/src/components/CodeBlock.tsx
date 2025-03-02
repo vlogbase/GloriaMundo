@@ -32,8 +32,8 @@ export const CodeBlock = ({ language, value }: CodeBlockProps) => {
           </Button>
         </div>
       )}
-      <pre className={cn("p-4 overflow-x-auto text-sm", !language && "pt-3")}>
-        <code>{value}</code>
+      <pre className={cn("p-4 overflow-x-auto text-sm whitespace-pre-wrap sm:whitespace-pre", !language && "pt-3")}>
+        <code className="break-words">{value}</code>
       </pre>
     </div>
   );

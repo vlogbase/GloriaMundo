@@ -35,16 +35,16 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
         </Avatar>
         
         <div className="flex-1">
-          <Card 
+          <div 
             className={isUser
               ? "bg-userBg/30 p-4 rounded-lg rounded-tl-none shadow-none"
-              : "bg-white p-4 rounded-lg rounded-tl-none shadow-sm"
+              : "bg-white p-4 rounded-lg rounded-tl-none shadow-sm w-full md:w-auto max-w-full overflow-hidden"
             }
           >
             {isUser ? (
               <p>{message.content}</p>
             ) : (
-              <div className="markdown">
+              <div className="markdown max-w-full break-words">
                 <MarkdownRenderer>{message.content}</MarkdownRenderer>
                 
                 {/* Display citations if available */}
@@ -53,13 +53,13 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                     <h4 className="font-medium mb-2 text-primary">Sources:</h4>
                     <div className="space-y-1">
                       {message.citations.map((citation, index) => (
-                        <div key={index} className="flex gap-2">
+                        <div key={index} className="flex gap-2 flex-wrap">
                           <span className="text-muted-foreground">[{index + 1}]</span>
                           <a 
                             href={citation} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:underline truncate"
+                            className="text-blue-600 dark:text-blue-400 hover:underline break-all"
                           >
                             {citation}
                           </a>
@@ -70,7 +70,7 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                 )}
               </div>
             )}
-          </Card>
+          </div>
           
           <div className="flex items-center mt-1 ml-1">
             <div className="text-xs text-muted-foreground">
