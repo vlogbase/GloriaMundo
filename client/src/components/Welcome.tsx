@@ -11,13 +11,62 @@ interface WelcomeProps {
 
 export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) => {
   const [clickedSuggestion, setClickedSuggestion] = useState<string | null>(null);
+  const [displayedSuggestions, setDisplayedSuggestions] = useState<string[]>([]);
   
-  const suggestions = [
-    "Tell me about the most recent scientific discovery",
-    "What are the seven wonders of the natural world?",
-    "Explain quantum computing to a 10-year-old",
-    "Show me beautiful places to visit in Japan"
+  // All possible suggestions
+  const allSuggestions = [
+    "What's a small joy I could add to my morning routine?",
+    "Suggest a fun outdoor activity for this weekend based on the weather forecast.",
+    "What are the happiest places to visit in the world?",
+    "How can I bring more color into my living space without a major renovation?",
+    "What's a simple recipe that brings people together?",
+    "Show me creative ways people are spreading kindness today.",
+    "What beautiful natural phenomena can I see this month?",
+    "Which books are bringing readers the most joy this year?",
+    "What's a simple craft I could make with items already in my home?",
+    "How are people celebrating the upcoming season in joyful ways?",
+    "What hobby has the best community for beginners to join?",
+    "What positive environmental changes are happening right now?",
+    "Which simple stretches could make my workday more pleasant?",
+    "What's a delightful tradition from another culture I could learn about?",
+    "Show me inspiring stories of everyday heroes from this week.",
+    "What's a fun way to learn something new in just 10 minutes a day?",
+    "What mindfulness practice brings the most joy to beginners?",
+    "What unexpected ingredients are chefs using to create amazing flavors this season?",
+    "Which tech tools are helping people connect more meaningfully?",
+    "What's a simple way to bring more music into my daily routine?",
+    "What's an efficient way to organize my kitchen that makes cooking more enjoyable?",
+    "Which houseplants thrive with minimal care but brighten a space?",
+    "What are some budget-friendly day trips worth taking?",
+    "How can I transform my commute time into something I look forward to?",
+    "What small kitchen gadget makes the biggest difference in meal preparation?",
+    "Which fabrics are both comfortable and durable for everyday furniture?",
+    "What's a 15-minute exercise routine that energizes rather than exhausts?",
+    "How can I make my workspace more ergonomic and visually pleasing?",
+    "What are some easy ways to personalize gift-giving without spending more?",
+    "Which simple maintenance tasks prevent bigger headaches for homeowners?",
+    "What are some versatile ingredients worth keeping stocked in my pantry?",
+    "How can I improve my sleep environment without buying a new mattress?",
+    "What digital tools help people organize their thoughts more effectively?",
+    "Which podcast genres are people finding most engaging on their daily walks?",
+    "What's a low-maintenance outdoor plant that attracts butterflies or birds?",
+    "How are people repurposing everyday items to reduce waste creatively?",
+    "What activities help build meaningful connections with neighbors?",
+    "Which seasonal foods are at their peak flavor right now?",
+    "What's a simple photography technique that transforms ordinary moments?",
+    "How can I create a relaxing evening routine that improves my next day?"
   ];
+  
+  // Randomly select 4 unique suggestions when component mounts or is revisited
+  useEffect(() => {
+    const getRandomSuggestions = () => {
+      // Shuffle array and pick first 4
+      const shuffled = [...allSuggestions].sort(() => 0.5 - Math.random());
+      setDisplayedSuggestions(shuffled.slice(0, 4));
+    };
+    
+    getRandomSuggestions();
+  }, []);
   
   const handleSuggestionClick = (suggestion: string) => {
     if (isLoading || clickedSuggestion) return; // Prevent multiple clicks
@@ -57,7 +106,7 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
-            {suggestions.map((suggestion, index) => {
+            {displayedSuggestions.map((suggestion, index) => {
               const isThisClicked = clickedSuggestion === suggestion;
               
               return (
