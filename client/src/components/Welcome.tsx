@@ -121,8 +121,8 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
                   onClick={() => handleSuggestionClick(suggestion)}
                   disabled={isLoading}
                 >
-                  <div className="flex justify-between w-full items-center">
-                    <span className="suggestion-content font-medium text-sm md:text-base pr-6">{suggestion}</span>
+                  <div className="flex justify-between w-full items-start">
+                    <div className="suggestion-content font-medium text-sm md:text-base pr-6 text-left break-words">{suggestion}</div>
                     
                     {/* Joyful loading indicator with sparkles */}
                     {isThisClicked ? (

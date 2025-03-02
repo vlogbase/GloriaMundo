@@ -167,13 +167,49 @@ Format your responses using markdown for better readability.`,
         // Update the conversation title even without API key
         const conversation = await storage.getConversation(conversationId);
         if (conversation && conversation.title === "New Conversation") {
-          // Generate a basic title based on the content
-          const words = content.split(' ');
-          const shortTitle = words.length > 5 
-            ? words.slice(0, 5).join(' ') + '...'
-            : content;
+          // Generate an intelligent title based on the content
+          let generatedTitle = "";
           
-          await storage.updateConversationTitle(conversationId, shortTitle);
+          // Extract main topic from first user message
+          if (content.length <= 25) {
+            // If message is short, use it directly
+            generatedTitle = content;
+          } else {
+            // Try to extract an intelligent title by keeping key phrases
+            // First, try to extract a question
+            const questionMatch = content.match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
+            if (questionMatch && questionMatch[0].length < 50) {
+              generatedTitle = questionMatch[0];
+            } else {
+              // Extract first sentence or meaningful chunk
+              const sentenceEnd = content.indexOf('.');
+              const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
+                ? content.substring(0, sentenceEnd + 1) 
+                : content.substring(0, Math.min(content.length, 40));
+              
+              // Split by common stop words and take first few meaningful words
+              const words = firstChunk.split(/\s+/);
+              generatedTitle = words.slice(0, 5).join(' ');
+              
+              // Ensure title doesn't end abruptly
+              if (words.length > 5 && !generatedTitle.endsWith('.')) {
+                generatedTitle += '...';
+              }
+            }
+          }
+          
+          // Clean up title - remove quotes and excessive punctuation
+          generatedTitle = generatedTitle
+            .replace(/^["']|["']$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Ensure title is not too long
+          if (generatedTitle.length > 40) {
+            generatedTitle = generatedTitle.substring(0, 37) + '...';
+          }
+          
+          await storage.updateConversationTitle(conversationId, generatedTitle);
         }
         
         return res.json({
@@ -226,60 +262,53 @@ Format your responses using markdown for better readability.`,
           citations: data.citations || null,
         });
 
-        // If this is the first message in the conversation, generate a better title using Perplexity
+        // If this is the first message in the conversation, generate a better title without extra API calls
         const conversation = await storage.getConversation(conversationId);
         if (conversation && conversation.title === "New Conversation") {
-          try {
-            // Generate a descriptive title from the user's first message
-            const titleMessages = [
-              {
-                role: "system",
-                content: "Your task is to create a short, descriptive title (max 5 words) for a conversation that starts with the user message below. Make the title descriptive, concise, and engaging. Do not use quotes or punctuation in the title. Just return the title and nothing else."
-              },
-              {
-                role: "user",
-                content: content
-              }
-            ];
-            
-            const titleResponse = await fetch(PERPLEXITY_API_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${PERPLEXITY_API_KEY}`
-              },
-              body: JSON.stringify({
-                model: PERPLEXITY_MODEL,
-                messages: titleMessages,
-                temperature: 0.3,
-                top_p: 0.9,
-                max_tokens: 10,
-                stream: false
-              })
-            });
-            
-            if (titleResponse.ok) {
-              const titleData = await titleResponse.json();
-              const generatedTitle = titleData.choices[0].message.content
-                .replace(/^["']|["']$/g, '') // Remove any quotes
-                .replace(/[.!?]$/, ''); // Remove ending punctuation
-              
-              await storage.updateConversationTitle(conversationId, generatedTitle);
+          // Generate an intelligent title based on the content
+          let generatedTitle = "";
+          
+          // Extract main topic from first user message
+          if (content.length <= 25) {
+            // If message is short, use it directly
+            generatedTitle = content;
+          } else {
+            // Try to extract an intelligent title by keeping key phrases
+            // First, try to extract a question
+            const questionMatch = content.match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
+            if (questionMatch && questionMatch[0].length < 50) {
+              generatedTitle = questionMatch[0];
             } else {
-              // Fallback to truncated user message if API call fails
-              await storage.updateConversationTitle(
-                conversationId, 
-                content.length > 30 ? content.substring(0, 30) + "..." : content
-              );
+              // Extract first sentence or meaningful chunk
+              const sentenceEnd = content.indexOf('.');
+              const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
+                ? content.substring(0, sentenceEnd + 1) 
+                : content.substring(0, Math.min(content.length, 40));
+              
+              // Split by common stop words and take first few meaningful words
+              const words = firstChunk.split(/\s+/);
+              generatedTitle = words.slice(0, 5).join(' ');
+              
+              // Ensure title doesn't end abruptly
+              if (words.length > 5 && !generatedTitle.endsWith('.')) {
+                generatedTitle += '...';
+              }
             }
-          } catch (error) {
-            console.error('Error generating title:', error);
-            // Fallback to truncated user message
-            await storage.updateConversationTitle(
-              conversationId, 
-              content.length > 30 ? content.substring(0, 30) + "..." : content
-            );
           }
+          
+          // Clean up title - remove quotes and excessive punctuation
+          generatedTitle = generatedTitle
+            .replace(/^["']|["']$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Ensure title is not too long
+          if (generatedTitle.length > 40) {
+            generatedTitle = generatedTitle.substring(0, 37) + '...';
+          }
+          
+          // Update the conversation title
+          await storage.updateConversationTitle(conversationId, generatedTitle);
         }
 
         res.json({
