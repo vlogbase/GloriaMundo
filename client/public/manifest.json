@@ -4,8 +4,8 @@
   "description": "Experience joyful AI-powered discovery conversations with GloriaMundo, the glory of the world",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#38B2AC",
-  "theme_color": "#38B2AC",
+  "background_color": "#0C2340", 
+  "theme_color": "#0C2340",
   "orientation": "portrait-primary",
   "icons": [
     {
