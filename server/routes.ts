@@ -88,20 +88,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const previousMessages = await storage.getMessagesByConversation(conversationId);
       
       // Prepare messages for Perplexity API
+      // Filter out any invalid messages and ensure proper role alternation
+      let filteredMessages = previousMessages.filter(msg => msg.role === "user" || msg.role === "assistant");
+      // Sort messages by ID to ensure correct sequence
+      filteredMessages.sort((a, b) => a.id - b.id);
+      
       const messages = [
         {
           role: "system",
           content: "You are GloriaMundo, an AI assistant focused on bringing the joy of discovery to users. Your goal is to help users explore wonderful things through AI and web search. Be helpful, accurate, and inspiring. Make learning enjoyable and show enthusiasm about discoveries. Format your responses using markdown for better readability.",
-        },
-        ...previousMessages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
-        {
-          role: "user",
-          content
         }
       ];
+      
+      // Ensure proper alternation of user and assistant messages
+      let lastRole = "assistant"; // Start with assistant so first user message can be added
+      
+      for (const msg of filteredMessages) {
+        // Only add message if it alternates properly
+        if (msg.role !== lastRole) {
+          messages.push({
+            role: msg.role,
+            content: msg.content
+          });
+          lastRole = msg.role;
+        }
+      }
+      
+      // Ensure the last message is from the user
+      if (lastRole !== "user") {
+        messages.push({
+          role: "user",
+          content
+        });
+      }
 
       // Check if we have an API key
       if (!PERPLEXITY_API_KEY) {
@@ -121,25 +140,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Call Perplexity API
       try {
+        // Log request information
+        console.log('Calling Perplexity API with:', {
+          model: PERPLEXITY_MODEL,
+          messages: JSON.stringify(messages),
+          temperature: 0.2,
+          top_p: 0.9,
+          stream: false
+        });
+
+        const payload = {
+          model: PERPLEXITY_MODEL,
+          messages,
+          temperature: 0.2,
+          top_p: 0.9,
+          stream: false
+        };
+
         const response = await fetch(PERPLEXITY_API_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${PERPLEXITY_API_KEY}`
           },
-          body: JSON.stringify({
-            model: PERPLEXITY_MODEL,
-            messages,
-            temperature: 0.2,
-            max_tokens: 4000,
-            top_p: 0.9,
-            stream: false,
-            presence_penalty: 0,
-            frequency_penalty: 1
-          })
+          body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Perplexity API error details: ${errorText}`);
           throw new Error(`Perplexity API returned ${response.status}`);
         }
 
