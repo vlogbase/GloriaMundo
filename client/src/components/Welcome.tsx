@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Globe, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
+import { AdSense } from "./AdSense";
 
 interface WelcomeProps {
   onSuggestionClick: (suggestion: string) => void;
@@ -157,6 +158,17 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
                 </Button>
               );
             })}
+          </div>
+          
+          {/* AdSense Banner */}
+          <div className="mt-8 pt-4 border-t border-gray-100">
+            <p className="text-sm text-muted-foreground mb-2 text-center">Sponsored Content</p>
+            <AdSense 
+              adSlot="1234567890" 
+              adFormat="auto" 
+              style={{ display: 'block', marginBottom: '20px' }}
+              className="rounded-md overflow-hidden"
+            />
           </div>
         </CardContent>
       </Card>
