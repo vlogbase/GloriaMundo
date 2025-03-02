@@ -1,0 +1,179 @@
+import { 
+  users, type User, type InsertUser, 
+  conversations, type Conversation, type InsertConversation,
+  messages, type Message, type InsertMessage
+} from "@shared/schema";
+
+export interface IStorage {
+  // User methods
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  
+  // Conversation methods
+  getConversations(): Promise<Conversation[]>;
+  getConversation(id: number): Promise<Conversation | undefined>;
+  createConversation(conversation: Partial<InsertConversation>): Promise<Conversation>;
+  updateConversationTitle(id: number, title: string): Promise<Conversation | undefined>;
+  deleteConversation(id: number): Promise<void>;
+  clearConversations(): Promise<void>;
+  
+  // Message methods
+  getMessage(id: number): Promise<Message | undefined>;
+  getMessagesByConversation(conversationId: number): Promise<Message[]>;
+  createMessage(message: Partial<InsertMessage>): Promise<Message>;
+}
+
+export class MemStorage implements IStorage {
+  private users: Map<number, User>;
+  private conversations: Map<number, Conversation>;
+  private messages: Map<number, Message>;
+  
+  private userId: number;
+  private conversationId: number;
+  private messageId: number;
+
+  constructor() {
+    this.users = new Map();
+    this.conversations = new Map();
+    this.messages = new Map();
+    
+    this.userId = 1;
+    this.conversationId = 1;
+    this.messageId = 1;
+  }
+
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username,
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.userId++;
+    const user: User = { ...insertUser, id };
+    this.users.set(id, user);
+    return user;
+  }
+  
+  // Conversation methods
+  async getConversations(): Promise<Conversation[]> {
+    // Sort conversations by updated date in descending order
+    return Array.from(this.conversations.values())
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+  
+  async getConversation(id: number): Promise<Conversation | undefined> {
+    return this.conversations.get(id);
+  }
+  
+  async createConversation(data: Partial<InsertConversation>): Promise<Conversation> {
+    const id = this.conversationId++;
+    const now = new Date();
+    
+    const conversation: Conversation = {
+      id,
+      userId: data.userId ?? null,
+      title: data.title ?? "New Conversation",
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.conversations.set(id, conversation);
+    return conversation;
+  }
+  
+  async updateConversationTitle(id: number, title: string): Promise<Conversation | undefined> {
+    const conversation = this.conversations.get(id);
+    
+    if (!conversation) {
+      return undefined;
+    }
+    
+    const updated = {
+      ...conversation,
+      title,
+      updatedAt: new Date()
+    };
+    
+    this.conversations.set(id, updated);
+    return updated;
+  }
+  
+  async deleteConversation(id: number): Promise<void> {
+    // Delete the conversation
+    this.conversations.delete(id);
+    
+    // Delete all associated messages
+    const messageIds = Array.from(this.messages.entries())
+      .filter(([_, msg]) => msg.conversationId === id)
+      .map(([id, _]) => id);
+    
+    for (const messageId of messageIds) {
+      this.messages.delete(messageId);
+    }
+  }
+  
+  async clearConversations(): Promise<void> {
+    this.conversations.clear();
+    this.messages.clear();
+  }
+  
+  // Message methods
+  async getMessage(id: number): Promise<Message | undefined> {
+    return this.messages.get(id);
+  }
+  
+  async getMessagesByConversation(conversationId: number): Promise<Message[]> {
+    // Return messages sorted by created date
+    return Array.from(this.messages.values())
+      .filter(msg => msg.conversationId === conversationId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+  
+  async createMessage(data: Partial<InsertMessage>): Promise<Message> {
+    if (!data.conversationId) {
+      throw new Error("conversationId is required");
+    }
+    
+    if (!data.role) {
+      throw new Error("role is required");
+    }
+    
+    if (!data.content) {
+      throw new Error("content is required");
+    }
+    
+    const id = this.messageId++;
+    const now = new Date();
+    
+    const message: Message = {
+      id,
+      conversationId: data.conversationId,
+      role: data.role,
+      content: data.content,
+      citations: data.citations ?? null,
+      createdAt: now
+    };
+    
+    this.messages.set(id, message);
+    
+    // Update the conversation's updatedAt timestamp
+    const conversation = this.conversations.get(data.conversationId);
+    if (conversation) {
+      this.conversations.set(data.conversationId, {
+        ...conversation,
+        updatedAt: now
+      });
+    }
+    
+    return message;
+  }
+}
+
+export const storage = new MemStorage();
