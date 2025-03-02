@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
@@ -16,7 +16,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({
   children,
-  defaultTheme = "dark", // Default to dark mode
+  defaultTheme = "light",
 }: ThemeProviderProps) => {
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem("theme") as Theme) || defaultTheme
@@ -25,22 +25,22 @@ export const ThemeProvider = ({
   useEffect(() => {
     const root = window.document.documentElement;
     
+    // Remove the previous theme class
     root.classList.remove("light", "dark");
-    root.classList.add(theme);
-    localStorage.setItem("theme", theme);
     
-    // Also update the theme.json appearance value for consistency
-    // We can't directly update the file, but we're updating the DOM to match
+    // Add the current theme class
+    root.classList.add(theme);
+    
+    // Store the theme in localStorage
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === "light" ? "dark" : "light"));
   };
 
-  const value = { theme, toggleTheme };
-
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -48,8 +48,10 @@ export const ThemeProvider = ({
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
+  
   if (context === undefined) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
+  
   return context;
 };

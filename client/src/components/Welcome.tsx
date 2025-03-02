@@ -113,7 +113,7 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
                 <Button
                   key={index}
                   variant="outline"
-                  className={`suggestion-button w-full h-auto py-4 px-5 bg-white hover:bg-gray-50 justify-start text-left relative 
+                  className={`suggestion-button w-full h-auto py-4 px-5 bg-card hover:bg-muted justify-start text-left relative 
                              overflow-visible shadow-sm transition-all duration-200 
                              ${isThisClicked 
                                ? 'border-primary border-2 bg-primary/5' 

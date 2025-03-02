@@ -80,8 +80,8 @@ export const Sidebar = ({
                 >
                   <div 
                     className={cn(
-                      "p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors",
-                      currentConversationId === conversation.id && "bg-gray-100"
+                      "p-3 rounded-lg hover:bg-muted cursor-pointer transition-colors",
+                      currentConversationId === conversation.id && "bg-muted"
                     )}
                   >
                     <h3 className="font-medium truncate">{conversation.title}</h3>
