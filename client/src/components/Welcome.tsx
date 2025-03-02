@@ -97,7 +97,6 @@ export const Welcome = ({ onSuggestionClick, isLoading = false }: WelcomeProps) 
             </div>
             <div className="ml-4">
               <h2 className="text-xl font-semibold">Welcome to GloriaMundo</h2>
-              <p className="text-muted-foreground">Discover the joy of exploring our world through AI</p>
             </div>
           </div>
           

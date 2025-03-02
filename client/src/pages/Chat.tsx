@@ -138,6 +138,11 @@ export default function Chat() {
           <ThemeToggle />
         </div>
         
+        {/* Desktop theme toggle - top right */}
+        <div className="hidden md:block absolute top-4 right-4 z-10">
+          <ThemeToggle />
+        </div>
+        
         {/* Chat messages area */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 space-y-6">
           {isLoadingMessages ? (

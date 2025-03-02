@@ -73,7 +73,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
           </Button>
         </form>
         <p className="text-xs text-muted-foreground mt-2 text-center">
-          GloriaMundo uses Perplexity's sonar-reasoning model to provide information. Always verify important information.
+          For important decisions, always confirm information with trusted sources.
         </p>
       </div>
     </div>
