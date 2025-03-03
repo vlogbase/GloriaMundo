@@ -1,0 +1,24 @@
+I’m not a regulator or court, so I can’t give you an official legal verdict, but from a best-practice standpoint under UK/EU cookie rules (PECR + GDPR), here are the main compliance concerns:
+
+No “Reject” Option:
+The banner apparently only has an “Accept” (or “Agree”) button and then says “by continuing to use it…” which implies “implied consent.” Under GDPR and most EU/UK guidance, you should also provide an equally prominent “Reject” (or “Decline”) button or a way to refuse non‑essential cookies just as easily as accepting them.
+
+No Granular Choices (if you use non‑essential cookies):
+
+If your site sets any cookies beyond those strictly necessary for the site to function (analytics, ad/tracking, social media, etc.), you must let users opt in or out of those categories.
+“Strictly necessary” cookies do not require consent, but everything else does.
+Consent Should Be Explicit, Not Implied:
+
+Saying “by continuing to use it, you agree…” is considered “implied consent,” which isn’t valid anymore. GDPR requires an affirmative action (e.g., clicking “Accept”) for non‑essential cookies.
+No Mention of How to Withdraw/Change Consent Later:
+
+Users must be able to revoke or change their cookie preferences at any time just as easily as they gave consent. Typically, sites provide a small “Cookie Settings” link or icon that remains visible so users can revisit their choices.
+Learn More / Cookie Policy Link:
+
+It’s good that you have a “Learn More” link, but it should clearly explain (1) which cookies you use, (2) what they do, (3) how long they last, (4) whether third parties are involved, and (5) how users can manage or delete them.
+How to Fix It
+Add a ‘Reject’ (or ‘Decline’) Button: So that users have a clear, equally prominent way to refuse non‑essential cookies.
+Ensure Non‑Essential Cookies Are Blocked By Default: Until users click “Accept” or choose specific cookie preferences.
+Allow Users to Change Their Minds Later: Provide a “Cookie Settings” or “Manage Cookies” link (often placed in the footer) so consent can be withdrawn or changed easily.
+Confirm Your Cookie Policy Is Detailed and Accessible: Make sure it lists each cookie’s purpose, duration, and whether it’s first- or third-party.
+With these adjustments, your banner and overall cookie approach would align much more closely with GDPR/PECR requirements.

@@ -1,65 +1,291 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Settings, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogTitle, 
+  DialogDescription,
+  DialogHeader,
+  DialogFooter 
+} from '@/components/ui/dialog';
+
+type CookiePreferences = {
+  essential: boolean;  // Always true, cannot be toggled
+  analytics: boolean;
+  advertising: boolean;
+  preferences: boolean;
+};
 
 export const CookieConsent = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [preferences, setPreferences] = useState<CookiePreferences>({
+    essential: true,     // Always true
+    analytics: false,    // Default off
+    advertising: false,  // Default off
+    preferences: false   // Default off
+  });
   
+  // Load saved preferences on initial render and set up event listener
   useEffect(() => {
-    // Check if user has already consented
-    const hasConsented = localStorage.getItem('cookieConsent') === 'true';
-    if (!hasConsented) {
-      // Only show banner if consent hasn't been given yet
+    const savedPreferences = localStorage.getItem('cookiePreferences');
+    const consentStatus = localStorage.getItem('cookieConsentStatus');
+    
+    if (savedPreferences) {
+      setPreferences(JSON.parse(savedPreferences));
+    }
+    
+    // Show banner if user hasn't made a choice yet
+    if (!consentStatus) {
       setIsVisible(true);
     }
+    
+    // Listen for the openCookieSettings event from Footer
+    const handleOpenSettings = () => {
+      setShowPreferences(true);
+      setIsVisible(true);
+    };
+    
+    window.addEventListener('openCookieSettings', handleOpenSettings);
+    
+    // Clean up event listener on component unmount
+    return () => {
+      window.removeEventListener('openCookieSettings', handleOpenSettings);
+    };
   }, []);
 
-  const handleAccept = () => {
-    // Store consent in localStorage
-    localStorage.setItem('cookieConsent', 'true');
+  // Save preferences to localStorage
+  const savePreferences = (status: 'accepted' | 'rejected' | 'customized') => {
+    localStorage.setItem('cookiePreferences', JSON.stringify(preferences));
+    localStorage.setItem('cookieConsentStatus', status);
     setIsVisible(false);
+    setShowPreferences(false);
+  };
+
+  const handleAccept = () => {
+    // Accept all cookies
+    setPreferences({
+      essential: true,
+      analytics: true,
+      advertising: true,
+      preferences: true
+    });
+    savePreferences('accepted');
+  };
+
+  const handleReject = () => {
+    // Reject all non-essential cookies
+    setPreferences({
+      essential: true,
+      analytics: false,
+      advertising: false,
+      preferences: false
+    });
+    savePreferences('rejected');
+  };
+
+  const handleSavePreferences = () => {
+    savePreferences('customized');
+  };
+
+  const handlePreferenceChange = (type: keyof Omit<CookiePreferences, 'essential'>) => {
+    setPreferences(prev => ({
+      ...prev,
+      [type]: !prev[type]
+    }));
+  };
+
+  // Function to open cookie settings from anywhere
+  // This can be exported and used in a footer component
+  const openCookieSettings = () => {
+    setShowPreferences(true);
+    setIsVisible(true);
   };
 
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          transition={{ duration: 0.3 }}
-          className="fixed bottom-0 left-0 right-0 z-50 p-2 bg-background border-t border-border shadow-lg"
-        >
-          <div className="container max-w-7xl mx-auto flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              This site uses cookies for essential functions only. By continuing to use this site, you consent to our use of cookies.{' '}
-              <Link href="/privacy">
-                <span className="underline cursor-pointer">Learn more</span>
-              </Link>
-            </p>
-            <div className="flex gap-2 ml-4 shrink-0">
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="text-xs h-8"
-                onClick={handleAccept}
-              >
-                Accept
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="text-xs h-8 px-2"
-                onClick={handleAccept}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+    <>
+      <AnimatePresence>
+        {isVisible && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.3 }}
+            className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-background border-t border-border shadow-lg"
+          >
+            <div className="container max-w-7xl mx-auto">
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <div className="flex-grow">
+                  <h3 className="text-sm font-medium mb-1">Cookie Preferences</h3>
+                  <p className="text-xs text-muted-foreground">
+                    This site uses essential cookies to ensure the core functionality. Non-essential cookies are disabled by default.{' '}
+                    <Link href="/privacy#cookies">
+                      <span className="underline cursor-pointer">Learn more</span>
+                    </Link>
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setShowPreferences(true)}
+                  >
+                    <Settings className="h-3 w-3 mr-1" />
+                    Cookie Settings
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={handleReject}
+                  >
+                    Reject All
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={handleAccept}
+                  >
+                    Accept All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8 px-2 md:hidden"
+                    onClick={() => setIsVisible(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Cookie preferences dialog */}
+      <Dialog open={showPreferences} onOpenChange={setShowPreferences}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Cookie Preferences</DialogTitle>
+            <DialogDescription>
+              Customize your cookie preferences below. Essential cookies cannot be disabled as they are necessary for the website to function properly.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Essential cookies - always enabled */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium">Essential Cookies</h4>
+                <p className="text-xs text-muted-foreground">
+                  Required for the core functionality of the website. Cannot be disabled.
+                </p>
+              </div>
+              <Switch checked={true} disabled />
+            </div>
+            
+            <Separator />
+            
+            {/* Analytics cookies */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium">Analytics Cookies</h4>
+                <p className="text-xs text-muted-foreground">
+                  Help us understand how visitors interact with our website.
+                </p>
+              </div>
+              <Switch 
+                checked={preferences.analytics}
+                onCheckedChange={() => handlePreferenceChange('analytics')}
+              />
+            </div>
+            
+            <Separator />
+            
+            {/* Advertising cookies */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium">Advertising Cookies</h4>
+                <p className="text-xs text-muted-foreground">
+                  Used to show relevant advertisements based on your interests.
+                </p>
+              </div>
+              <Switch 
+                checked={preferences.advertising}
+                onCheckedChange={() => handlePreferenceChange('advertising')}
+              />
+            </div>
+            
+            <Separator />
+            
+            {/* Preferences cookies */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium">Preferences Cookies</h4>
+                <p className="text-xs text-muted-foreground">
+                  Remember your settings and preferences for a better experience.
+                </p>
+              </div>
+              <Switch 
+                checked={preferences.preferences}
+                onCheckedChange={() => handlePreferenceChange('preferences')}
+              />
             </div>
           </div>
-        </motion.div>
+
+          <DialogFooter>
+            <div className="flex gap-2 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={handleReject}
+              >
+                Reject All
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="flex-1"
+                onClick={handleSavePreferences}
+              >
+                Save Preferences
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Floating cookie settings button - always visible */}
+      {!isVisible && (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-4 right-4 z-40"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 rounded-full p-0 shadow-md"
+              onClick={openCookieSettings}
+              title="Cookie Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        </AnimatePresence>
       )}
-    </AnimatePresence>
+    </>
   );
 };

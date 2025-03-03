@@ -112,19 +112,39 @@ export default function Privacy() {
           </p>
         </section>
         
-        <section>
+        <section id="cookies">
           <h2 className="text-xl font-semibold mb-2 text-foreground">Cookies</h2>
           <p>
-            We use essential cookies that are necessary for the core functionality of our service.
-            These cookies don't track you for advertising purposes. They are used only for:
+            We use cookies on our website, which are categorized as follows:
           </p>
-          <ul className="list-disc pl-6 mt-2 space-y-1">
-            <li>Remembering your preferences and settings</li>
-            <li>Maintaining your session state</li>
-            <li>Enabling basic functionality like conversation history</li>
+          <ul className="list-disc pl-6 mt-2 space-y-2">
+            <li>
+              <strong>Essential Cookies</strong>: Necessary for the core functionality of our service. These cookies cannot be
+              disabled and don't track you for advertising purposes. They are used for:
+              <ul className="list-circle pl-6 mt-1 space-y-1 text-xs">
+                <li>Remembering your preferences and settings</li>
+                <li>Maintaining your session state</li>
+                <li>Enabling basic functionality like conversation history</li>
+                <li>Storing your cookie consent preferences</li>
+              </ul>
+            </li>
+            <li>
+              <strong>Analytics Cookies</strong>: Help us understand how visitors interact with our website, allowing us to improve the user experience.
+              These cookies collect anonymous information about page visits and navigation.
+            </li>
+            <li>
+              <strong>Advertising Cookies</strong>: Used to deliver advertisements relevant to your interests, both on our site and others.
+              These cookies track your browsing habits to deliver targeted advertising.
+            </li>
+            <li>
+              <strong>Preferences Cookies</strong>: Remember choices you make to enhance your experience, such as saved
+              conversation themes or interface customizations.
+            </li>
           </ul>
           <p className="mt-2">
-            You can adjust your browser settings to block cookies, but this may affect the functionality of our service.
+            You have complete control over non-essential cookies through our Cookie Preferences settings, accessible at any time via the 
+            cookie settings button at the bottom-right of the screen. You can also adjust your browser settings to block cookies, 
+            but this may affect the functionality of our service.
           </p>
         </section>
         
