@@ -10,18 +10,28 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="GloriaMundo" />
     <link rel="apple-touch-icon" href="/pwa-icons/icon-192x192.png" />
+    
+    <!-- Preload critical assets -->
+    <link rel="preload" href="/pwa-icons/gm-logo.png" as="image" />
+    <link rel="preload" href="/src/main.tsx" as="script" type="module" />
+    
+    <!-- Font optimization -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    
+    <!-- SEO metadata -->
+    <title>GloriaMundo - Discover the Joy of AI</title>
+    <meta name="description" content="Explore the wonders of our world through AI-powered discovery with GloriaMundo. Get instant answers to your questions with our advanced conversational AI." />
+    
     <!-- Apple splash screens -->
     <link rel="apple-touch-startup-image" href="/pwa-icons/icon-512x512.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="/pwa-icons/icon-512x512.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="/pwa-icons/icon-512x512.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <title>GloriaMundo - Discover the Joy of AI</title>
-    <meta name="description" content="Explore the wonders of our world through AI-powered discovery with GloriaMundo" />
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312"
-     crossorigin="anonymous"></script>
+    
+    <!-- Fetch AdSense script only when needed (deferred) -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312" crossorigin="anonymous"></script>
   </head>
   <body>
     <div id="root"></div>

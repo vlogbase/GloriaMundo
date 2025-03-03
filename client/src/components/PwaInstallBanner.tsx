@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense, memo } from 'react';
 import { X, Download, BellOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Logo } from './Logo';
+
+// Lazy load the Logo component since it's not needed initially
+const Logo = lazy(() => import('./Logo'));
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -14,11 +16,22 @@ interface PwaInstallBannerProps {
   show: boolean;
 }
 
-export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
+export const PwaInstallBanner = memo(({ show }: PwaInstallBannerProps) => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isReminderBanner, setIsReminderBanner] = useState(false);
+  const [logoLoaded, setLogoLoaded] = useState(false);
+
+  // Preload the Logo component when isInstallable becomes true
+  useEffect(() => {
+    if (isInstallable && !logoLoaded) {
+      // Use dynamic import to preload Logo component
+      import('./Logo').then(() => {
+        setLogoLoaded(true);
+      });
+    }
+  }, [isInstallable, logoLoaded]);
 
   useEffect(() => {
     // Only show banner if PWA is installable and if show prop is true
@@ -129,7 +142,9 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
               {/* Header with logo and close button */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Logo size={36} />
+                  <Suspense fallback={<div className="w-9 h-9 bg-primary/20 rounded-full" />}>
+                    <Logo size={36} />
+                  </Suspense>
                   <h3 className="font-semibold">GloriaMundo</h3>
                 </div>
                 
@@ -190,4 +205,6 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
       )}
     </AnimatePresence>
   );
-};
+});
+
+PwaInstallBanner.displayName = 'PwaInstallBanner';
