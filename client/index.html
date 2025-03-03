@@ -1,6 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <!-- Google Tag Manager dataLayer initialization with consent mode -->
+    <script>
+      // Initialize dataLayer with consent mode
+      window.dataLayer = window.dataLayer || [];
+      
+      // Set default consent - deny all except essential
+      window.dataLayer.push({
+        'event': 'default_consent',
+        'consent': {
+          'analytics_storage': 'denied',
+          'ad_storage': 'denied',
+          'personalization_storage': 'denied',
+          'functionality_storage': 'granted', // Essential cookies always needed
+          'security_storage': 'granted'       // Security cookies always needed
+        }
+      });
+      
+      // Check if user has set preferences previously
+      const savedPreferences = localStorage.getItem('cookiePreferences');
+      if (savedPreferences) {
+        try {
+          const prefs = JSON.parse(savedPreferences);
+          // Update consent based on saved preferences
+          window.dataLayer.push({
+            'event': 'consent_update',
+            'consent': {
+              'analytics_storage': prefs.analytics ? 'granted' : 'denied',
+              'ad_storage': prefs.advertising ? 'granted' : 'denied',
+              'personalization_storage': prefs.preferences ? 'granted' : 'denied',
+              'functionality_storage': 'granted',
+              'security_storage': 'granted'
+            }
+          });
+        } catch (e) {
+          console.error('Error parsing saved cookie preferences:', e);
+        }
+      }
+    </script>
+    
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-M4NNWL9N');</script>
+    <!-- End Google Tag Manager -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Use favicon.ico which loads automatically without preloading -->
@@ -39,6 +85,10 @@
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312" crossorigin="anonymous"></script>
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-M4NNWL9N"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <!-- PWA Service Worker Registration with proper messaging -->

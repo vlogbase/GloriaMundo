@@ -14,6 +14,13 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 
+// Add type declarations for Google Tag Manager
+declare global {
+  interface Window {
+    dataLayer: any[];
+  }
+}
+
 type CookiePreferences = {
   essential: boolean;  // Always true, cannot be toggled
   analytics: boolean;
@@ -59,10 +66,36 @@ export const CookieConsent = () => {
     };
   }, []);
 
-  // Save preferences to localStorage
+  // Save preferences to localStorage and configure cookies/tracking
   const savePreferences = (status: 'accepted' | 'rejected' | 'customized') => {
     localStorage.setItem('cookiePreferences', JSON.stringify(preferences));
     localStorage.setItem('cookieConsentStatus', status);
+    
+    // Configure Google Tag Manager based on preferences
+    if (window.dataLayer) {
+      // Send consent information to GTM
+      window.dataLayer.push({
+        event: 'cookie_consent_update',
+        cookie_consent: {
+          analytics: preferences.analytics,
+          advertising: preferences.advertising,
+          preferences: preferences.preferences
+        }
+      });
+      
+      // Update consent settings in GTM (for GDPR compliance)
+      window.dataLayer.push({
+        'event': 'consent_update',
+        'consent': {
+          'analytics_storage': preferences.analytics ? 'granted' : 'denied',
+          'ad_storage': preferences.advertising ? 'granted' : 'denied',
+          'personalization_storage': preferences.preferences ? 'granted' : 'denied',
+          'functionality_storage': 'granted', // Essential cookies always needed
+          'security_storage': 'granted'      // Security cookies always needed
+        }
+      });
+    }
+    
     setIsVisible(false);
     setShowPreferences(false);
   };

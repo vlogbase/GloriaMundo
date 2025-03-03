@@ -81,19 +81,42 @@ export default function Privacy() {
         <section>
           <h2 className="text-xl font-semibold mb-2 text-foreground">Third-Party Services and Data Transfers</h2>
           <p>
-            We use the Perplexity API to power our AI responses. Your queries are sent to Perplexity
-            solely for the purpose of generating AI responses and not for any other use without your explicit consent.
-            We also use Google AdSense for displaying advertisements, which may use cookies to personalize ads.
+            We use the following third-party services:
           </p>
+          <ul className="list-disc pl-6 mt-2 space-y-2">
+            <li>
+              <strong>Perplexity API</strong>: Used to power our AI responses. Your queries are sent to Perplexity
+              solely for the purpose of generating AI responses and not for any other use without your explicit consent.
+            </li>
+            <li>
+              <strong>Google AdSense</strong>: Used for displaying advertisements, which may use cookies to personalize ads
+              if you have granted permission for advertising cookies.
+            </li>
+            <li>
+              <strong>Google Tag Manager</strong>: Used to manage and deploy marketing tags (snippets of code or tracking pixels) 
+              on our website without modifying the code. Google Tag Manager only operates based on your cookie consent settings 
+              and respects your privacy preferences.
+            </li>
+          </ul>
           <p className="mt-2">
-            <strong>Cross-Border Transfers</strong>: Your data may be processed outside the UK through the Perplexity API.
+            <strong>Cross-Border Transfers</strong>: Your data may be processed outside the UK through our third-party services.
             Such transfers are protected by appropriate safeguards such as Standard Contractual Clauses.
-            For more information on how Perplexity processes your data, please refer to the 
-            <a href="https://www.perplexity.ai/privacy" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-primary hover:underline cursor-pointer ml-1">
-              Perplexity Privacy Policy
-              <ExternalLink className="h-3 w-3 ml-1" />
-            </a>.
+            For more information on how these services process your data, please refer to their respective privacy policies:
           </p>
+          <ul className="list-disc pl-6 mt-1 space-y-1 text-sm">
+            <li>
+              <a href="https://www.perplexity.ai/privacy" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-primary hover:underline cursor-pointer">
+                Perplexity Privacy Policy
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </a>
+            </li>
+            <li>
+              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-primary hover:underline cursor-pointer">
+                Google Privacy Policy
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </a>
+            </li>
+          </ul>
         </section>
         
         <section>
@@ -142,8 +165,13 @@ export default function Privacy() {
             </li>
           </ul>
           <p className="mt-2">
+            <strong>Google Tag Manager</strong>: We use Google Tag Manager (GTM) to manage the various tracking technologies on our website.
+            GTM itself does not collect any personal data, but it helps us deploy other tracking technologies efficiently based on your cookie preferences.
+            When you set your cookie preferences, GTM ensures that only the tracking technologies you've consented to are loaded.
+          </p>
+          <p className="mt-2">
             You have complete control over non-essential cookies through our Cookie Preferences settings, accessible at any time via the 
-            cookie settings button at the bottom-right of the screen. You can also adjust your browser settings to block cookies, 
+            cookie settings in the footer. You can also adjust your browser settings to block cookies, 
             but this may affect the functionality of our service.
           </p>
         </section>
