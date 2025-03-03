@@ -52,7 +52,7 @@ export default function Contact() {
           <Card className="p-6 bg-primary/5 border-primary/10">
             <h3 className="font-semibold mb-2">Contact Information</h3>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Email: contact@gloriamundo.ai</p>
+              <p>Email: andy@gloriamundo.com</p>
               <p>Response Time: 1-2 business days</p>
             </div>
           </Card>
