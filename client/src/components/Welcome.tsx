@@ -61,7 +61,7 @@ const SuggestionButton = memo(({
           whileHover={{ opacity: 1 }}
           className="text-primary/60"
         >
-          <Logo size={14} />
+          <Logo size={18} />
         </motion.div>
       )}
     </div>
@@ -173,8 +173,8 @@ export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomePr
       <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 shadow-sm border-none">
         <CardContent className="p-6">
           <div className="flex items-center mb-4">
-            <div className="h-12 w-12 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-white">
-              <Logo size={24} />
+            <div className="h-12 w-12 flex items-center justify-center">
+              <Logo size={42} />
             </div>
             <div className="ml-4">
               <h2 className="text-xl font-semibold">Welcome to GloriaMundo</h2>

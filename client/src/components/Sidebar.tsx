@@ -65,7 +65,7 @@ export const Sidebar = ({
                 setLocation("/");
                 onClose();
               }}
-              className="my-1"
+              className="my-1 cursor-pointer"
             />
             <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
               <Plus className="h-5 w-5" />
@@ -141,6 +141,7 @@ export const Sidebar = ({
               setLocation("/");
               onClose();
             }}
+            className="cursor-pointer"
           />
           {/* Collapse button on desktop */}
           <div className="flex space-x-1">
