@@ -264,28 +264,9 @@ export const CookieConsent = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Floating cookie settings button - always visible */}
-      {!isVisible && (
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-4 right-4 z-40"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 w-8 rounded-full p-0 shadow-md"
-              onClick={openCookieSettings}
-              title="Cookie Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </motion.div>
-        </AnimatePresence>
-      )}
+      {/* We've removed the floating cookie settings button as requested 
+          to avoid conflicts with the send message button on mobile.
+          Cookie settings are still accessible through the footer link. */}
     </>
   );
 };
