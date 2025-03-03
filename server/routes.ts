@@ -3,6 +3,14 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertMessageSchema } from "@shared/schema";
+import 'express-session';
+
+// Extend SessionData interface for express-session
+declare module 'express-session' {
+  interface SessionData {
+    userConversations?: number[]; // Array of conversation IDs
+  }
+}
 
 // Define API key environment variable
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || "";
@@ -14,6 +22,7 @@ const PERPLEXITY_MODEL = "llama-3.1-sonar-small-128k-online";
 const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+
   // Serve ads.txt and sitemap.xml at the root level
   app.get("/ads.txt", (req, res) => {
     res.sendFile("client/public/ads.txt", { root: "." });
@@ -26,9 +35,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API routes
   app.get("/api/conversations", async (req, res) => {
     try {
-      const conversations = await storage.getConversations();
-      res.json(conversations);
+      // Initialize session user conversations if not exists
+      if (!req.session.userConversations) {
+        req.session.userConversations = [];
+      }
+      
+      // Get all conversations and filter by user session
+      const allConversations = await storage.getConversations();
+      const userConversations = allConversations.filter(
+        conv => req.session.userConversations?.includes(conv.id)
+      );
+      
+      res.json(userConversations);
     } catch (error) {
+      console.error("Error fetching conversations:", error);
       res.status(500).json({ message: "Failed to fetch conversations" });
     }
   });
@@ -40,13 +60,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Title is required" });
       }
       
+      // Initialize session user conversations if not exists
+      if (!req.session.userConversations) {
+        req.session.userConversations = [];
+      }
+      
       const conversation = await storage.createConversation({ 
         title, 
         userId: null // No authentication yet
       });
       
+      // Add conversation ID to user session
+      req.session.userConversations.push(conversation.id);
+      // Save session changes
+      req.session.save();
+      
       res.json(conversation);
     } catch (error) {
+      console.error("Error creating conversation:", error);
       res.status(500).json({ message: "Failed to create conversation" });
     }
   });
@@ -349,18 +380,35 @@ Format your responses using markdown for better readability.`,
   app.delete("/api/conversations/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // Remove from session if it exists
+      if (req.session.userConversations) {
+        req.session.userConversations = req.session.userConversations.filter(
+          convId => convId !== id
+        );
+        req.session.save();
+      }
+      
       await storage.deleteConversation(id);
       res.json({ success: true });
     } catch (error) {
+      console.error("Error deleting conversation:", error);
       res.status(500).json({ message: "Failed to delete conversation" });
     }
   });
 
   app.delete("/api/conversations", async (req, res) => {
     try {
+      // Clear user session conversations
+      if (req.session.userConversations) {
+        req.session.userConversations = [];
+        req.session.save();
+      }
+      
       await storage.clearConversations();
       res.json({ success: true });
     } catch (error) {
+      console.error("Error clearing conversations:", error);
       res.status(500).json({ message: "Failed to clear conversations" });
     }
   });
