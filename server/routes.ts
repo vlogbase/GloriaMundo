@@ -40,11 +40,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.userConversations = [];
       }
       
-      // Get all conversations and filter by user session
+      // Get all conversations
       const allConversations = await storage.getConversations();
-      const userConversations = allConversations.filter(
-        conv => req.session.userConversations?.includes(conv.id)
-      );
+      
+      // If session has no conversations yet but there are conversations in storage,
+      // restore them to the session (this helps with persistence)
+      if (req.session.userConversations?.length === 0 && allConversations.length > 0) {
+        req.session.userConversations = allConversations.map(conv => conv.id);
+        req.session.save();
+      }
+      
+      // Get all conversations and filter by user session if available
+      const userConversations = req.session.userConversations?.length > 0
+        ? allConversations.filter(conv => req.session.userConversations?.includes(conv.id))
+        : allConversations;
       
       res.json(userConversations);
     } catch (error) {
