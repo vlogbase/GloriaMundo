@@ -4,10 +4,16 @@ import { Conversation } from "@/lib/types";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cookieUtils } from "@/lib/utils";
 
 export const useConversations = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Get sidebar state from cookies or default to open
+  const savedSidebarState = cookieUtils.get<'expanded' | 'collapsed'>('sidebar_state', 'expanded') || 'expanded';
+  const [sidebarState, setSidebarState] = useState<'expanded' | 'collapsed'>(savedSidebarState);
+  
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
@@ -19,6 +25,11 @@ export const useConversations = () => {
       setIsMobileSidebarOpen(false);
     }
   }, [isMobile]);
+  
+  // Save sidebar state to cookies whenever it changes
+  useEffect(() => {
+    cookieUtils.set('sidebar_state', sidebarState);
+  }, [sidebarState]);
 
   // Fetch all conversations
   const fetchConversations = useCallback(async () => {
@@ -98,6 +109,11 @@ export const useConversations = () => {
     }
   }, [toast]);
 
+  // Toggle sidebar state between expanded and collapsed
+  const toggleSidebarCollapse = useCallback(() => {
+    setSidebarState(prev => prev === 'expanded' ? 'collapsed' : 'expanded');
+  }, []);
+
   // Toggle mobile sidebar
   const toggleMobileSidebar = useCallback(() => {
     setIsMobileSidebarOpen((prev) => !prev);
@@ -128,6 +144,8 @@ export const useConversations = () => {
     conversations,
     isLoading,
     isMobileSidebarOpen,
+    sidebarState,
+    toggleSidebarCollapse,
     toggleMobileSidebar,
     fetchConversations,
     createConversation,

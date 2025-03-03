@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import Cookies from 'js-cookie';
 
 /**
  * Combines class names using clsx and tailwind-merge
@@ -106,3 +107,35 @@ export function parseError(error: any): string {
   
   return "An unexpected error occurred";
 }
+
+/**
+ * Cookie utility functions for managing client-side storage
+ */
+export const cookieUtils = {
+  // Set a cookie with the specified name and value
+  set: (name: string, value: any, options?: Cookies.CookieAttributes) => {
+    Cookies.set(name, JSON.stringify(value), {
+      expires: 30, // 30 days by default
+      sameSite: 'Lax',
+      ...options
+    });
+  },
+  
+  // Get a cookie with the specified name
+  get: <T>(name: string, defaultValue?: T): T | undefined => {
+    const value = Cookies.get(name);
+    if (!value) return defaultValue;
+    
+    try {
+      return JSON.parse(value) as T;
+    } catch (error) {
+      console.error(`Error parsing cookie value for ${name}:`, error);
+      return defaultValue;
+    }
+  },
+  
+  // Remove a cookie with the specified name
+  remove: (name: string, options?: Cookies.CookieAttributes) => {
+    Cookies.remove(name, options);
+  }
+};
