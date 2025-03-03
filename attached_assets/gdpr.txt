@@ -1,0 +1,24 @@
+Since you're operating in the UK and under the UK GDPR framework, you'll need to ensure your privacy policy provides clear, detailed information about how you process user data, including data sent to third parties like the Perplexity API. Here are some key aspects to consider:
+
+1. Data Retention
+Retention Periods: Specify how long you store the data that you collect from users. For example, if you store conversation histories, state the period (e.g., “up to 30 days” or “until the user deletes it”).
+Third-Party Retention: Explain if and how long the Perplexity API retains the data. You may need to refer users to Perplexity's privacy policy if they are responsible for further retention.
+2. Data Security Measures
+In Transit: Describe how you secure data while it is being transmitted to and from the Perplexity API. For example, mention that you use TLS/SSL encryption to protect user data during transit.
+At Rest: Outline any measures you have in place to protect data once it’s stored. This might include encryption, secure servers, access controls, and regular security audits.
+3. Data Transfers and Third-Party Processing
+Cross-Border Transfers: If the Perplexity API processes data outside of the UK (e.g., in the US), you must inform users about this and explain the safeguards in place. For instance, you might note that the transfer complies with the UK’s data protection standards (such as using Standard Contractual Clauses or other approved mechanisms).
+Data Sharing: Clearly state that users’ chat data and technical details are shared with Perplexity solely for the purpose of providing the AI service, and not for any other use without explicit consent.
+4. Legal Basis for Processing
+Consent or Legitimate Interest: Clarify the legal grounds on which you are processing this data. Often this might be user consent (if you have an opt-in mechanism) or legitimate interest (if it’s necessary for the service).
+Data Processing Agreements (DPAs): Ensure you have a DPA in place with Perplexity (or confirm they have one in place), which outlines the responsibilities and security measures required when handling personal data.
+5. User Rights and Transparency
+Access and Deletion: Inform users of their rights under UK GDPR, such as the right to access, correct, or delete their data.
+Further Information: Provide a clear path for users to request more detailed information about your data processing practices, if needed.
+By including these details in your privacy policy, you’ll be better aligned with UK GDPR requirements and provide your users with transparency about how their data is handled—especially when it involves transferring data to a third-party service like Perplexity. It’s also advisable to consult with a legal expert to ensure full compliance with all relevant regulations.
+
+
+
+
+
+

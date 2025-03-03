@@ -8,6 +8,7 @@ import Privacy from "@/pages/Privacy";
 import Contact from "@/pages/Contact";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { Footer } from "@/components/Footer";
+import { CookieConsent } from "@/components/CookieConsent";
 
 function Router() {
   return (
@@ -31,6 +32,7 @@ function App() {
           </div>
           <Footer />
         </div>
+        <CookieConsent />
         <Toaster />
       </ThemeProvider>
     </QueryClientProvider>

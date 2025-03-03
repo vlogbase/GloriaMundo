@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 
 export default function Privacy() {
   return (
@@ -20,6 +20,7 @@ export default function Privacy() {
           <p>
             At GloriaMundo, we respect your privacy and are committed to protecting your personal data.
             This Privacy Policy explains how we collect, use, and safeguard your information when you use our AI discovery platform.
+            This policy is designed to comply with the UK General Data Protection Regulation (UK GDPR).
           </p>
         </section>
         
@@ -30,7 +31,19 @@ export default function Privacy() {
             <li>Message content you send to our AI system</li>
             <li>Conversation history</li>
             <li>Technical data such as IP address, browser type, and device information</li>
-            <li>Cookies and usage data to improve our services</li>
+            <li>Essential cookies required for the service to function properly</li>
+          </ul>
+        </section>
+        
+        <section>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Legal Basis for Processing</h2>
+          <p>
+            We process your personal data on the following legal grounds:
+          </p>
+          <ul className="list-disc pl-6 mt-2 space-y-1">
+            <li><strong>Consent</strong>: For the use of cookies essential to the service's functionality</li>
+            <li><strong>Legitimate Interest</strong>: For providing the AI service and processing conversation data, which is necessary for the functionality you've requested</li>
+            <li><strong>Contract</strong>: For fulfilling our obligation to provide you with our AI discovery service</li>
           </ul>
         </section>
         
@@ -46,33 +59,72 @@ export default function Privacy() {
         </section>
         
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-foreground">Data Storage</h2>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Data Retention</h2>
           <p>
             We store your conversations to provide continuity in your experience with GloriaMundo.
-            You can delete your conversation history at any time using the clear conversations option.
+            Your conversation data is retained until you explicitly delete it using the tools provided.
+            If your account remains inactive for 12 months, we may delete your conversation history.
           </p>
         </section>
         
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-foreground">Third-Party Services</h2>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Data Security</h2>
+          <p>
+            We implement appropriate technical and organizational measures to protect your personal data:
+          </p>
+          <ul className="list-disc pl-6 mt-2 space-y-1">
+            <li><strong>In Transit</strong>: All data is encrypted using TLS/SSL when transmitted between your device and our servers, and between our servers and the Perplexity API</li>
+            <li><strong>At Rest</strong>: We use industry-standard encryption for stored data and implement access controls to limit who can view your information</li>
+          </ul>
+        </section>
+        
+        <section>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Third-Party Services and Data Transfers</h2>
           <p>
             We use the Perplexity API to power our AI responses. Your queries are sent to Perplexity
-            in accordance with their privacy policy. We also use Google AdSense for displaying advertisements,
-            which may use cookies to personalize ads.
+            solely for the purpose of generating AI responses and not for any other use without your explicit consent.
+            We also use Google AdSense for displaying advertisements, which may use cookies to personalize ads.
+          </p>
+          <p className="mt-2">
+            <strong>Cross-Border Transfers</strong>: Your data may be processed outside the UK through the Perplexity API.
+            Such transfers are protected by appropriate safeguards such as Standard Contractual Clauses.
+            For more information on how Perplexity processes your data, please refer to the 
+            <a href="https://www.perplexity.ai/privacy" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-primary hover:underline cursor-pointer ml-1">
+              Perplexity Privacy Policy
+              <ExternalLink className="h-3 w-3 ml-1" />
+            </a>.
           </p>
         </section>
         
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-foreground">Your Rights</h2>
-          <p>GloriaMundo offers the following privacy controls:</p>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Your Rights Under GDPR</h2>
+          <p>Under the UK GDPR, you have the following rights:</p>
           <ul className="list-disc pl-6 mt-2 space-y-1">
-            <li>View your conversation history through the sidebar interface</li>
-            <li>Delete individual conversations using the delete button in the sidebar</li>
-            <li>Clear all conversation history with the "Clear conversations" option</li>
+            <li><strong>Right to access</strong>: You can view your conversation history through the sidebar interface</li>
+            <li><strong>Right to erasure</strong>: You can delete individual conversations or clear all conversations using the provided options</li>
+            <li><strong>Right to object</strong>: You can object to our processing of your data by contacting us</li>
+            <li><strong>Right to restriction</strong>: You can request restriction of processing your data</li>
+            <li><strong>Right to data portability</strong>: You can request a copy of your data in a structured format</li>
           </ul>
           <p className="mt-2">
-            If you have additional privacy concerns or requests regarding your data, 
+            To exercise any of these rights beyond what's available in the application interface,
             please contact us using the information in the Contact section.
+          </p>
+        </section>
+        
+        <section>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Cookies</h2>
+          <p>
+            We use essential cookies that are necessary for the core functionality of our service.
+            These cookies don't track you for advertising purposes. They are used only for:
+          </p>
+          <ul className="list-disc pl-6 mt-2 space-y-1">
+            <li>Remembering your preferences and settings</li>
+            <li>Maintaining your session state</li>
+            <li>Enabling basic functionality like conversation history</li>
+          </ul>
+          <p className="mt-2">
+            You can adjust your browser settings to block cookies, but this may affect the functionality of our service.
           </p>
         </section>
         
@@ -87,10 +139,13 @@ export default function Privacy() {
         <section>
           <h2 className="text-xl font-semibold mb-2 text-foreground">Contact Us</h2>
           <p>
-            If you have any questions about this Privacy Policy, please 
+            If you have any questions about this Privacy Policy or would like to exercise your data protection rights, please 
             <Link href="/contact">
               <span className="text-primary hover:underline cursor-pointer ml-1">contact us</span>
             </Link>.
+          </p>
+          <p className="mt-2">
+            Email: andy@gloriamundo.com
           </p>
         </section>
         
