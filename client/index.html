@@ -6,6 +6,9 @@
     <link rel="icon" type="image/png" href="/pwa-icons/gm-logo.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#38B2AC" />
+    <!-- Mobile web app capability -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Keep for backwards compatibility with iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="GloriaMundo" />
@@ -13,7 +16,8 @@
     
     <!-- Preload critical assets -->
     <link rel="preload" href="/pwa-icons/gm-logo.png" as="image" />
-    <link rel="preload" href="/src/main.tsx" as="script" type="module" />
+    <!-- Script preload doesn't work with type="module", using a standard fetch preload instead -->
+    <link rel="preconnect" href="/" crossorigin />
     
     <!-- Font optimization -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,17 +40,55 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- PWA Service Worker Registration -->
+    <!-- PWA Service Worker Registration with proper messaging -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/service-worker.js')
             .then(registration => {
               console.log('ServiceWorker registration successful with scope: ', registration.scope);
+              
+              // Listen for updates
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                
+                // When the new service worker is installed
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('New content is available; refreshing content when appropriate');
+                  }
+                });
+              });
             })
             .catch(error => {
               console.log('ServiceWorker registration failed: ', error);
             });
+            
+          // Handle communication with service worker using MessageChannel for proper responses
+          navigator.serviceWorker.ready.then(registration => {
+            // Function to safely communicate with service worker
+            window.sendToServiceWorker = function(message) {
+              return new Promise((resolve, reject) => {
+                const messageChannel = new MessageChannel();
+                
+                // Set up response handler
+                messageChannel.port1.onmessage = event => {
+                  if (event.data.error) {
+                    reject(event.data.error);
+                  } else {
+                    resolve(event.data);
+                  }
+                };
+                
+                // Send message with port for response
+                if (registration.active) {
+                  registration.active.postMessage(message, [messageChannel.port2]);
+                } else {
+                  reject(new Error('No active service worker'));
+                }
+              });
+            };
+          });
         });
       }
     </script>

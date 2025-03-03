@@ -81,11 +81,16 @@ export const PwaInstallBanner = memo(({ show }: PwaInstallBannerProps) => {
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
-      e.preventDefault();
+      // Instead of preventing default which cancels the browser's automatic prompt,
+      // we'll just capture the event for our manual triggering
+      // Note: We no longer call e.preventDefault() here
+      
       // Stash the event so it can be triggered later
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setIsInstallable(true);
+      
+      // Log successful capture of the install prompt
+      console.log('Install prompt captured for later use');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);

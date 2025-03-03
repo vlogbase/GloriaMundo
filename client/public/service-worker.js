@@ -171,10 +171,28 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-// Handle messages from clients
+// Handle messages from clients with proper response
 self.addEventListener('message', (event) => {
+  // Ensure we have a MessagePort to respond to
+  const replyPort = event.ports && event.ports[0];
+  
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    
+    // Send a response if there's a port to reply to
+    if (replyPort) {
+      replyPort.postMessage({ success: true, message: 'Skip waiting successful' });
+    }
+  } else if (event.data && event.data.type) {
+    console.log('Service worker received message:', event.data.type);
+    
+    // Always respond even to unknown messages to prevent "message port closed" errors
+    if (replyPort) {
+      replyPort.postMessage({ 
+        success: false, 
+        message: `Unknown command: ${event.data.type}` 
+      });
+    }
   }
 });
 
