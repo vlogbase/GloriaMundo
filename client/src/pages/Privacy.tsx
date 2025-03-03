@@ -64,13 +64,16 @@ export default function Privacy() {
         
         <section>
           <h2 className="text-xl font-semibold mb-2 text-foreground">Your Rights</h2>
-          <p>You have the right to:</p>
+          <p>GloriaMundo offers the following privacy controls:</p>
           <ul className="list-disc pl-6 mt-2 space-y-1">
-            <li>Access your personal data</li>
-            <li>Delete your conversation history</li>
-            <li>Object to processing of your personal data</li>
-            <li>Request restriction of processing your personal data</li>
+            <li>View your conversation history through the sidebar interface</li>
+            <li>Delete individual conversations using the delete button in the sidebar</li>
+            <li>Clear all conversation history with the "Clear conversations" option</li>
           </ul>
+          <p className="mt-2">
+            If you have additional privacy concerns or requests regarding your data, 
+            please contact us using the information in the Contact section.
+          </p>
         </section>
         
         <section>
