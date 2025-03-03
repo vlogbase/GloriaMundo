@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Dialog, 
@@ -13,7 +12,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { formatDistanceToNow } from "date-fns";
-import { Plus, Globe, Trash2, X } from "lucide-react";
+import { Plus, Globe, Trash2, X, Menu, ChevronRight, Home } from "lucide-react";
 import { Conversation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +23,8 @@ interface SidebarProps {
   onClose: () => void;
   onNewConversation: () => void;
   onClearConversations: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const Sidebar = ({ 
@@ -32,10 +33,19 @@ export const Sidebar = ({
   isOpen,
   onClose,
   onNewConversation,
-  onClearConversations
+  onClearConversations,
+  isCollapsed = false,
+  onToggleCollapse
 }: SidebarProps) => {
   const [_, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Store the collapse state in localStorage
+  useEffect(() => {
+    if (isCollapsed !== undefined) {
+      localStorage.setItem('sidebar-collapsed', isCollapsed.toString());
+    }
+  }, [isCollapsed]);
   
   return (
     <>
@@ -46,11 +56,83 @@ export const Sidebar = ({
           onClick={onClose}
         />
       )}
+
+      {/* Collapsed slim sidebar with just icons - visible on desktop when collapsed */}
+      {isCollapsed && (
+        <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 flex-col w-16 bg-background border-r border-border">
+          {/* Home button */}
+          <div className="p-4 border-b border-border flex flex-col items-center">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="mb-2" title="Home">
+                <Home className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
+              <Plus className="h-5 w-5" />
+            </Button>
+          </div>
+          
+          {/* Toggle expand button */}
+          <div className="flex-1 flex items-center justify-center">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onToggleCollapse}
+              title="Expand Sidebar"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+          
+          {/* Clear conversations button */}
+          <div className="p-4 border-t border-border flex justify-center">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  title="Clear Conversations"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Clear all conversations?</DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete all your conversations. This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => {
+                      onClearConversations();
+                      setIsDialogOpen(false);
+                      setLocation("/");
+                    }}
+                  >
+                    Clear all
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </aside>
+      )}
       
-      {/* Sidebar */}
+      {/* Full Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 md:relative md:z-0 md:h-screen flex flex-col w-64 bg-background border-r border-border transition-transform duration-300 md:translate-x-0",
-        isOpen ? "translate-x-0" : "-translate-x-full"
+        "fixed inset-y-0 left-0 z-50 md:relative md:z-0 md:h-screen flex flex-col bg-background border-r border-border transition-all duration-300 md:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full",
+        isCollapsed ? "md:hidden" : "w-64"
       )}>
         <div className="p-4 border-b border-border flex items-center justify-between">
           <Link href="/">
@@ -59,9 +141,21 @@ export const Sidebar = ({
               GloriaMundo
             </h1>
           </Link>
-          <Button variant="ghost" size="icon" onClick={onNewConversation}>
-            <Plus className="h-5 w-5" />
-          </Button>
+          {/* Collapse button on desktop */}
+          <div className="flex space-x-1">
+            <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
+              <Plus className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hidden md:flex"
+              onClick={onToggleCollapse}
+              title="Collapse Sidebar"
+            >
+              <ChevronRight className="h-5 w-5 rotate-180" />
+            </Button>
+          </div>
         </div>
         
         {/* Conversation list */}
