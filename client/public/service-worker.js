@@ -176,23 +176,43 @@ self.addEventListener('message', (event) => {
   // Ensure we have a MessagePort to respond to
   const replyPort = event.ports && event.ports[0];
   
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-    
-    // Send a response if there's a port to reply to
+  // Always acknowledge receipt of the message with a response
+  // This helps prevent "message port closed" warnings
+  const respondToMessage = (response = { success: true }) => {
     if (replyPort) {
-      replyPort.postMessage({ success: true, message: 'Skip waiting successful' });
+      try {
+        replyPort.postMessage(response);
+      } catch (err) {
+        console.warn('Error responding to message:', err);
+      }
     }
-  } else if (event.data && event.data.type) {
-    console.log('Service worker received message:', event.data.type);
-    
-    // Always respond even to unknown messages to prevent "message port closed" errors
-    if (replyPort) {
-      replyPort.postMessage({ 
-        success: false, 
-        message: `Unknown command: ${event.data.type}` 
+  };
+  
+  // If no message data, send a basic acknowledgment
+  if (!event.data) {
+    return respondToMessage({ success: false, message: 'No message data received' });
+  }
+  
+  // Process message based on type
+  switch (event.data.type) {
+    case 'SKIP_WAITING':
+      self.skipWaiting();
+      respondToMessage({ success: true, message: 'Skip waiting successful' });
+      break;
+      
+    case 'HEARTBEAT':
+      // Just acknowledge heartbeats to keep connection alive
+      respondToMessage({ success: true, message: 'Heartbeat acknowledged', timestamp: Date.now() });
+      break;
+      
+    default:
+      // Handle any unknown message types
+      console.log('Service worker received message:', event.data.type);
+      respondToMessage({ 
+        success: true, 
+        message: `Received: ${event.data.type}`,
+        known: false 
       });
-    }
   }
 });
 

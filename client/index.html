@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/pwa-icons/gm-logo.png" />
+    <!-- Use favicon.ico which loads automatically without preloading -->
+    <link rel="icon" type="image/png" href="/pwa-icons/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#38B2AC" />
     <!-- Mobile web app capability -->
@@ -14,10 +15,10 @@
     <meta name="apple-mobile-web-app-title" content="GloriaMundo" />
     <link rel="apple-touch-icon" href="/pwa-icons/icon-192x192.png" />
     
-    <!-- Preload critical assets -->
-    <link rel="preload" href="/pwa-icons/gm-logo.png" as="image" />
-    <!-- Script preload doesn't work with type="module", using a standard fetch preload instead -->
+    <!-- Preconnect to important origins -->
     <link rel="preconnect" href="/" crossorigin />
+    <!-- We're removing the preload for gm-logo.png since it may not be needed immediately -->
+    <!-- Instead, we'll ensure it's loaded when needed in the component itself -->
     
     <!-- Font optimization -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -69,25 +70,50 @@
             // Function to safely communicate with service worker
             window.sendToServiceWorker = function(message) {
               return new Promise((resolve, reject) => {
+                // Create new message channel for each request
                 const messageChannel = new MessageChannel();
+                
+                // Set up timeout to prevent message port issues
+                const timeout = setTimeout(() => {
+                  // Clean up event listener to prevent memory leaks
+                  messageChannel.port1.onmessage = null;
+                  resolve({ success: false, message: 'Request timed out' });
+                }, 3000);
                 
                 // Set up response handler
                 messageChannel.port1.onmessage = event => {
-                  if (event.data.error) {
+                  clearTimeout(timeout);
+                  if (event.data && event.data.error) {
                     reject(event.data.error);
                   } else {
-                    resolve(event.data);
+                    resolve(event.data || { success: true });
                   }
+                  // Explicitly add this to help prevent "port closed" warnings
+                  messageChannel.port1.close();
                 };
                 
                 // Send message with port for response
                 if (registration.active) {
-                  registration.active.postMessage(message, [messageChannel.port2]);
+                  try {
+                    registration.active.postMessage(message, [messageChannel.port2]);
+                  } catch (err) {
+                    clearTimeout(timeout);
+                    console.warn('Error posting message to service worker:', err);
+                    resolve({ success: false, message: 'Failed to send message' });
+                  }
                 } else {
-                  reject(new Error('No active service worker'));
+                  clearTimeout(timeout);
+                  resolve({ success: false, message: 'No active service worker' });
                 }
               });
             };
+            
+            // Add a heartbeat to keep SW connection alive
+            const heartbeatInterval = 30000; // 30 seconds
+            setInterval(() => {
+              window.sendToServiceWorker({ type: 'HEARTBEAT' })
+                .catch(err => console.debug('SW heartbeat error:', err));
+            }, heartbeatInterval);
           });
         });
       }
