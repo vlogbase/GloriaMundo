@@ -46,16 +46,7 @@ export default function Chat() {
   // State to track whether to show the PWA install banner
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   
-  // State to track sidebar collapse on desktop
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    // Initialize from localStorage if available
-    const savedState = localStorage.getItem('sidebar-collapsed');
-    return savedState ? savedState === 'true' : false;
-  });
-  
-  const toggleSidebarCollapse = () => {
-    setIsSidebarCollapsed(prev => !prev);
-  };
+  // This state is no longer needed as it's handled by useConversations
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
@@ -64,7 +55,9 @@ export default function Chat() {
     toggleMobileSidebar, 
     conversations, 
     createConversation,
-    clearConversations
+    clearConversations,
+    sidebarState,
+    toggleSidebarCollapse
   } = useConversations();
   
   const { 
@@ -138,7 +131,7 @@ export default function Chat() {
   return (
     <div className={cn(
       "flex h-screen overflow-hidden bg-background",
-      isSidebarCollapsed ? "sidebar-collapsed" : ""
+      sidebarState === 'collapsed' ? "sidebar-collapsed" : ""
     )}>
       {/* Sidebar component */}
       <Sidebar 
@@ -148,14 +141,14 @@ export default function Chat() {
         onClose={toggleMobileSidebar}
         onNewConversation={handleNewConversation}
         onClearConversations={clearConversations}
-        isCollapsed={isSidebarCollapsed}
+        isCollapsed={sidebarState === 'collapsed'}
         onToggleCollapse={toggleSidebarCollapse}
       />
       
       {/* Main content */}
       <div className={cn(
         "flex-1 flex flex-col overflow-hidden transition-all duration-300",
-        isSidebarCollapsed ? "ml-16 md:ml-16" : "ml-0 md:ml-0"
+        sidebarState === 'collapsed' ? "ml-16 md:ml-16" : "ml-0 md:ml-0"
       )}>
         {/* Mobile header */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-background">

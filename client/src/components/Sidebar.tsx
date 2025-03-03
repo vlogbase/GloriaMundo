@@ -40,12 +40,8 @@ export const Sidebar = ({
   const [_, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // Store the collapse state in localStorage
-  useEffect(() => {
-    if (isCollapsed !== undefined) {
-      localStorage.setItem('sidebar-collapsed', isCollapsed.toString());
-    }
-  }, [isCollapsed]);
+  // Note: We no longer need to store collapse state in localStorage here
+  // as it's now managed by the useConversations hook with cookies
   
   return (
     <>
