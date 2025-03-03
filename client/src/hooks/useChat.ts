@@ -47,7 +47,7 @@ export const useChat = () => {
     // If not the active conversation, load it first
     if (activeConversationId !== conversationId) {
       setActiveConversationId(conversationId);
-      setLocation(`/conversation/${conversationId}`);
+      setLocation(`/chat/${conversationId}`);
     }
 
     // Optimistically add user message

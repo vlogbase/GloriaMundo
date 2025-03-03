@@ -30,9 +30,17 @@ const ThemeToggle = () => {
 };
 
 export default function Chat() {
-  // Get the conversation ID from the URL if available
-  const [match, params] = useRoute("/conversation/:id");
-  const conversationId = match ? parseInt(params.id) : undefined;
+  // Get the conversation ID from the URL if available (support both formats)
+  const [matchOld, paramsOld] = useRoute("/conversation/:id");
+  const [matchNew, paramsNew] = useRoute("/chat/:id");
+  
+  // Determine the conversation ID from URL parameters
+  let conversationId: number | undefined = undefined;
+  if (matchOld && paramsOld) {
+    conversationId = parseInt(paramsOld.id);
+  } else if (matchNew && paramsNew) {
+    conversationId = parseInt(paramsNew.id);
+  }
   
   // State to track whether to show the PWA install banner
   const [showPwaBanner, setShowPwaBanner] = useState(false);

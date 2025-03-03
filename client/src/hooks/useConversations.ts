@@ -49,7 +49,7 @@ export const useConversations = () => {
       const newConversation = await response.json();
       
       setConversations((prev) => [newConversation, ...prev]);
-      setLocation(`/conversation/${newConversation.id}`);
+      setLocation(`/chat/${newConversation.id}`);
       return newConversation;
     } catch (error) {
       console.error("Error creating conversation:", error);

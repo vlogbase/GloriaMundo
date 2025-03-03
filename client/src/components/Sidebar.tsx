@@ -75,7 +75,7 @@ export const Sidebar = ({
               conversations.map((conversation) => (
                 <Link 
                   key={conversation.id} 
-                  href={`/conversation/${conversation.id}`}
+                  href={`/chat/${conversation.id}`}
                   onClick={onClose}
                 >
                   <div 
