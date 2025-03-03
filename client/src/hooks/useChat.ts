@@ -78,6 +78,11 @@ export const useChat = () => {
           .map(msg => msg.id === tempUserMessage.id ? data.userMessage : msg)
           .concat([data.assistantMessage])
       );
+      
+      // Dispatch a custom event to notify that a message was sent (for conversation title updates)
+      window.dispatchEvent(new CustomEvent('message-sent', {
+        detail: { conversationId }
+      }));
     } catch (error) {
       console.error("Error sending message:", error);
       toast({

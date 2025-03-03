@@ -66,12 +66,17 @@ export default function Chat() {
   
   // Scroll behavior when messages change
   useEffect(() => {
-    if (messages.length > 0 && latestMessageRef.current) {
-      // Scroll to the top of the latest message
-      latestMessageRef.current.scrollIntoView({ 
-        behavior: "smooth", 
-        block: "start" // Ensures we scroll to the top of the element
-      });
+    if (messages.length > 0) {
+      // If there's a latest message ref (AI response), scroll to it
+      if (latestMessageRef.current) {
+        latestMessageRef.current.scrollIntoView({ 
+          behavior: "smooth", 
+          block: "start" // Ensures we scroll to the top of the element
+        });
+      } else if (messagesEndRef.current) {
+        // Otherwise scroll to the bottom to see the latest user message
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      }
     } else if (messagesEndRef.current) {
       // If there are no messages yet, scroll to the bottom
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });

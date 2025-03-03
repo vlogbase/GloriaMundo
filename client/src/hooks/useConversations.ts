@@ -107,6 +107,22 @@ export const useConversations = () => {
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+  
+  // Listen for message-sent event to refresh conversations
+  useEffect(() => {
+    const handleMessageSent = () => {
+      // Add a small delay to ensure server has time to update the conversation title
+      setTimeout(() => {
+        fetchConversations();
+      }, 500); // 500ms should be enough for the server to process
+    };
+    
+    window.addEventListener('message-sent', handleMessageSent);
+    
+    return () => {
+      window.removeEventListener('message-sent', handleMessageSent);
+    };
+  }, [fetchConversations]);
 
   return {
     conversations,
