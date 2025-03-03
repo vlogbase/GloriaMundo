@@ -58,11 +58,17 @@ export const Sidebar = ({
         <aside className="hidden md:flex fixed inset-y-0 left-0 z-50 flex-col w-16 bg-background border-r border-border">
           {/* Top buttons group */}
           <div className="p-4 border-b border-border flex flex-col items-center space-y-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon" title="Home" onClick={() => setLocation("/")}>
-                <Home className="h-5 w-5" />
-              </Button>
-            </Link>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              title="Home" 
+              onClick={() => {
+                setLocation("/");
+                onClose();
+              }}
+            >
+              <Home className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
               <Plus className="h-5 w-5" />
             </Button>
@@ -131,12 +137,18 @@ export const Sidebar = ({
         isCollapsed ? "md:hidden" : "w-64"
       )}>
         <div className="p-4 border-b border-border flex items-center justify-between">
-          <Link href="/" onClick={() => setLocation("/")}>
-            <h1 className="font-semibold text-xl text-primary flex items-center cursor-pointer">
+          <div 
+            onClick={() => {
+              setLocation("/");
+              onClose();
+            }}
+            className="cursor-pointer"
+          >
+            <h1 className="font-semibold text-xl text-primary flex items-center">
               <Globe className="mr-2 text-secondary h-5 w-5" />
               GloriaMundo
             </h1>
-          </Link>
+          </div>
           {/* Collapse button on desktop */}
           <div className="flex space-x-1">
             <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
