@@ -1,8 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Globe, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect, lazy, Suspense, memo } from "react";
+import { Logo } from "@/components/Logo";
 
 interface WelcomeProps {
   onSuggestionClick: (suggestion: string) => void;
@@ -60,7 +61,7 @@ const SuggestionButton = memo(({
           whileHover={{ opacity: 1 }}
           className="text-primary/60"
         >
-          <Globe size={14} />
+          <Logo size={14} />
         </motion.div>
       )}
     </div>
@@ -173,7 +174,7 @@ export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomePr
         <CardContent className="p-6">
           <div className="flex items-center mb-4">
             <div className="h-12 w-12 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-white">
-              <Globe className="h-6 w-6" />
+              <Logo size={24} />
             </div>
             <div className="ml-4">
               <h2 className="text-xl font-semibold">Welcome to GloriaMundo</h2>
