@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Download } from 'lucide-react';
+import { X, Download, BellOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +18,7 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isReminderBanner, setIsReminderBanner] = useState(false);
 
   useEffect(() => {
     // Only show banner if PWA is installable and if show prop is true
@@ -26,8 +27,32 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
       const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches 
                               || (window.navigator as any).standalone === true;
       
-      if (!isInStandaloneMode && localStorage.getItem('pwaInstallBannerDismissed') !== 'true') {
-        setIsVisible(true);
+      const hasOptedOutCompletely = localStorage.getItem('pwaInstallBannerNeverRemind') === 'true';
+      
+      if (!isInStandaloneMode && !hasOptedOutCompletely) {
+        // Check if this is the first time or a reminder
+        const lastShownTime = localStorage.getItem('pwaInstallBannerLastShown');
+        const firstInteractionComplete = localStorage.getItem('pwaInstallBannerFirstInteractionComplete') === 'true';
+        
+        if (!lastShownTime || !firstInteractionComplete) {
+          // First time showing banner
+          setIsReminderBanner(false);
+          setIsVisible(true);
+          localStorage.setItem('pwaInstallBannerLastShown', Date.now().toString());
+          localStorage.setItem('pwaInstallBannerFirstInteractionComplete', 'true');
+        } else {
+          // Check if enough time has passed for a reminder
+          const timeSinceLastShown = Date.now() - parseInt(lastShownTime);
+          const oneHourInMs = 60 * 60 * 1000;
+          const oneDayInMs = 24 * 60 * 60 * 1000;
+          
+          // First reminder after 1 hour, then every 24 hours
+          if (firstInteractionComplete && timeSinceLastShown >= oneHourInMs) {
+            setIsReminderBanner(true);
+            setIsVisible(true);
+            localStorage.setItem('pwaInstallBannerLastShown', Date.now().toString());
+          }
+        }
       }
     }
   }, [show, isInstallable]);
@@ -70,7 +95,12 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
 
   const handleDismiss = () => {
     setIsVisible(false);
-    localStorage.setItem('pwaInstallBannerDismissed', 'true');
+    // For first-time banner, we don't need to set any special flags
+  };
+  
+  const handleNeverRemind = () => {
+    setIsVisible(false);
+    localStorage.setItem('pwaInstallBannerNeverRemind', 'true');
   };
 
   if (!isVisible) return null;
