@@ -3,7 +3,7 @@ import { X, Download, BellOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
-import Logo from './Logo';
+import { Logo } from './Logo';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -40,16 +40,25 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
           setIsVisible(true);
           localStorage.setItem('pwaInstallBannerLastShown', Date.now().toString());
           localStorage.setItem('pwaInstallBannerFirstInteractionComplete', 'true');
+          localStorage.setItem('pwaInstallBannerReminderCount', '0');
         } else {
           // Check if enough time has passed for a reminder
           const timeSinceLastShown = Date.now() - parseInt(lastShownTime);
           const oneHourInMs = 60 * 60 * 1000;
           const oneDayInMs = 24 * 60 * 60 * 1000;
           
+          // Get reminder count to determine timing
+          const reminderCount = parseInt(localStorage.getItem('pwaInstallBannerReminderCount') || '0');
+          
           // First reminder after 1 hour, then every 24 hours
-          if (firstInteractionComplete && timeSinceLastShown >= oneHourInMs) {
+          const requiredTimeToPass = reminderCount === 0 ? oneHourInMs : oneDayInMs;
+          
+          if (firstInteractionComplete && timeSinceLastShown >= requiredTimeToPass) {
             setIsReminderBanner(true);
             setIsVisible(true);
+            
+            // Update reminder count and last shown time
+            localStorage.setItem('pwaInstallBannerReminderCount', (reminderCount + 1).toString());
             localStorage.setItem('pwaInstallBannerLastShown', Date.now().toString());
           }
         }
@@ -136,20 +145,45 @@ export const PwaInstallBanner = ({ show }: PwaInstallBannerProps) => {
               
               {/* Tagline */}
               <p className="text-sm text-muted-foreground">
-                Curiosity meets clarity. GloriaMundo: the conversational agent that transforms questions into adventures.
+                {isReminderBanner 
+                  ? "Don't miss out! Install GloriaMundo for a better experience on your device."
+                  : "Curiosity meets clarity. GloriaMundo: the conversational agent that transforms questions into adventures."
+                }
               </p>
               
-              {/* Install button */}
-              <div className="flex justify-end">
-                <Button 
-                  variant="default" 
-                  onClick={handleInstallClick}
-                  className="bg-primary hover:bg-primary/90 text-white"
-                >
-                  <Download className="h-4 w-4 mr-1" />
-                  Install App
-                </Button>
-              </div>
+              {/* Action buttons - different layout for reminder */}
+              {isReminderBanner ? (
+                <div className="flex justify-end items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleNeverRemind}
+                    className="text-xs"
+                  >
+                    <BellOff className="h-3 w-3 mr-1" />
+                    Don't remind me again
+                  </Button>
+                  <Button 
+                    variant="default" 
+                    onClick={handleInstallClick}
+                    className="bg-primary hover:bg-primary/90 text-white"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Install App
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <Button 
+                    variant="default" 
+                    onClick={handleInstallClick}
+                    className="bg-primary hover:bg-primary/90 text-white"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Install App
+                  </Button>
+                </div>
+              )}
             </div>
           </Card>
         </motion.div>
