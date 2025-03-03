@@ -14,9 +14,13 @@ const PERPLEXITY_MODEL = "llama-3.1-sonar-small-128k-online";
 const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Serve ads.txt at the root level
+  // Serve ads.txt and sitemap.xml at the root level
   app.get("/ads.txt", (req, res) => {
     res.sendFile("client/public/ads.txt", { root: "." });
+  });
+  
+  app.get("/sitemap.xml", (req, res) => {
+    res.sendFile("client/public/sitemap.xml", { root: "." });
   });
 
   // API routes
