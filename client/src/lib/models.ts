@@ -18,8 +18,8 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
   multimodal: {
     id: "multimodal",
     name: "Multimodal",
-    description: "Advanced model with versatile capabilities (Llama 3.3 Versatile)",
-    apiName: "llama-3.3-70b-versatile",
+    description: "Vision capabilities for analyzing images and text (Llama 3.2 Vision)",
+    apiName: "llama-3.2-90b-vision-preview",
     apiProvider: "groq"
   }
 };

@@ -16,6 +16,7 @@ export interface Message {
   conversationId: number;
   role: "user" | "assistant" | "system";
   content: string;
+  image?: string; // Base64 encoded image data
   citations: string[] | null;
   createdAt: string;
 }
