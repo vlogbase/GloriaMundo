@@ -532,7 +532,10 @@ Format your responses using markdown for better readability and organization.`;
           let generatedTitle = "";
           
           // Extract main topic from first user message
-          if (content.length <= 25) {
+          if (!content || content.length === 0) {
+            // Handle empty content case
+            generatedTitle = image ? "Image Analysis" : "New Conversation";
+          } else if (content.length <= 25) {
             // If message is short, use it directly
             generatedTitle = content as string;
           } else {
@@ -592,7 +595,10 @@ Format your responses using markdown for better readability and organization.`;
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, modelType = "reasoning", image } = req.body;
+      let { content = "", modelType = "reasoning", image } = req.body;
+      
+      // Ensure content is a string (even if empty)
+      content = content || "";
       
       if (!content && !image) {
         return res.status(400).json({ message: "Message content or image is required" });
@@ -761,7 +767,10 @@ Format your responses using markdown for better readability and organization.`;
           let generatedTitle = "";
           
           // Extract main topic from first user message
-          if (content.length <= 25) {
+          if (!content || content.length === 0) {
+            // Handle empty content case
+            generatedTitle = image ? "Image Analysis" : "New Conversation";
+          } else if (content.length <= 25) {
             // If message is short, use it directly
             generatedTitle = content;
           } else {
@@ -1002,7 +1011,10 @@ Format your responses using markdown for better readability and organization.`;
           let generatedTitle = "";
           
           // Extract main topic from first user message
-          if (content.length <= 25) {
+          if (!content || content.length === 0) {
+            // Handle empty content case
+            generatedTitle = image ? "Image Analysis" : "New Conversation";
+          } else if (content.length <= 25) {
             // If message is short, use it directly
             generatedTitle = content;
           } else {
