@@ -14,9 +14,24 @@ declare module 'express-session' {
   }
 }
 
-// Define API keys
+// Define API keys with proper validation
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || "";
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+
+// Validate API keys on startup
+const isPerplexityKeyValid = PERPLEXITY_API_KEY && PERPLEXITY_API_KEY.length > 10;
+const isGroqKeyValid = GROQ_API_KEY && GROQ_API_KEY.length > 10;
+
+console.log("API Key Status:");
+console.log(`- Perplexity API Key: ${isPerplexityKeyValid ? "Valid" : "Invalid or Missing"}`);
+console.log(`- Groq API Key: ${isGroqKeyValid ? "Valid" : "Invalid or Missing"}`);
+
+// Function to validate API key at request time
+function isValidApiKey(key: string | undefined | null): boolean {
+  if (!key) return false;
+  if (typeof key !== 'string') return false;
+  return key.length > 10;
+}
 
 // Define model configurations
 const MODEL_CONFIGS = {
@@ -50,9 +65,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     res.json({
       perplexityKey: perplexityKeyStatus,
+      perplexityKeyValid: isValidApiKey(PERPLEXITY_API_KEY),
       groqKey: groqKeyStatus,
+      groqKeyValid: isValidApiKey(GROQ_API_KEY),
       envVars: Object.keys(process.env).filter(key => key.includes("API") || key.includes("KEY"))
     });
+  });
+  
+  // Test API connections without sending real messages
+  app.get("/api/debug/test-connection/:provider", async (req, res) => {
+    const { provider } = req.params;
+    
+    try {
+      let apiUrl, apiKey, modelName;
+      
+      if (provider === "groq") {
+        apiUrl = "https://api.groq.com/openai/v1/models";
+        apiKey = GROQ_API_KEY;
+        modelName = "models list";
+      } else if (provider === "perplexity") {
+        apiUrl = "https://api.perplexity.ai/chat/completions";
+        apiKey = PERPLEXITY_API_KEY;
+        modelName = "test connection";
+      } else {
+        return res.status(400).json({ error: "Invalid provider. Use 'groq' or 'perplexity'." });
+      }
+      
+      if (!isValidApiKey(apiKey)) {
+        return res.status(400).json({ 
+          error: `No valid API key for ${provider}`, 
+          keyValid: false,
+          keyExists: !!apiKey,
+          keyLength: apiKey ? apiKey.length : 0
+        });
+      }
+      
+      // For Perplexity, we need to send a minimal request since they don't have a models endpoint
+      if (provider === "perplexity") {
+        const testPayload = {
+          model: "llama-3.1-sonar-reasoning-128k-online",
+          messages: [
+            {
+              role: "system",
+              content: "You are a helpful assistant. Keep your response very short."
+            },
+            {
+              role: "user",
+              content: "Test connection. Say 'CONNECTION_OK' if you can hear me."
+            }
+          ],
+          max_tokens: 20
+        };
+        
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(testPayload)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          return res.status(response.status).json({ 
+            error: `API returned ${response.status}`, 
+            details: errorText,
+            provider
+          });
+        }
+        
+        return res.json({ 
+          success: true, 
+          provider,
+          status: "Connected successfully"
+        });
+      }
+      
+      // For Groq, use their models endpoint
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(response.status).json({ 
+          error: `API returned ${response.status}`, 
+          details: errorText,
+          provider
+        });
+      }
+      
+      return res.json({ 
+        success: true, 
+        provider,
+        status: "Connected successfully"
+      });
+    } catch (error) {
+      console.error(`Error testing ${provider} API connection:`, error);
+      return res.status(500).json({ 
+        error: "Failed to test API connection", 
+        provider,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
   });
 
   // Serve ads.txt and sitemap.xml at the root level
@@ -263,8 +382,9 @@ Format your responses using markdown for better readability.`;
       }
 
       // Check if we have the required API key for the selected model
-      if (!modelConfig.apiKey) {
-        // No API key, send a mock response
+      if (!isValidApiKey(modelConfig.apiKey)) {
+        console.error(`Invalid or missing API key for ${modelType} model (provider: ${modelConfig.apiProvider})`);
+        // No valid API key, send a mock response
         const assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
