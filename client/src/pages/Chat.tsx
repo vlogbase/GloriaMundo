@@ -185,75 +185,12 @@ export default function Chat() {
               isLoading={isLoadingResponse} 
             />
           ) : messages.length === 0 && isLoadingResponse ? (
-            <div className="max-w-4xl mx-auto">
-              <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 shadow-sm border-none p-10">
-                <div className="flex flex-col items-center justify-center space-y-6 text-center">
-                  <div className="h-24 w-24 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-white relative">
-                    <Globe className="h-12 w-12" />
-                    <motion.div 
-                      className="absolute -right-2 -top-2"
-                      animate={{ 
-                        scale: [0.8, 1.2, 0.8],
-                        rotate: [0, 10, 0, -10, 0],
-                        opacity: [0.7, 1, 0.7]
-                      }}
-                      transition={{ 
-                        duration: 2,
-                        repeat: Infinity
-                      }}
-                    >
-                      <Sparkles className="h-8 w-8 text-yellow-400" />
-                    </motion.div>
-                  </div>
-                  
-                  <h2 className="text-2xl font-semibold mt-6">Discovering wonderful things...</h2>
-                  <p className="text-muted-foreground max-w-md">
-                    GloriaMundo is exploring the world to bring you a joyful, informative response. Just a moment while we gather the perfect information for you!
-                  </p>
-                  
-                  <div className="flex space-x-3 mt-4">
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.2, 1],
-                        y: [0, -10, 0]
-                      }}
-                      transition={{ 
-                        duration: 1.5,
-                        repeat: Infinity,
-                        repeatType: "loop",
-                        delay: 0
-                      }}
-                      className="h-3 w-3 bg-primary rounded-full"
-                    />
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.2, 1],
-                        y: [0, -10, 0]
-                      }}
-                      transition={{ 
-                        duration: 1.5,
-                        repeat: Infinity,
-                        repeatType: "loop",
-                        delay: 0.2
-                      }}
-                      className="h-3 w-3 bg-primary rounded-full"
-                    />
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.2, 1],
-                        y: [0, -10, 0]
-                      }}
-                      transition={{ 
-                        duration: 1.5,
-                        repeat: Infinity,
-                        repeatType: "loop",
-                        delay: 0.4
-                      }}
-                      className="h-3 w-3 bg-primary rounded-full"
-                    />
-                  </div>
-                </div>
-              </Card>
+            <div className="flex justify-center items-center h-full">
+              <div className="typing-indicator">
+                <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-0"></span>
+                <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-150 mx-2"></span>
+                <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-300"></span>
+              </div>
             </div>
           ) : (
             <>
