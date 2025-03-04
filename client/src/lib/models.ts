@@ -11,8 +11,8 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
   search: {
     id: "search",
     name: "Search",
-    description: "Provides up-to-date information with search capabilities (Sonar-reasoning)",
-    apiName: "llama-3.1-sonar-reasoning-128k-online",
+    description: "Provides up-to-date information with search capabilities (Sonar-small)",
+    apiName: "sonar-small-online",
     apiProvider: "perplexity"
   },
   multimodal: {

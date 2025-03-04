@@ -43,7 +43,7 @@ const MODEL_CONFIGS = {
   },
   search: {
     apiProvider: "perplexity",
-    modelName: "llama-3.1-sonar-reasoning-128k-online",
+    modelName: "sonar-small-online",  // Updated to a valid model name
     apiUrl: "https://api.perplexity.ai/chat/completions",
     apiKey: PERPLEXITY_API_KEY
   },
@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For Perplexity, we need to send a minimal request since they don't have a models endpoint
       if (provider === "perplexity") {
         const testPayload = {
-          model: "llama-3.1-sonar-reasoning-128k-online",
+          model: "sonar-small-online", // Using a valid model name
           messages: [
             {
               role: "system",
