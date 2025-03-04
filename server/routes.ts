@@ -713,11 +713,25 @@ Format your responses using markdown for better readability and organization.`;
       if (lastRole !== "user") {
         if (image && modelType === "multimodal") {
           // Add the image data for multimodal requests with proper typing
+          // For llama-3.2-90b-vision-preview, the image URL must be a data URL or a publicly accessible URL
+          // Make sure image URL is properly formatted if it's a base64 data URL
+          let imageUrl = image;
+          if (image.startsWith('data:')) {
+            // It's already a data URL, we can use it as is
+            console.log("Using provided data URL for multimodal request");
+          } else if (!image.startsWith('http')) {
+            // If it's not a URL and not a data URL, prefix with data:image
+            if (!image.startsWith('data:image')) {
+              imageUrl = `data:image/jpeg;base64,${image}`;
+              console.log("Converting base64 to proper data URL format");
+            }
+          }
+
           const multimodalMessage: MultimodalMessage = {
             role: "user",
             content: [
               { type: "text", text: content },
-              { type: "image_url", image_url: { url: image } }
+              { type: "image_url", image_url: { url: imageUrl } }
             ]
           };
           messages.push(multimodalMessage);
@@ -799,11 +813,35 @@ Format your responses using markdown for better readability and organization.`;
         // Log request information
         console.log(`Calling ${modelType} API (${modelConfig.apiProvider}) with:`, {
           model: modelConfig.modelName,
-          messages: JSON.stringify(messages),
           temperature: 0.2,
           top_p: 0.9,
-          stream: shouldStream
+          stream: shouldStream,
+          messagesCount: messages.length,
+          messagesTypes: messages.map(msg => {
+            if ('content' in msg && Array.isArray(msg.content)) {
+              return 'multimodal';
+            } else {
+              return 'text';
+            }
+          })
         });
+        
+        // For debug purposes, log the actual shape of multimodal messages without exposing too much data
+        if (modelType === "multimodal") {
+          console.log("Multimodal message structure:", 
+            messages.map(msg => {
+              if ('content' in msg && Array.isArray(msg.content)) {
+                // For multimodal messages, log the structure without the full data URLs
+                return {
+                  role: msg.role,
+                  contentTypes: msg.content.map(item => item.type)
+                };
+              } else {
+                return { role: msg.role, contentType: 'text' };
+              }
+            })
+          );
+        }
 
         const payload = {
           model: modelConfig.modelName,
