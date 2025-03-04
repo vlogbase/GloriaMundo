@@ -43,7 +43,7 @@ const MODEL_CONFIGS = {
   },
   search: {
     apiProvider: "perplexity",
-    modelName: "pplx-70b-online",  // Updated to an officially supported Perplexity model
+    modelName: "sonar-reasoning",  // Updated with the correct model name
     apiUrl: "https://api.perplexity.ai/chat/completions",
     apiKey: PERPLEXITY_API_KEY
   },
@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For Perplexity, we need to send a minimal request since they don't have a models endpoint
       if (provider === "perplexity") {
         const testPayload = {
-          model: "pplx-70b-online", // Using an officially supported Perplexity model
+          model: "sonar-reasoning", // Using the correct Perplexity model name
           messages: [
             {
               role: "system",

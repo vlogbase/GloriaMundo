@@ -11,8 +11,8 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
   search: {
     id: "search",
     name: "Search",
-    description: "Provides up-to-date information with search capabilities (PPLX-70B)",
-    apiName: "pplx-70b-online",
+    description: "Provides up-to-date information with search capabilities (Sonar)",
+    apiName: "sonar-reasoning",
     apiProvider: "perplexity"
   },
   multimodal: {
