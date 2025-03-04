@@ -65,7 +65,7 @@ const MODEL_CONFIGS = {
   },
   multimodal: {
     apiProvider: "groq",
-    modelName: "llama-3.3-70b-versatile",
+    modelName: "llama-3.2-90b-vision-preview",
     apiUrl: "https://api.groq.com/openai/v1/chat/completions",
     apiKey: GROQ_API_KEY
   }
@@ -374,7 +374,8 @@ Remember that your purpose is to provide accurate, helpful information that addr
 
 Format your responses using markdown for better readability and organization.`;
 
-      const messages = [
+      // Initialize the messages array with proper typing for both text and multimodal messages
+      const messages: ApiMessage[] = [
         {
           role: "system",
           content: systemContent,
@@ -389,14 +390,14 @@ Format your responses using markdown for better readability and organization.`;
         if (msg.role !== lastRole) {
           if (msg.role === "user" && msg.image && modelType === "multimodal") {
             // For multimodal model with image, format according to Llama 3.2 Vision requirements
-            // We need to use any type here since the API needs a different format for multimodal messages
-            (messages as any).push({
+            const multimodalMessage: MultimodalMessage = {
               role: msg.role,
               content: [
                 { type: "text", text: msg.content },
                 { type: "image_url", image_url: { url: msg.image } }
               ]
-            });
+            };
+            messages.push(multimodalMessage);
           } else {
             messages.push({
               role: msg.role,
@@ -410,15 +411,15 @@ Format your responses using markdown for better readability and organization.`;
       // Ensure the last message is from the user
       if (lastRole !== "user") {
         if (image && modelType === "multimodal") {
-          // Add the image data for multimodal requests - using any to bypass type checking
-          // This is necessary because multimodal models expect a different content format
-          (messages as any).push({
+          // Add the image data for multimodal requests with proper typing
+          const multimodalMessage: MultimodalMessage = {
             role: "user",
             content: [
               { type: "text", text: content },
               { type: "image_url", image_url: { url: image } }
             ]
-          });
+          };
+          messages.push(multimodalMessage);
         } else {
           messages.push({
             role: "user",
