@@ -94,25 +94,27 @@ export const useStreamingChat = () => {
         eventSourceRef.current = null;
       }
       
-      // For streaming (reasoning model), use SSE
-      if (selectedModel === "reasoning") {
-        // Reset the streaming message ref
+      // Check if we're running in a deployed/production environment
+      const isProduction = window.location.host.includes('.replit.app') || 
+                          window.location.host.includes('.gloriamundo.com') ||
+                          !window.location.host.includes('localhost');
+      
+      // In production environments or with non-reasoning models, don't use streaming
+      // This avoids streaming issues in deployed environments
+      if (selectedModel === "reasoning" && !isProduction) {
+        // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
         // Create a new EventSource connection
         const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
         eventSourceRef.current = eventSource;
         
-        // Handle the different event types
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
           
           // Handle different event types
           switch (data.type) {
             case "initial":
-              // Keep both the temporary user message and add the real one for debugging
-              console.log("Received initial event with user message:", data.userMessage);
-              
               // Set up the streaming message reference
               streamingMessageRef.current = {
                 id: data.assistantMessageId,
@@ -145,19 +147,15 @@ export const useStreamingChat = () => {
               break;
               
             case "done":
-              // Final update with the complete message, only update the assistant message
-              // but keep the user message as is
+              // Final update with the complete message
               setMessages((prev) => prev.map(msg => 
                 msg.id === data.assistantMessage.id ? data.assistantMessage : msg
               ));
               
-              // Set streaming complete flag for scroll behavior
               setStreamingComplete(true);
               
-              // Clean up after a short delay to allow UI updates to process
               setTimeout(() => {
                 setIsLoadingResponse(false);
-                // Reset streaming complete flag after loading state is updated
                 setTimeout(() => setStreamingComplete(false), 100);
               }, 50);
               
@@ -165,7 +163,6 @@ export const useStreamingChat = () => {
               eventSourceRef.current = null;
               streamingMessageRef.current = null;
               
-              // Dispatch a custom event to notify that a message was sent (for conversation title updates)
               window.dispatchEvent(new CustomEvent('message-sent', {
                 detail: { conversationId }
               }));
@@ -181,7 +178,7 @@ export const useStreamingChat = () => {
           toast({
             variant: "destructive",
             title: "Connection Error",
-            description: "Lost connection to the server. Please try again.",
+            description: "Streaming failed. Falling back to standard mode.",
           });
           
           // Clean up
@@ -189,14 +186,13 @@ export const useStreamingChat = () => {
           eventSource.close();
           eventSourceRef.current = null;
           
-          // If we have a partial message, keep it
+          // If we have a partial message, remove it and fall back to non-streaming
           if (streamingMessageRef.current) {
-            setMessages((prev) => prev.map(msg => 
-              msg.id === streamingMessageRef.current?.id 
-                ? { ...msg, content: msg.content + "\n\n*Connection lost. Message may be incomplete.*" } 
-                : msg
-            ));
+            setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
             streamingMessageRef.current = null;
+            
+            // Fall back to non-streaming request
+            fallbackToNonStreaming(conversationId, content, image);
           }
         };
         
@@ -204,7 +200,31 @@ export const useStreamingChat = () => {
         return;
       }
       
-      // For non-streaming models (search, multimodal), use regular fetch
+      // For non-streaming approach (production or non-reasoning models), use regular fetch
+      await fallbackToNonStreaming(conversationId, content, image);
+      
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to send message",
+      });
+      
+      // Remove the optimistic message on error
+      setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessage.id));
+    } finally {
+      // For non-streaming requests, we need to set loading to false here
+      // (For streaming requests, this is done in the "done" event handler)
+      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
+        setIsLoadingResponse(false);
+      }
+    }
+  }, [activeConversationId, selectedModel, setLocation, toast]);
+  
+  // Helper function to handle non-streaming requests
+  const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string) => {
+    try {
       const response = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: {
@@ -223,35 +243,39 @@ export const useStreamingChat = () => {
       
       const data = await response.json();
       
-      // We already added the user message optimistically - just replace it with the real one and add assistant message
-      setMessages((prev) => 
-        prev
-          .map(msg => msg.id === tempUserMessage.id ? data.userMessage : msg)
-          .concat([data.assistantMessage])
-      );
+      // Update messages with the response data
+      setMessages((prev) => {
+        // Find our temporary message and replace it
+        const userMsgIndex = prev.findIndex(msg => 
+          msg.role === "user" && msg.content === content && msg.conversationId === conversationId
+        );
+        
+        if (userMsgIndex === -1) {
+          // If we can't find it, just add both messages
+          return [...prev, data.userMessage, data.assistantMessage];
+        }
+        
+        // Replace the temporary user message and add the assistant message
+        const newMessages = [...prev];
+        newMessages[userMsgIndex] = data.userMessage;
+        
+        // Add the assistant message if it doesn't exist already
+        if (!prev.some(msg => msg.id === data.assistantMessage.id)) {
+          newMessages.push(data.assistantMessage);
+        }
+        
+        return newMessages;
+      });
       
-      // Dispatch a custom event to notify that a message was sent (for conversation title updates)
+      // Notify that a message was sent (for conversation title updates)
       window.dispatchEvent(new CustomEvent('message-sent', {
         detail: { conversationId }
       }));
     } catch (error) {
-      console.error("Error sending message:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to send message",
-      });
-      
-      // Remove the optimistic message on error
-      setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessage.id));
-    } finally {
-      // For non-streaming requests, we need to set loading to false here
-      // (For streaming requests, this is done in the "done" event handler)
-      if (selectedModel !== "reasoning") {
-        setIsLoadingResponse(false);
-      }
+      console.error("Error in fallback request:", error);
+      throw error; // Re-throw to be caught by the main try/catch
     }
-  }, [activeConversationId, selectedModel, setLocation, toast]);
+  };
 
   // Start a new conversation
   const startNewConversation = useCallback(async () => {
