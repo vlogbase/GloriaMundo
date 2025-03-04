@@ -1,43 +1,152 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState, useEffect, lazy, Suspense, memo } from "react";
-import { Logo } from "@/components/Logo";
+import { useState, useEffect, memo } from "react";
+import { useModelSelection } from "@/hooks/useModelSelection";
+import { ModelType } from "@/lib/types";
 
 interface WelcomeProps {
   onSuggestionClick: (suggestion: string) => void;
   isLoading?: boolean;
 }
 
-// Memoized Button component for better performance
-const SuggestionButton = memo(({ 
+interface SuggestionData {
+  shortQuestion: string;
+  fullQuestion: string;
+  modelTypes: ModelType[];
+}
+
+// The suggestions data from CSV
+const SUGGESTIONS_DATA: SuggestionData[] = [
+  { 
+    shortQuestion: "Next Prime Number?", 
+    fullQuestion: "Consider the following sequence: 2, 3, 5, 7, 11. What is the next prime number? Please explain your reasoning step by step.",
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Solve the riddle", 
+    fullQuestion: 'Solve the riddle: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?" Provide clues and detailed reasoning.',
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Assign pets logically", 
+    fullQuestion: "In a logic puzzle, three friends—Alex, Bob, and Carol—each own a different pet: a cat, a dog, and a bird. Given that Alex does not own the bird and Bob is allergic to cats, determine who owns which pet using step-by-step deductions.",
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Prove √2 irrational", 
+    fullQuestion: "Prove that the square root of 2 is irrational by using a proof by contradiction. Clearly outline each logical step in your explanation.",
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Analyze argument logic", 
+    fullQuestion: 'Analyze the argument: "If it rains, the ground gets wet. The ground is wet, therefore it rained." Identify any logical fallacies or assumptions and discuss the validity of this reasoning.',
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Solve arithmetic puzzle", 
+    fullQuestion: "Solve this arithmetic puzzle: If 5 + 3 = 28 and 9 + 1 = 910, determine what 7 + 3 equals. Explain your reasoning and the pattern behind these equations.",
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Swan color question", 
+    fullQuestion: 'Consider the statement: "All swans are white." If a single black swan is observed, what does that imply about the statement? Discuss your reasoning process.',
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Predict Fibonacci numbers", 
+    fullQuestion: "Given the Fibonacci sequence: 1, 1, 2, 3, 5, 8, 13, predict the next two numbers and explain how the sequence is generated.",
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Moral dilemma analysis", 
+    fullQuestion: 'Debate the moral dilemma: "Is it ever justifiable to lie in order to protect someone\'s feelings?" Present a structured argument, including pros and cons.',
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "Chess endgame strategy", 
+    fullQuestion: "In a simplified chess endgame with only a king and pawn, explain the strategy required to promote the pawn into a queen, detailing each necessary move.",
+    modelTypes: ["reasoning", "multimodal"]
+  },
+  { 
+    shortQuestion: "2023 IPCC Report Summary", 
+    fullQuestion: "Find and summarize the key findings of the 2023 IPCC report on climate change, including major recommendations and data trends.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Internet usage 2024?", 
+    fullQuestion: "Search for current statistics on global internet usage in 2024 and analyze the trends and implications based on recent reports.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Renewable breakthroughs?", 
+    fullQuestion: "Identify the top three renewable energy breakthroughs of the past year and explain their potential impact on energy markets.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "EV battery advancements", 
+    fullQuestion: "Locate a detailed review of the latest advancements in electric vehicle battery technology, and summarize how these improvements compare to previous generations.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Cybersecurity threats 2024", 
+    fullQuestion: "Find a comprehensive report on current cybersecurity threats in 2024, including recommended mitigation strategies and analysis.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Mars rover news", 
+    fullQuestion: "Search for the latest updates on Mars rover missions and discoveries, summarizing the key news and findings from recent space exploration efforts.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Global economic trends", 
+    fullQuestion: "Locate a detailed analysis of global economic trends in 2024, highlighting key sectors driving growth and current challenges.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "AI in healthcare?", 
+    fullQuestion: "Search for current data on the adoption of AI technologies in healthcare and explain how these advancements are transforming patient care.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Digital privacy laws", 
+    fullQuestion: "Find recent insights on digital privacy laws around the world and discuss how evolving regulations impact technology companies.",
+    modelTypes: ["search"]
+  },
+  { 
+    shortQuestion: "Tech legal cases", 
+    fullQuestion: "Locate updates on major legal cases involving tech companies, summarizing the controversies, legal arguments, and outcomes.",
+    modelTypes: ["search"]
+  }
+];
+
+// Individual suggestion bubble component
+const SuggestionBubble = memo(({ 
   suggestion, 
-  isThisClicked, 
-  isLoading,
+  isClicked,
+  isLoading, 
   onClick 
 }: { 
   suggestion: string;
-  isThisClicked: boolean;
+  isClicked: boolean;
   isLoading: boolean;
   onClick: () => void;
-}) => (
-  <Button
-    variant="outline"
-    className={`suggestion-button w-full h-auto py-4 px-5 bg-card hover:bg-muted justify-start text-left relative 
-               overflow-visible shadow-sm transition-all duration-200 
-               ${isThisClicked 
-                 ? 'border-primary border-2 bg-primary/5' 
-                 : 'hover:shadow hover:border-primary/40'}`}
-    onClick={onClick}
-    disabled={isLoading}
-  >
-    <div className="flex justify-between w-full items-start">
-      <div className="suggestion-content font-medium text-sm md:text-base pr-6 text-left break-words">{suggestion}</div>
-      
-      {/* Joyful loading indicator with sparkles */}
-      {isThisClicked ? (
-        <div className="flex-shrink-0 flex items-center space-x-1 explore-animation">
+}) => {
+  return (
+    <motion.button
+      className={`px-4 py-3 rounded-2xl bg-primary/10 hover:bg-primary/20 transition-all
+                 text-sm md:text-base cursor-pointer shadow-sm
+        ${isClicked ? "bg-primary/30 text-primary font-medium" : ""}
+        ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
+      `}
+      disabled={isLoading}
+      onClick={onClick}
+      whileHover={{ scale: 1.03 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span>{suggestion}</span>
+        
+        {isClicked && (
           <motion.div
             animate={{ 
               scale: [0.8, 1.2, 0.8],
@@ -49,159 +158,74 @@ const SuggestionButton = memo(({
             }}
             className="text-primary"
           >
-            <Sparkles size={16} />
+            <Sparkles size={14} />
           </motion.div>
-          <div className="explore-text text-primary hidden sm:block">
-            <span className="text-sm">Exploring...</span>
-          </div>
-        </div>
-      ) : (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          whileHover={{ opacity: 1 }}
-          className="text-primary/60"
-        >
-          <Logo size={18} />
-        </motion.div>
-      )}
-    </div>
-  </Button>
-));
+        )}
+      </div>
+    </motion.button>
+  );
+});
 
-SuggestionButton.displayName = 'SuggestionButton';
+SuggestionBubble.displayName = 'SuggestionBubble';
 
 // The main Welcome component
 export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomeProps) => {
-  const [clickedSuggestion, setClickedSuggestion] = useState<string | null>(null);
-  const [displayedSuggestions, setDisplayedSuggestions] = useState<string[]>([]);
+  const [clickedSuggestionId, setClickedSuggestionId] = useState<number | null>(null);
+  const [displayedSuggestions, setDisplayedSuggestions] = useState<SuggestionData[]>([]);
+  const { selectedModel } = useModelSelection();
   
-  // Only include the top 8 most relevant suggestions to reduce initial bundle size
-  const topSuggestions = [
-    "What's a small joy I could add to my morning routine?",
-    "Suggest a fun outdoor activity for this weekend based on the weather forecast.",
-    "What are the happiest places to visit in the world?",
-    "How can I bring more color into my living space without a major renovation?",
-    "What's a simple recipe that brings people together?",
-    "Show me creative ways people are spreading kindness today.",
-    "What beautiful natural phenomena can I see this month?",
-    "Which books are bringing readers the most joy this year?"
-  ];
-  
-  // Lazy load the full suggestions list
-  const [fullSuggestionsLoaded, setFullSuggestionsLoaded] = useState(false);
-  const [allSuggestions, setAllSuggestions] = useState(topSuggestions);
-  
-  // Load full suggestions when component is mounted
+  // Get suggestions appropriate for the current model
   useEffect(() => {
-    // Only load full suggestions if not already loaded
-    if (!fullSuggestionsLoaded) {
-      const additionalSuggestions = [
-        "What's a simple craft I could make with items already in my home?",
-        "How are people celebrating the upcoming season in joyful ways?",
-        "What hobby has the best community for beginners to join?",
-        "What positive environmental changes are happening right now?",
-        "Which simple stretches could make my workday more pleasant?",
-        "What's a delightful tradition from another culture I could learn about?",
-        "Show me inspiring stories of everyday heroes from this week.",
-        "What's a fun way to learn something new in just 10 minutes a day?",
-        "What mindfulness practice brings the most joy to beginners?",
-        "What unexpected ingredients are chefs using to create amazing flavors this season?",
-        "Which tech tools are helping people connect more meaningfully?",
-        "What's a simple way to bring more music into my daily routine?",
-        "What's an efficient way to organize my kitchen that makes cooking more enjoyable?",
-        "Which houseplants thrive with minimal care but brighten a space?",
-        "What are some budget-friendly day trips worth taking?",
-        "How can I transform my commute time into something I look forward to?",
-        "What small kitchen gadget makes the biggest difference in meal preparation?",
-        "Which fabrics are both comfortable and durable for everyday furniture?",
-        "What's a 15-minute exercise routine that energizes rather than exhausts?",
-        "How can I make my workspace more ergonomic and visually pleasing?",
-        "What are some easy ways to personalize gift-giving without spending more?",
-        "Which simple maintenance tasks prevent bigger headaches for homeowners?",
-        "What are some versatile ingredients worth keeping stocked in my pantry?",
-        "How can I improve my sleep environment without buying a new mattress?",
-        "What digital tools help people organize their thoughts more effectively?",
-        "Which podcast genres are people finding most engaging on their daily walks?",
-        "What's a low-maintenance outdoor plant that attracts butterflies or birds?",
-        "How are people repurposing everyday items to reduce waste creatively?",
-        "What activities help build meaningful connections with neighbors?",
-        "Which seasonal foods are at their peak flavor right now?",
-        "What's a simple photography technique that transforms ordinary moments?",
-        "How can I create a relaxing evening routine that improves my next day?"
-      ];
+    const getRandomSuggestionsForModel = () => {
+      // Filter suggestions applicable to the current model
+      const filteredSuggestions = SUGGESTIONS_DATA.filter(suggestion => 
+        suggestion.modelTypes.includes(selectedModel)
+      );
       
-      // Use a timeout to prioritize initial render first
-      setTimeout(() => {
-        setAllSuggestions([...topSuggestions, ...additionalSuggestions]);
-        setFullSuggestionsLoaded(true);
-      }, 100);
-    }
-  }, [fullSuggestionsLoaded]);
-  
-  // Randomly select 4 unique suggestions
-  useEffect(() => {
-    const getRandomSuggestions = () => {
       // Shuffle array and pick first 4
-      const shuffled = [...allSuggestions].sort(() => 0.5 - Math.random());
+      const shuffled = [...filteredSuggestions].sort(() => 0.5 - Math.random());
       setDisplayedSuggestions(shuffled.slice(0, 4));
     };
     
-    getRandomSuggestions();
-  }, [allSuggestions]);
+    getRandomSuggestionsForModel();
+  }, [selectedModel]);
   
-  const handleSuggestionClick = (suggestion: string) => {
-    if (isLoading || clickedSuggestion) return; // Prevent multiple clicks
+  const handleSuggestionClick = (index: number, suggestion: SuggestionData) => {
+    if (isLoading || clickedSuggestionId !== null) return; // Prevent multiple clicks
     
-    setClickedSuggestion(suggestion);
-    onSuggestionClick(suggestion);
+    setClickedSuggestionId(index);
+    onSuggestionClick(suggestion.fullQuestion);
   };
   
   // Reset clicked suggestion when loading is complete
   useEffect(() => {
-    if (!isLoading && clickedSuggestion) {
-      setClickedSuggestion(null);
+    if (!isLoading && clickedSuggestionId !== null) {
+      setClickedSuggestionId(null);
     }
-  }, [isLoading, clickedSuggestion]);
+  }, [isLoading, clickedSuggestionId]);
   
   return (
     <motion.div 
-      className="w-full max-w-4xl mx-auto px-1 sm:px-0"
+      className="flex flex-col items-center justify-center mt-20 mb-10"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 shadow-sm border-none">
-        <CardContent className="p-6">
-          <div className="flex items-center mb-4">
-            <div className="h-12 w-12 flex items-center justify-center">
-              <Logo size={42} />
-            </div>
-            <div className="ml-4">
-              <h2 className="text-xl font-semibold">Welcome to GloriaMundo</h2>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-w-2xl">
+        {displayedSuggestions.map((suggestion, index) => {
+          const isThisClicked = clickedSuggestionId === index;
           
-          <p className="mb-4">
-            Curiosity meets clarity. GloriaMundo: the conversational agent that transforms questions into adventures.
-          </p>
-          
-          <div className="space-y-4 mt-6">
-            {displayedSuggestions.map((suggestion, index) => {
-              const isThisClicked = clickedSuggestion === suggestion;
-              
-              return (
-                <SuggestionButton
-                  key={index}
-                  suggestion={suggestion}
-                  isThisClicked={isThisClicked}
-                  isLoading={isLoading}
-                  onClick={() => handleSuggestionClick(suggestion)}
-                />
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+          return (
+            <SuggestionBubble
+              key={index}
+              suggestion={suggestion.shortQuestion}
+              isClicked={isThisClicked}
+              isLoading={isLoading}
+              onClick={() => handleSuggestionClick(index, suggestion)}
+            />
+          );
+        })}
+      </div>
     </motion.div>
   );
 });
