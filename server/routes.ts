@@ -919,13 +919,15 @@ Format your responses using markdown for better readability and organization.`;
           }
           
           // Update the stored message with the full content
-          assistantMessage = await storage.createMessage({
-            id: assistantMessage.id,
-            conversationId,
-            role: "assistant",
-            content: assistantContent,
-            citations: null,
+          await storage.updateMessage(assistantMessage.id, {
+            content: assistantContent
           });
+          
+          // Get the updated message
+          const updatedMessage = await storage.getMessage(assistantMessage.id);
+          if (updatedMessage) {
+            assistantMessage = updatedMessage;
+          }
           
           // Final message to signal completion
           res.write(`data: ${JSON.stringify({ 
@@ -943,13 +945,16 @@ Format your responses using markdown for better readability and organization.`;
           const data = await response.json();
           
           // Update the assistant message with the content
-          assistantMessage = await storage.createMessage({
-            id: assistantMessage.id,
-            conversationId, 
-            role: "assistant",
+          await storage.updateMessage(assistantMessage.id, {
             content: data.choices[0].message.content,
-            citations: data.citations || null,
+            citations: data.citations || null
           });
+          
+          // Get the updated message
+          const updatedMessage = await storage.getMessage(assistantMessage.id);
+          if (updatedMessage) {
+            assistantMessage = updatedMessage;
+          }
         }
 
         // If this is the first message in the conversation, generate a better title without extra API calls

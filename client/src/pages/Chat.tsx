@@ -9,11 +9,14 @@ import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { useChat } from "@/hooks/useChat";
+import { useStreamingChat } from "@/hooks/useStreamingChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useTheme } from "@/hooks/use-theme";
 import { Menu, Globe, Sparkles, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useModelSelection } from "@/hooks/useModelSelection";
+import { Message } from "@/lib/types";
 
 // Theme toggle component
 const ThemeToggle = () => {
@@ -68,7 +71,7 @@ export default function Chat() {
     sendMessage,
     loadConversation,
     startNewConversation
-  } = useChat();
+  } = useStreamingChat();
   
   // Load conversation when ID changes in URL
   useEffect(() => {
