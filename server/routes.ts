@@ -43,7 +43,7 @@ const MODEL_CONFIGS = {
   },
   search: {
     apiProvider: "perplexity",
-    modelName: "mistral-7b-instruct",  // Updated to a working model
+    modelName: "pplx-70b-online",  // Updated to an officially supported Perplexity model
     apiUrl: "https://api.perplexity.ai/chat/completions",
     apiKey: PERPLEXITY_API_KEY
   },
@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For Perplexity, we need to send a minimal request since they don't have a models endpoint
       if (provider === "perplexity") {
         const testPayload = {
-          model: "mistral-7b-instruct", // Using a simpler model for testing
+          model: "pplx-70b-online", // Using an officially supported Perplexity model
           messages: [
             {
               role: "system",
