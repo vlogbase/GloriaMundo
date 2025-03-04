@@ -1,0 +1,21 @@
+Model,Whole Question,Displayed Question
+reasoning,"Consider the following sequence: 2, 3, 5, 7, 11. What is the next prime number? Please explain your reasoning step by step.",Next Prime Number?
+reasoning,"Solve the riddle: “I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?” Provide clues and detailed reasoning.",Solve the riddle
+reasoning,"In a logic puzzle, three friends—Alex, Bob, and Carol—each own a different pet: a cat, a dog, and a bird. Given that Alex does not own the bird and Bob is allergic to cats, determine who owns which pet using step-by-step deductions.",Assign pets logically
+reasoning,Prove that the square root of 2 is irrational by using a proof by contradiction. Clearly outline each logical step in your explanation.,Prove √2 irrational
+reasoning,"Analyze the argument: “If it rains, the ground gets wet. The ground is wet, therefore it rained.” Identify any logical fallacies or assumptions and discuss the validity of this reasoning.",Analyze argument logic
+reasoning,"Solve this arithmetic puzzle: If 5 + 3 = 28 and 9 + 1 = 910, determine what 7 + 3 equals. Explain your reasoning and the pattern behind these equations.",Solve arithmetic puzzle
+reasoning,"Consider the statement: “All swans are white.” If a single black swan is observed, what does that imply about the statement? Discuss your reasoning process.",Swan color question
+reasoning,"Given the Fibonacci sequence: 1, 1, 2, 3, 5, 8, 13, predict the next two numbers and explain how the sequence is generated.",Predict Fibonacci numbers
+reasoning,"Debate the moral dilemma: “Is it ever justifiable to lie in order to protect someone’s feelings?” Present a structured argument, including pros and cons.",Moral dilemma analysis
+reasoning,"In a simplified chess endgame with only a king and pawn, explain the strategy required to promote the pawn into a queen, detailing each necessary move.",Chess endgame strategy
+search,"Find and summarize the key findings of the 2023 IPCC report on climate change, including major recommendations and data trends.",2023 IPCC Report Summary
+search,Search for current statistics on global internet usage in 2024 and analyze the trends and implications based on recent reports.,Internet usage 2024?
+search,Identify the top three renewable energy breakthroughs of the past year and explain their potential impact on energy markets.,Renewable breakthroughs?
+search,"Locate a detailed review of the latest advancements in electric vehicle battery technology, and summarize how these improvements compare to previous generations.",EV battery advancements
+search,"Find a comprehensive report on current cybersecurity threats in 2024, including recommended mitigation strategies and analysis.",Cybersecurity threats 2024
+search,"Search for the latest updates on Mars rover missions and discoveries, summarizing the key news and findings from recent space exploration efforts.",Mars rover news
+search,"Locate a detailed analysis of global economic trends in 2024, highlighting key sectors driving growth and current challenges.",Global economic trends
+search,Search for current data on the adoption of AI technologies in healthcare and explain how these advancements are transforming patient care.,AI in healthcare?
+search,Find recent insights on digital privacy laws around the world and discuss how evolving regulations impact technology companies.,Digital privacy laws
+search,"Locate updates on major legal cases involving tech companies, summarizing the controversies, legal arguments, and outcomes.",Tech legal cases
