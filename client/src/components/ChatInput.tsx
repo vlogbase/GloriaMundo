@@ -85,7 +85,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
                   <ToggleGroupItem 
                     value={model.id} 
                     aria-label={model.name}
-                    className="flex items-center gap-1 px-3 py-1 text-sm"
+                    className="flex items-center gap-1 px-3 py-1 text-sm data-[state=on]:bg-primary/20 data-[state=on]:border-primary/50"
                   >
                     {getModelIcon(model.id)}
                     <span>{model.name}</span>

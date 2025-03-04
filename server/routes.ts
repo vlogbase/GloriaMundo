@@ -28,7 +28,7 @@ const MODEL_CONFIGS = {
   },
   search: {
     apiProvider: "perplexity",
-    modelName: "llama-3.1-sonar-small-128k-online",
+    modelName: "llama-3.1-sonar-reasoning-128k-online",
     apiUrl: "https://api.perplexity.ai/chat/completions",
     apiKey: PERPLEXITY_API_KEY
   },
