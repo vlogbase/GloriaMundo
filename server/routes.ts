@@ -304,8 +304,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
+      // Only allow reasoning model for streaming (fail fast for other models)
+      if (modelType !== "reasoning") {
+        return res.status(400).json({ 
+          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
+        });
+      }
+      
+      // If an image is present, don't allow streaming (since we need to use multimodal model)
+      if (image) {
+        return res.status(400).json({ 
+          message: "Streaming is not supported for image inputs. Please use the standard API endpoint."
+        });
+      }
+      
       // Get the model configuration based on the requested model type
-      const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
+      const modelConfig = MODEL_CONFIGS.reasoning; // Always use reasoning for streaming
       
       // Always use streaming for this endpoint
       const shouldStream = true;
@@ -847,22 +861,29 @@ Format your responses using markdown for better readability and organization.`;
           })
         });
         
-        // For debug purposes, log the actual shape of multimodal messages without exposing too much data
-        if (modelType === "multimodal") {
-          console.log("Multimodal message structure:", 
-            messages.map(msg => {
-              if ('content' in msg && Array.isArray(msg.content)) {
-                // For multimodal messages, log the structure without the full data URLs
-                return {
-                  role: msg.role,
-                  contentTypes: msg.content.map(item => item.type)
-                };
-              } else {
-                return { role: msg.role, contentType: 'text' };
-              }
-            })
-          );
-        }
+        // For debug purposes, log the actual shape of messages in a safe way
+        console.log("API message structure:", 
+          messages.map(msg => {
+            if ('content' in msg && Array.isArray(msg.content)) {
+              // For multimodal messages, log the structure without the full data URLs
+              return {
+                role: msg.role,
+                contentTypes: msg.content.map(item => item.type)
+              };
+            } else {
+              return { 
+                role: msg.role, 
+                contentType: 'text',
+                // Log a preview of the text content for debugging
+                contentPreview: typeof msg.content === 'string' ? 
+                  (msg.content.length > 30 ? 
+                    msg.content.substring(0, 30) + '...' : 
+                    msg.content) : 
+                  'unknown'
+              };
+            }
+          })
+        );
 
         const payload = {
           model: modelConfig.modelName,
@@ -1003,16 +1024,65 @@ Format your responses using markdown for better readability and organization.`;
           // Non-streaming response
           const data = await response.json();
           
-          // Update the assistant message with the content
-          await storage.updateMessage(assistantMessage.id, {
-            content: data.choices[0].message.content,
-            citations: data.citations || null
+          console.log(`Received response from ${modelConfig.apiProvider} API:`, {
+            model: data.model,
+            object: data.object,
+            choicesCount: data.choices?.length || 0
           });
           
-          // Get the updated message
-          const updatedMessage = await storage.getMessage(assistantMessage.id);
-          if (updatedMessage) {
-            assistantMessage = updatedMessage;
+          // Handle different API response formats based on provider and model
+          try {
+            let messageContent = "";
+            let messageCitations = null;
+            
+            // Extract content based on provider/response format
+            if (data.choices && data.choices.length > 0) {
+              if (data.choices[0].message) {
+                // OpenAI-compatible format (Groq and some Perplexity responses)
+                messageContent = data.choices[0].message.content || "";
+              } else if (data.choices[0].text) {
+                // Alternative format sometimes used
+                messageContent = data.choices[0].text || "";
+              } else {
+                console.error(`Unexpected response format from ${modelConfig.apiProvider}:`, 
+                  JSON.stringify(data.choices[0]).substring(0, 200));
+                throw new Error(`Could not extract content from ${modelConfig.apiProvider} response`);
+              }
+            } else {
+              console.error(`No choices in ${modelConfig.apiProvider} response:`, 
+                JSON.stringify(data).substring(0, 200));
+              throw new Error(`Empty response from ${modelConfig.apiProvider}`);
+            }
+            
+            // Handle citations if present (Perplexity specific)
+            if (data.citations) {
+              messageCitations = data.citations;
+            }
+            
+            // Update the assistant message with the content
+            await storage.updateMessage(assistantMessage.id, {
+              content: messageContent,
+              citations: messageCitations
+            });
+            
+            // Get the updated message
+            const updatedMessage = await storage.getMessage(assistantMessage.id);
+            if (updatedMessage) {
+              assistantMessage = updatedMessage;
+            }
+          } catch (extractError) {
+            console.error(`Error extracting content from ${modelConfig.apiProvider} response:`, extractError);
+            
+            // Fallback: Update with error message
+            await storage.updateMessage(assistantMessage.id, {
+              content: `I apologize, but I encountered an error while processing your request with the ${modelType} model. Please try again or select a different model.`,
+              citations: null
+            });
+            
+            const updatedMessage = await storage.getMessage(assistantMessage.id);
+            if (updatedMessage) {
+              assistantMessage = updatedMessage;
+            }
           }
         }
 
@@ -1073,13 +1143,42 @@ Format your responses using markdown for better readability and organization.`;
           assistantMessage,
         });
       } catch (error) {
-        console.error(`Error calling ${modelConfig.apiProvider} API:`, error);
+        // Log error with additional diagnostic information
+        console.error(`Error with ${modelType} model (${modelConfig.apiProvider}):`, {
+          error: error instanceof Error ? error.message : String(error),
+          modelType,
+          apiProvider: modelConfig.apiProvider,
+          apiUrl: modelConfig.apiUrl,
+          modelName: modelConfig.modelName,
+          hasValidKey: isValidApiKey(modelConfig.apiKey),
+          messagesCount: messages.length
+        });
+        
+        // Create a more detailed error message to help debugging
+        let errorMessage = `I apologize, but I encountered an error while processing your request with the ${modelType} model.`;
+        
+        // Add specific suggestions based on the error
+        if (error instanceof Error) {
+          const errorText = error.message.toLowerCase();
+          
+          if (errorText.includes("timeout") || errorText.includes("network")) {
+            errorMessage += " There seems to be a network issue. Please check your connection and try again.";
+          } else if (errorText.includes("unauthorized") || errorText.includes("authentication") || errorText.includes("401")) {
+            errorMessage += " There might be an issue with the API authentication. Please try a different model or contact support.";
+          } else if (errorText.includes("quota") || errorText.includes("rate limit") || errorText.includes("429")) {
+            errorMessage += " The API rate limit may have been exceeded. Please try again in a moment or select a different model.";
+          } else {
+            errorMessage += " Please try again or select a different model.";
+          }
+        } else {
+          errorMessage += " Please try again or select a different model.";
+        }
         
         // Create a fallback response (ensure content is never empty)
         const assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
-          content: `I apologize, but I encountered an error while processing your request with the ${modelType} model. Please try again or select a different model.`,
+          content: errorMessage,
           citations: null,
         });
         
