@@ -95,7 +95,12 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
       
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
+        // Use image/png for better quality when needed for multimodal analysis
         const resizedImageData = canvas.toDataURL('image/jpeg', 0.9);
+        // Ensure the model is switched to multimodal when an image is added
+        if (selectedModel !== 'multimodal') {
+          setSelectedModel('multimodal');
+        }
         setSelectedImage(resizedImageData);
         setImagePreviewUrl(resizedImageData);
       }
@@ -109,6 +114,10 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
       if (ctx) {
         ctx.drawImage(img, 0, 0);
         const imageData = canvas.toDataURL('image/jpeg', 0.9);
+        // Ensure the model is switched to multimodal when an image is added
+        if (selectedModel !== 'multimodal') {
+          setSelectedModel('multimodal');
+        }
         setSelectedImage(imageData);
         setImagePreviewUrl(imageData);
       }

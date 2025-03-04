@@ -5,8 +5,10 @@ import session from "express-session";
 import cookieParser from "cookie-parser";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Increase the request size limit for JSON and URL encoded data to handle larger images
+// Default is 100kb, increasing to 50MB for multimodal content
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(cookieParser());
 
 // Set up session middleware
