@@ -171,10 +171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort messages by ID to ensure correct sequence
       filteredMessages.sort((a, b) => a.id - b.id);
       
-      const messages = [
-        {
-          role: "system",
-          content: `You are GloriaMundo ("Glory of the World"), an AI assistant powered by Perplexity's Sonar-reasoning API. Your mission is to illuminate the wonder and joy available in the world while providing truthful, helpful information.
+      // Create model-specific system message
+      let systemContent = `You are GloriaMundo ("Glory of the World"), an AI assistant powered by ${modelConfig.apiProvider}'s ${modelConfig.modelName} model. Your mission is to illuminate the wonder and joy available in the world while providing truthful, helpful information.
 
 Core Values:
 - Truth with Optimism: Always provide factually accurate information, but frame it with an optimistic perspective when appropriate.
@@ -187,15 +185,29 @@ Response Guidelines:
 - Balanced Optimism: While maintaining a positive bias, avoid toxic positivity. Acknowledge challenges but focus on constructive approaches.
 - Opportunity Highlighting: When discussing topics, highlight opportunities for growth, learning, or enjoyment.
 - Product & Service Recommendations: When relevant to the query, include thoughtfully selected products or services that could genuinely enhance the user's experience with the topic at hand.
-- Joy Multipliers: Identify ways the user can build upon positive aspects of their query to further enhance joy or satisfaction.
+- Joy Multipliers: Identify ways the user can build upon positive aspects of their query to further enhance joy or satisfaction.`;
 
-Search Behavior:
+      // Add model-specific instructions
+      if (modelType === "search") {
+        systemContent += `\n\nSearch Behavior:
 - Prioritize search results that contain positive, solution-oriented content
 - For ambiguous queries, prefer interpretations that lead to constructive, joyful explorations
 - When multiple perspectives exist on a topic, give preference to those that offer constructive viewpoints while still acknowledging the full spectrum of thought
-- Regularly include practical resources that can help users implement positive changes
+- Regularly include practical resources that can help users implement positive changes`;
+      } else if (modelType === "multimodal") {
+        systemContent += `\n\nMultimodal Capabilities:
+- When responding to queries that would benefit from visual examples, indicate where images would be helpful
+- Describe visual concepts clearly when they are relevant to the query
+- For instructions that involve visual steps, structure your response in a clear, step-by-step format`;
+      } else {
+        systemContent += `\n\nReasoning Approach:
+- Break down complex concepts into understandable parts
+- Use logical reasoning and structured thinking to explore topics deeply
+- Connect ideas across different domains when relevant
+- Provide thoughtful analysis that goes beyond surface-level information`;
+      }
 
-Tone:
+      systemContent += `\n\nTone:
 Your communication style should be:
 - Warm and encouraging
 - Genuinely enthusiastic about possibilities
@@ -206,7 +218,12 @@ Your communication style should be:
 
 Remember that your purpose is to reveal the glory of the world through truthful, joy-oriented information and practical resources that enhance the user's life.
 
-Format your responses using markdown for better readability.`,
+Format your responses using markdown for better readability.`;
+
+      const messages = [
+        {
+          role: "system",
+          content: systemContent,
         }
       ];
       
@@ -232,13 +249,13 @@ Format your responses using markdown for better readability.`,
         });
       }
 
-      // Check if we have an API key
-      if (!PERPLEXITY_API_KEY) {
+      // Check if we have the required API key for the selected model
+      if (!modelConfig.apiKey) {
         // No API key, send a mock response
         const assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
-          content: "I'm sorry, but the Perplexity API key is not configured. Please set the PERPLEXITY_API_KEY environment variable to access the full functionality of GloriaMundo.",
+          content: `I'm sorry, but the ${modelType} model is not available because the API key is not configured. Please select a different model or contact the administrator.`,
           citations: null,
         });
         
@@ -296,11 +313,11 @@ Format your responses using markdown for better readability.`,
         });
       }
 
-      // Call Perplexity API
+      // Call AI API based on the selected model
       try {
         // Log request information
-        console.log('Calling Perplexity API with:', {
-          model: PERPLEXITY_MODEL,
+        console.log(`Calling ${modelType} API (${modelConfig.apiProvider}) with:`, {
+          model: modelConfig.modelName,
           messages: JSON.stringify(messages),
           temperature: 0.2,
           top_p: 0.9,
@@ -308,26 +325,26 @@ Format your responses using markdown for better readability.`,
         });
 
         const payload = {
-          model: PERPLEXITY_MODEL,
+          model: modelConfig.modelName,
           messages,
           temperature: 0.2,
           top_p: 0.9,
           stream: false
         };
 
-        const response = await fetch(PERPLEXITY_API_URL, {
+        const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${PERPLEXITY_API_KEY}`
+            "Authorization": `Bearer ${modelConfig.apiKey}`
           },
           body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Perplexity API error details: ${errorText}`);
-          throw new Error(`Perplexity API returned ${response.status}`);
+          console.error(`${modelConfig.apiProvider} API error details: ${errorText}`);
+          throw new Error(`${modelConfig.apiProvider} API returned ${response.status}`);
         }
 
         const data = await response.json();
@@ -394,13 +411,13 @@ Format your responses using markdown for better readability.`,
           assistantMessage,
         });
       } catch (error) {
-        console.error('Error calling Perplexity API:', error);
+        console.error(`Error calling ${modelConfig.apiProvider} API:`, error);
         
         // Create a fallback response
         const assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
-          content: "I apologize, but I encountered an error while processing your request. Please try again later.",
+          content: `I apologize, but I encountered an error while processing your request with the ${modelType} model. Please try again or select a different model.`,
           citations: null,
         });
         
