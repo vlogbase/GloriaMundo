@@ -689,12 +689,16 @@ Remember that your purpose is to provide accurate, helpful information that addr
 Format your responses using markdown for better readability and organization.`;
 
       // Initialize the messages array with proper typing for both text and multimodal messages
-      const messages: ApiMessage[] = [
-        {
+      const messages: ApiMessage[] = [];
+      
+      // Only add system message if we're not using images with multimodal model
+      // Groq's llama-3.2-90b-vision-preview doesn't support system messages with images
+      if (!(modelType === "multimodal" && image)) {
+        messages.push({
           role: "system",
           content: systemContent,
-        }
-      ];
+        });
+      }
       
       // Ensure proper alternation of user and assistant messages
       let lastRole = "assistant"; // Start with assistant so first user message can be added
