@@ -604,6 +604,12 @@ Format your responses using markdown for better readability and organization.`;
         return res.status(400).json({ message: "Message content or image is required" });
       }
       
+      // If an image is present, force the model type to multimodal
+      if (image) {
+        console.log("Image detected, forcing model type to multimodal");
+        modelType = "multimodal";
+      }
+      
       // Get the model configuration based on the requested model type
       const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       
@@ -717,7 +723,9 @@ Format your responses using markdown for better readability and organization.`;
       
       // Ensure the last message is from the user
       if (lastRole !== "user") {
-        if (image && modelType === "multimodal") {
+        // If we have an image, we always use the multimodal format regardless of model type
+        // However, modelType should already be set to "multimodal" at this point
+        if (image) {
           // Add the image data for multimodal requests with proper typing
           // For llama-3.2-90b-vision-preview, the image URL must be a data URL or a publicly accessible URL
           // Make sure image URL is properly formatted if it's a base64 data URL
