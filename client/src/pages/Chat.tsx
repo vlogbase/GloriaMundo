@@ -53,6 +53,10 @@ export default function Chat() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
+  const userMessageRef = useRef<HTMLDivElement>(null);
+  
+  // Add a ref to track if we've already scrolled to the user message
+  const hasScrolledToUserMessageRef = useRef<boolean>(false);
   const { 
     isMobileSidebarOpen, 
     toggleMobileSidebar, 
@@ -84,10 +88,32 @@ export default function Chat() {
     }
   }, [conversationId, loadConversation]);
   
-  // Scroll behavior when messages change
+  // Separate effects for loading state and message changes to control scroll behavior
+  
+  // First, handle scrolling specifically when loading state changes
   useEffect(() => {
+    // When loading starts, scroll to user message once and set flag
+    if (isLoadingResponse && userMessageRef.current && !hasScrolledToUserMessageRef.current) {
+      userMessageRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start" // Position the user message at the top of the viewport
+      });
+      hasScrolledToUserMessageRef.current = true; // Prevent repeated scrolling during streaming
+    }
+    
+    // When loading finishes, reset the scroll flag
+    if (!isLoadingResponse) {
+      hasScrolledToUserMessageRef.current = false;
+    }
+  }, [isLoadingResponse]);
+  
+  // Handle regular scrolling behavior when messages change but not during streaming
+  useEffect(() => {
+    // Don't auto-scroll during streaming to avoid interfering with user scrolling
+    if (isLoadingResponse) return;
+    
     if (messages.length > 0) {
-      // If there's a latest message ref (AI response), scroll to it
+      // If user just loaded a conversation or new messages are added outside of streaming
       if (latestMessageRef.current) {
         latestMessageRef.current.scrollIntoView({ 
           behavior: "smooth", 
@@ -101,7 +127,7 @@ export default function Chat() {
       // If there are no messages yet, scroll to the bottom
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, isLoadingResponse]);
   
   // Effect to show PWA install banner after first AI response
   useEffect(() => {
@@ -202,10 +228,20 @@ export default function Chat() {
           ) : (
             <>
               {messages.map((message: Message, index: number) => {
-                // Add ref to the latest message (usually AI's message)
-                const isLatestMessage = index === messages.length - 1 && message.role === 'assistant';
+                // Add refs to both user and AI messages
+                const isLatestAssistantMessage = index === messages.length - 1 && message.role === 'assistant';
+                const isLatestUserMessage = index === messages.length - 2 && message.role === 'user' && isLoadingResponse;
+                
+                // Determine which ref to use
+                let refToUse = undefined;
+                if (isLatestAssistantMessage) {
+                  refToUse = latestMessageRef;
+                } else if (isLatestUserMessage) {
+                  refToUse = userMessageRef;
+                }
+                
                 return (
-                  <div key={message.id} ref={isLatestMessage ? latestMessageRef : undefined}>
+                  <div key={message.id} ref={refToUse}>
                     <ChatMessage message={message} />
                   </div>
                 );
