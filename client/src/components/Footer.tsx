@@ -25,6 +25,14 @@ export const Footer = () => {
           <Settings className="h-3 w-3 mr-1" />
           Cookie Settings
         </button>
+        <a 
+          href="https://sovrn.co/hnfkntr" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hover:text-muted-foreground cursor-pointer transition-colors"
+        >
+          Sovrn
+        </a>
       </div>
       <div className="mt-2">
         © 2025 GloriaMundo. All rights reserved.
