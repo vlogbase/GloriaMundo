@@ -904,7 +904,7 @@ Format your responses using markdown for better readability and organization.`;
         let assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
-          content: "",
+          content: " ", // Use space instead of empty string to pass validation
           citations: null,
         });
         
@@ -1063,7 +1063,7 @@ Format your responses using markdown for better readability and organization.`;
       } catch (error) {
         console.error(`Error calling ${modelConfig.apiProvider} API:`, error);
         
-        // Create a fallback response
+        // Create a fallback response (ensure content is never empty)
         const assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
