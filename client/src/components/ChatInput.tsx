@@ -77,7 +77,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
             type="single" 
             value={selectedModel}
             onValueChange={(value) => value && setSelectedModel(value as ModelType)}
-            className="flex justify-center mb-3 space-x-1"
+            className="flex justify-center mb-3 space-x-1 select-none"
           >
             {Object.values(MODEL_OPTIONS).map((model) => (
               <Tooltip key={model.id}>
@@ -85,7 +85,9 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
                   <ToggleGroupItem 
                     value={model.id} 
                     aria-label={model.name}
-                    className="flex items-center gap-1 px-3 py-1 text-sm data-[state=on]:bg-primary/20 data-[state=on]:border-primary/50"
+                    className={`flex items-center gap-1 px-3 py-1 text-sm 
+                    ${selectedModel === model.id ? 'bg-primary/20 border-primary/50 ring-1 ring-primary/30 font-medium' : 'hover:bg-primary/10'}
+                    transition-all duration-200`}
                   >
                     {getModelIcon(model.id)}
                     <span>{model.name}</span>
