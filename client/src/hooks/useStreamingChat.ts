@@ -110,75 +110,134 @@ export const useStreamingChat = () => {
         eventSourceRef.current = eventSource;
         
         eventSource.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          
-          // Handle different event types
-          switch (data.type) {
-            case "initial":
-              // Set up the streaming message reference
-              streamingMessageRef.current = {
-                id: data.assistantMessageId,
-                content: ""
-              };
-              
-              // Add an empty message that will be updated as chunks arrive
-              setMessages((prev) => [...prev, {
-                id: data.assistantMessageId,
-                conversationId,
-                role: "assistant",
-                content: "",
-                citations: null,
-                createdAt: new Date().toISOString(),
-              }]);
-              break;
-              
-            case "chunk":
-              // Update the streaming message reference
-              if (streamingMessageRef.current && streamingMessageRef.current.id === data.id) {
-                streamingMessageRef.current.content += data.content;
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Handle different event types
+            switch (data.type) {
+              case "initial":
+                // Set up the streaming message reference
+                streamingMessageRef.current = {
+                  id: data.assistantMessageId,
+                  content: ""
+                };
                 
-                // Update the message in the state with the new content
+                // Add an empty message that will be updated as chunks arrive
+                setMessages((prev) => [...prev, {
+                  id: data.assistantMessageId,
+                  conversationId,
+                  role: "assistant",
+                  content: "",
+                  citations: null,
+                  createdAt: new Date().toISOString(),
+                }]);
+                break;
+                
+              case "chunk":
+                // Update the streaming message reference
+                if (streamingMessageRef.current && streamingMessageRef.current.id === data.id) {
+                  streamingMessageRef.current.content += data.content;
+                  
+                  // Update the message in the state with the new content
+                  setMessages((prev) => prev.map(msg => 
+                    msg.id === data.id 
+                      ? { ...msg, content: streamingMessageRef.current!.content } 
+                      : msg
+                  ));
+                }
+                break;
+                
+              case "done":
+                // Final update with the complete message
                 setMessages((prev) => prev.map(msg => 
-                  msg.id === data.id 
-                    ? { ...msg, content: streamingMessageRef.current!.content } 
-                    : msg
+                  msg.id === data.assistantMessage.id ? data.assistantMessage : msg
                 ));
-              }
-              break;
-              
-            case "done":
-              // Final update with the complete message
-              setMessages((prev) => prev.map(msg => 
-                msg.id === data.assistantMessage.id ? data.assistantMessage : msg
-              ));
-              
-              setStreamingComplete(true);
-              
-              setTimeout(() => {
+                
+                setStreamingComplete(true);
+                
+                setTimeout(() => {
+                  setIsLoadingResponse(false);
+                  setTimeout(() => setStreamingComplete(false), 100);
+                }, 50);
+                
+                eventSource.close();
+                eventSourceRef.current = null;
+                streamingMessageRef.current = null;
+                
+                window.dispatchEvent(new CustomEvent('message-sent', {
+                  detail: { conversationId }
+                }));
+                break;
+                
+              case "error":
+                // Handle explicit error events from server
+                console.error("Server streaming error:", data.message);
+                toast({
+                  variant: "destructive",
+                  title: "Server Error",
+                  description: data.message || "An error occurred with the streaming response.",
+                });
+                
+                // Clean up
                 setIsLoadingResponse(false);
-                setTimeout(() => setStreamingComplete(false), 100);
-              }, 50);
-              
-              eventSource.close();
-              eventSourceRef.current = null;
+                eventSource.close();
+                eventSourceRef.current = null;
+                
+                // If we have a partial message, remove it and fall back to non-streaming
+                if (streamingMessageRef.current) {
+                  setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
+                  streamingMessageRef.current = null;
+                  
+                  // Fall back to non-streaming request
+                  fallbackToNonStreaming(conversationId, content, image);
+                }
+                break;
+                
+              default:
+                console.warn("Unknown event type:", data.type);
+            }
+          } catch (parseError) {
+            console.error("Error parsing SSE message:", parseError, "Raw data:", event.data);
+            
+            // This is likely a JSON parsing error or malformed data
+            toast({
+              variant: "destructive",
+              title: "Response Format Error",
+              description: "Received invalid data from server. Falling back to standard mode.",
+            });
+            
+            // Clean up and fall back
+            eventSource.close();
+            eventSourceRef.current = null;
+            
+            if (streamingMessageRef.current) {
+              setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
               streamingMessageRef.current = null;
-              
-              window.dispatchEvent(new CustomEvent('message-sent', {
-                detail: { conversationId }
-              }));
-              break;
-              
-            default:
-              console.warn("Unknown event type:", data.type);
+              fallbackToNonStreaming(conversationId, content, image);
+            }
           }
         };
         
         eventSource.onerror = (error) => {
           console.error("EventSource error:", error);
+          
+          // Check if this is a connection error or server error
+          let errorDescription = "Streaming failed. Falling back to standard mode.";
+          
+          // Try to determine the reason for the error
+          if (error instanceof Event) {
+            const target = error.target as EventSource;
+            if (target && target.readyState === EventSource.CLOSED) {
+              errorDescription = "Connection closed unexpectedly. Trying standard mode.";
+            } else if (target && target.readyState === EventSource.CONNECTING) {
+              errorDescription = "Connection interrupted. Trying standard mode.";
+            }
+          }
+          
           toast({
             variant: "destructive",
             title: "Connection Error",
-            description: "Streaming failed. Falling back to standard mode.",
+            description: errorDescription,
           });
           
           // Clean up
@@ -237,11 +296,32 @@ export const useStreamingChat = () => {
         }),
       });
       
+      // Handle HTTP errors
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          // Try to get a more specific error message from the response
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // If we can't parse the error, just use the status text
+          errorMessage = `${response.statusText || 'Unknown error'} (${response.status})`;
+        }
+        
+        // Throw with a detailed message
+        throw new Error(errorMessage);
       }
       
+      // Parse successful response
       const data = await response.json();
+      
+      // Validate response structure
+      if (!data || !data.userMessage || !data.assistantMessage) {
+        console.error("Invalid response format:", data);
+        throw new Error("Server returned an invalid response format");
+      }
       
       // Update messages with the response data
       setMessages((prev) => {
@@ -273,6 +353,31 @@ export const useStreamingChat = () => {
       }));
     } catch (error) {
       console.error("Error in fallback request:", error);
+      
+      // Create a more helpful error message
+      let errorMessage = "Failed to send message";
+      
+      if (error instanceof Error) {
+        // Check for specific error patterns
+        const errorText = error.message.toLowerCase();
+        
+        if (error.message.includes("Failed to fetch") || errorText.includes("network")) {
+          errorMessage = "Network connection error. Please check your internet connection.";
+        } else if (errorText.includes("timeout")) {
+          errorMessage = "Request timed out. The server is taking too long to respond.";
+        } else if (error.message.length > 0 && !error.message.includes("[object")) {
+          // Use the error message if it's not just a generic object toString
+          errorMessage = error.message;
+        }
+      }
+      
+      // Show toast with specific error message
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage
+      });
+      
       throw error; // Re-throw to be caught by the main try/catch
     }
   };

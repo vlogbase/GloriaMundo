@@ -67,6 +67,9 @@ export const useChat = () => {
     setIsLoadingResponse(true);
 
     try {
+      // Log request details for debugging
+      console.log(`Sending message to conversation ${conversationId} with model: ${selectedModel}`);
+      
       const response = await apiRequest(
         "POST",
         `/api/conversations/${conversationId}/messages`,
@@ -77,7 +80,13 @@ export const useChat = () => {
         }
       );
       
+      // Extract and validate response data
       const data = await response.json();
+      
+      if (!data || !data.userMessage || !data.assistantMessage) {
+        console.error("Invalid API response format:", data);
+        throw new Error("The server returned an invalid response format");
+      }
       
       // We already added the user message optimistically - just replace it with the real one and add assistant message
       setMessages((prev) => 
@@ -92,10 +101,32 @@ export const useChat = () => {
       }));
     } catch (error) {
       console.error("Error sending message:", error);
+      
+      // Create a more helpful error message
+      let errorMessage = "Failed to send message";
+      
+      if (error instanceof Error) {
+        // Check for specific error patterns
+        const errorText = error.message.toLowerCase();
+        
+        if (errorText.includes("failed to fetch") || errorText.includes("network")) {
+          errorMessage = "Network connection error. Please check your internet connection.";
+        } else if (errorText.includes("timeout")) {
+          errorMessage = "Request timed out. The server is taking too long to respond.";
+        } else if (errorText.includes("invalid") && errorText.includes("format")) {
+          errorMessage = "Server returned an invalid response format. Please try again.";
+        } else if (errorText.includes("api key")) {
+          errorMessage = "API authentication error. Please try a different model.";
+        } else if (error.message.length > 0 && !error.message.includes("[object")) {
+          // Use the error message if it's not just a generic object toString
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to send message",
+        description: errorMessage,
       });
       
       // Remove the optimistic message on error

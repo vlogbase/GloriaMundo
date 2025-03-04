@@ -593,11 +593,49 @@ Format your responses using markdown for better readability and organization.`;
         
         res.end();
       } catch (error) {
-        console.error(`Error in streaming response:`, error);
+        // Create a detailed error message for the client
+        let errorMessage = "Failed to process streaming response";
+        
+        if (error instanceof Error) {
+          console.error(`Error in streaming response:`, error.message);
+          
+          // Provide more specific error messages based on the error type
+          if (error.message.includes("Failed to get reader")) {
+            errorMessage = "Server could not process the streaming response";
+          } else if (error.message.includes("API returned")) {
+            // Extract the status code if present
+            const statusMatch = error.message.match(/API returned (\d+)/);
+            if (statusMatch && statusMatch[1]) {
+              const status = statusMatch[1];
+              
+              // Customize message based on status code
+              if (status === "401" || status === "403") {
+                errorMessage = "Authentication error with the API. Please try a different model.";
+              } else if (status === "429") {
+                errorMessage = "API rate limit exceeded. Please try again in a moment.";
+              } else if (status === "500") {
+                errorMessage = "API server error. Please try again or select a different model.";
+              } else if (status === "502" || status === "504") {
+                errorMessage = "API gateway timeout. The server is currently experiencing high load.";
+              } else {
+                errorMessage = `API error (${status}). Please try again or select a different model.`;
+              }
+            } else {
+              errorMessage = "API error. Please try again or select a different model.";
+            }
+          } else if (error.message.toLowerCase().includes("timeout")) {
+            errorMessage = "Request timed out. The server is taking too long to respond.";
+          }
+        } else {
+          console.error(`Unknown error in streaming response:`, error);
+        }
+        
+        // Send the error event to the client
         res.write(`data: ${JSON.stringify({ 
           type: "error", 
-          message: "Failed to process streaming response"
+          message: errorMessage
         })}\n\n`);
+        
         res.end();
       }
     } catch (error) {
