@@ -109,10 +109,8 @@ export const useStreamingChat = () => {
           // Handle different event types
           switch (data.type) {
             case "initial":
-              // Replace the temporary user message with the real one
-              setMessages((prev) => prev.map(msg => 
-                msg.id === tempUserMessage.id ? data.userMessage : msg
-              ));
+              // Keep both the temporary user message and add the real one for debugging
+              console.log("Received initial event with user message:", data.userMessage);
               
               // Set up the streaming message reference
               streamingMessageRef.current = {
@@ -146,9 +144,9 @@ export const useStreamingChat = () => {
               break;
               
             case "done":
-              // Final update with the complete message
+              // Final update with the complete message, only update the assistant message
+              // but keep the user message as is
               setMessages((prev) => prev.map(msg => 
-                msg.id === tempUserMessage.id ? data.userMessage : 
                 msg.id === data.assistantMessage.id ? data.assistantMessage : msg
               ));
               
