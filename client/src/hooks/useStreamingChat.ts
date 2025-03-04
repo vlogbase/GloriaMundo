@@ -8,6 +8,7 @@ export const useStreamingChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
+  const [streamingComplete, setStreamingComplete] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
@@ -150,8 +151,16 @@ export const useStreamingChat = () => {
                 msg.id === data.assistantMessage.id ? data.assistantMessage : msg
               ));
               
-              // Clean up
-              setIsLoadingResponse(false);
+              // Set streaming complete flag for scroll behavior
+              setStreamingComplete(true);
+              
+              // Clean up after a short delay to allow UI updates to process
+              setTimeout(() => {
+                setIsLoadingResponse(false);
+                // Reset streaming complete flag after loading state is updated
+                setTimeout(() => setStreamingComplete(false), 100);
+              }, 50);
+              
               eventSource.close();
               eventSourceRef.current = null;
               streamingMessageRef.current = null;
@@ -255,6 +264,7 @@ export const useStreamingChat = () => {
     messages,
     isLoadingMessages,
     isLoadingResponse,
+    streamingComplete,
     activeConversationId,
     loadConversation,
     sendMessage,

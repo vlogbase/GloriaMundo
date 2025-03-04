@@ -73,6 +73,7 @@ export default function Chat() {
     messages, 
     isLoadingMessages,
     isLoadingResponse,
+    streamingComplete,
     sendMessage,
     loadConversation,
     startNewConversation
@@ -106,6 +107,17 @@ export default function Chat() {
       hasScrolledToUserMessageRef.current = false;
     }
   }, [isLoadingResponse]);
+  
+  // Handle scrolling when streaming is complete
+  useEffect(() => {
+    if (streamingComplete && latestMessageRef.current) {
+      // When streaming just finished, scroll to the completed AI message
+      latestMessageRef.current.scrollIntoView({ 
+        behavior: "smooth", 
+        block: "start" // Ensures we scroll to the top of the message
+      });
+    }
+  }, [streamingComplete]);
   
   // Handle regular scrolling behavior when messages change but not during streaming
   useEffect(() => {
