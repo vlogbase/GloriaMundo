@@ -42,6 +42,19 @@ const MODEL_CONFIGS = {
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
+  // Debug API keys route
+  app.get("/api/debug/keys", (req, res) => {
+    // Safe way to check if keys exist without exposing them
+    const perplexityKeyStatus = PERPLEXITY_API_KEY ? "exists (length: " + PERPLEXITY_API_KEY.length + ")" : "missing";
+    const groqKeyStatus = GROQ_API_KEY ? "exists (length: " + GROQ_API_KEY.length + ")" : "missing";
+    
+    res.json({
+      perplexityKey: perplexityKeyStatus,
+      groqKey: groqKeyStatus,
+      envVars: Object.keys(process.env).filter(key => key.includes("API") || key.includes("KEY"))
+    });
+  });
+
   // Serve ads.txt and sitemap.xml at the root level
   app.get("/ads.txt", (req, res) => {
     res.sendFile("client/public/ads.txt", { root: "." });
@@ -332,6 +345,27 @@ Format your responses using markdown for better readability.`;
           stream: false
         };
 
+        // Log the API request details for debugging (without exposing the full key)
+        const keyLength = modelConfig.apiKey.length;
+        const maskedKey = keyLength >= 10 
+          ? `${modelConfig.apiKey.substring(0, 5)}...${modelConfig.apiKey.substring(keyLength - 5)}` 
+          : "***";
+        
+        console.log(`API Request to ${modelConfig.apiUrl}:`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${maskedKey}`
+          },
+          payload: {
+            model: payload.model,
+            temperature: payload.temperature,
+            top_p: payload.top_p,
+            // Redact full messages to avoid logging sensitive data
+            messagesCount: payload.messages.length
+          }
+        });
+        
         const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
