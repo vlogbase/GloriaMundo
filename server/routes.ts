@@ -721,11 +721,12 @@ Format your responses using markdown for better readability and organization.`;
         }
       }
       
-      // Ensure the last message is from the user
-      if (lastRole !== "user") {
-        // If we have an image, we always use the multimodal format regardless of model type
-        // However, modelType should already be set to "multimodal" at this point
-        if (image) {
+      // Always add the current user message regardless of what was in the history
+      // This is the message that was just created above containing the image
+
+      // If we have an image, we always use the multimodal format regardless of model type
+      // However, modelType should already be set to "multimodal" at this point
+      if (image) {
           // Add the image data for multimodal requests with proper typing
           // For llama-3.2-90b-vision-preview, the image URL must be a data URL or a publicly accessible URL
           // Make sure image URL is properly formatted if it's a base64 data URL
@@ -755,7 +756,6 @@ Format your responses using markdown for better readability and organization.`;
             content: content || "" // Ensure content is never undefined
           });
         }
-      }
 
       // Check if we have the required API key for the selected model
       if (!isValidApiKey(modelConfig.apiKey)) {
