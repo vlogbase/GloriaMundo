@@ -608,8 +608,8 @@ Format your responses using markdown for better readability and organization.`;
       const userMessage = await storage.createMessage({
         conversationId,
         role: "user",
-        content,
-        image, // Store the image data in the message
+        content: content || "", // Ensure content is never undefined
+        image: image || undefined, // Store the image data in the message
         citations: null,
       });
 
