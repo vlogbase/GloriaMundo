@@ -786,28 +786,55 @@ Format your responses using markdown for better readability and organization.`;
         });
       }
       
-      // Ensure proper alternation of user and assistant messages
-      let lastRole = "assistant"; // Start with assistant so first user message can be added
-      
-      for (const msg of filteredMessages) {
-        // Only add message if it alternates properly
-        if (msg.role !== lastRole) {
-          // For multimodal model, don't include previous images in the context
-          // as the model only supports one image per request
-          if (modelType === "multimodal" && msg.image) {
-            // For previous messages with images in multimodal context, 
-            // only include the text content
+      // Special handling for Perplexity's search model which requires strict user/assistant alternation
+      if (modelType === "search") {
+        // For search model, we need to be extra careful with message ordering
+        // After system message, messages must strictly alternate between user and assistant
+        
+        // Get only the latest user message if no previous assistant response exists
+        if (filteredMessages.length <= 1) {
+          // If this is the first message, just include it (about to be added below)
+          // Don't add anything from history
+        } else {
+          // Include the most recent complete exchange (user + assistant) if available
+          const latestMessages = filteredMessages.slice(-2);
+          if (latestMessages.length === 2 && 
+              latestMessages[0].role === "user" && 
+              latestMessages[1].role === "assistant") {
             messages.push({
-              role: msg.role,
-              content: msg.content
+              role: "user",
+              content: latestMessages[0].content
             });
-          } else {
             messages.push({
-              role: msg.role,
-              content: msg.content
+              role: "assistant",
+              content: latestMessages[1].content
             });
           }
-          lastRole = msg.role;
+        }
+      } else {
+        // For non-search models, use the standard alternating approach
+        let lastRole = "assistant"; // Start with assistant so first user message can be added
+        
+        for (const msg of filteredMessages) {
+          // Only add message if it alternates properly
+          if (msg.role !== lastRole) {
+            // For multimodal model, don't include previous images in the context
+            // as the model only supports one image per request
+            if (modelType === "multimodal" && msg.image) {
+              // For previous messages with images in multimodal context, 
+              // only include the text content
+              messages.push({
+                role: msg.role,
+                content: msg.content
+              });
+            } else {
+              messages.push({
+                role: msg.role,
+                content: msg.content
+              });
+            }
+            lastRole = msg.role;
+          }
         }
       }
       
