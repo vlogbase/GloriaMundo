@@ -36,8 +36,12 @@ export const api = {
       return response.json();
     },
     
-    send: async (conversationId: number, content: string, image?: string): Promise<{ userMessage: Message, assistantMessage: Message }> => {
-      const response = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, { content, image });
+    send: async (conversationId: number, content: string, image?: string, modelType?: string): Promise<{ userMessage: Message, assistantMessage: Message }> => {
+      const response = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, { 
+        content, 
+        image,
+        modelType 
+      });
       return response.json();
     }
   }
