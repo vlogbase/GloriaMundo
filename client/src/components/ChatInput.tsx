@@ -299,11 +299,11 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message GloriaMundo..."
-            className={`w-full p-3 ${selectedModel === 'multimodal' ? 'pr-20' : 'pr-12'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
+            className={`w-full p-3 ${selectedModel === 'multimodal' && !selectedImage ? 'pr-20' : 'pr-12'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
             disabled={isLoading}
           />
           
-          {selectedModel === 'multimodal' && (
+          {selectedModel === 'multimodal' && !selectedImage && (
             <>
               <input
                 type="file"

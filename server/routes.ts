@@ -388,16 +388,15 @@ Format your responses using markdown for better readability and organization.`;
       for (const msg of filteredMessages) {
         // Only add message if it alternates properly
         if (msg.role !== lastRole) {
-          if (msg.role === "user" && msg.image && modelType === "multimodal") {
-            // For multimodal model with image, format according to Llama 3.2 Vision requirements
-            const multimodalMessage: MultimodalMessage = {
+          // For multimodal model, don't include previous images in the context
+          // as the model only supports one image per request
+          if (modelType === "multimodal" && msg.image) {
+            // For previous messages with images in multimodal context, 
+            // only include the text content
+            messages.push({
               role: msg.role,
-              content: [
-                { type: "text", text: msg.content },
-                { type: "image_url", image_url: { url: msg.image } }
-              ]
-            };
-            messages.push(multimodalMessage);
+              content: msg.content
+            });
           } else {
             messages.push({
               role: msg.role,
