@@ -445,11 +445,11 @@ Format your responses using markdown for better readability and organization.`;
           throw new Error(`${modelConfig.apiProvider} API returned ${response.status}`);
         }
 
-        // Create initial message with empty content (will be updated with streaming data)
+        // Create initial message with placeholder content (will be updated with streaming data)
         let assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
-          content: "",
+          content: "...", // Placeholder content that will be replaced
           citations: null,
         });
         
