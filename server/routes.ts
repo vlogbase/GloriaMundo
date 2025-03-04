@@ -730,7 +730,7 @@ Format your responses using markdown for better readability and organization.`;
           const multimodalMessage: MultimodalMessage = {
             role: "user",
             content: [
-              { type: "text", text: content },
+              { type: "text", text: content || "" }, // Ensure content is never undefined
               { type: "image_url", image_url: { url: imageUrl } }
             ]
           };
@@ -738,7 +738,7 @@ Format your responses using markdown for better readability and organization.`;
         } else {
           messages.push({
             role: "user",
-            content
+            content: content || "" // Ensure content is never undefined
           });
         }
       }
