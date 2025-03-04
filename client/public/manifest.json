@@ -1,7 +1,7 @@
 {
-  "name": "GloriaMundo - AI Discovery",
+  "name": "GloriaMundo - Free & Unlimited AI Assistant",
   "short_name": "GloriaMundo",
-  "description": "Curiosity meets clarity. GloriaMundo: the conversational agent that transforms questions into adventures.",
+  "description": "Free unlimited access to powerful AI models for all your tasks and questions, with no restrictions.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a365d",
