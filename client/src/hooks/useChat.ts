@@ -45,7 +45,7 @@ export const useChat = () => {
   }, [setLocation, toast]);
 
   // Send a message
-  const sendMessage = useCallback(async (conversationId: number, content: string) => {
+  const sendMessage = useCallback(async (conversationId: number, content: string, image?: string) => {
     // If not the active conversation, load it first
     if (activeConversationId !== conversationId) {
       setActiveConversationId(conversationId);
@@ -58,6 +58,7 @@ export const useChat = () => {
       conversationId,
       role: "user",
       content,
+      image,
       createdAt: new Date().toISOString(),
       citations: null,
     };
@@ -71,6 +72,7 @@ export const useChat = () => {
         `/api/conversations/${conversationId}/messages`,
         { 
           content,
+          image,
           modelType: selectedModel  // Include the selected model in the request
         }
       );

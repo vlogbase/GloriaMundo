@@ -2,33 +2,178 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Send, Lightbulb, Search, Image } from "lucide-react";
+import { Send, Lightbulb, Search, Image, X, Upload, Camera } from "lucide-react";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { ModelType } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ChatInputProps {
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, image?: string) => void;
   isLoading: boolean;
 }
 
 export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
   const [message, setMessage] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { selectedModel, setSelectedModel } = useModelSelection();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     
-    if (!message.trim() || isLoading) return;
+    if ((!message.trim() && !selectedImage) || isLoading) return;
     
-    onSendMessage(message);
+    onSendMessage(message, selectedImage || undefined);
     setMessage("");
+    setSelectedImage(null);
+    setImagePreviewUrl(null);
     
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+    }
+  };
+  
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        const img = document.createElement('img');
+        img.onload = () => {
+          processImage(img);
+        };
+        
+        img.src = event.target?.result as string;
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Process and resize image if needed
+  const processImage = (img: HTMLImageElement) => {
+    // Check if image needs resizing (max 1024px on any side)
+    const maxSize = 1024;
+    const needsResize = img.width > maxSize || img.height > maxSize;
+    
+    if (needsResize) {
+      // Resize image while preserving aspect ratio
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height) {
+        if (width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const resizedImageData = canvas.toDataURL('image/jpeg', 0.9);
+        setSelectedImage(resizedImageData);
+        setImagePreviewUrl(resizedImageData);
+      }
+    } else {
+      // Use original image if it doesn't need resizing
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg', 0.9);
+        setSelectedImage(imageData);
+        setImagePreviewUrl(imageData);
+      }
+    }
+  };
+  
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  // Start camera for taking a photo
+  const startCamera = async () => {
+    setCameraModalOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      setCameraModalOpen(false);
+    }
+  };
+  
+  // Close camera and stop stream
+  const closeCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const tracks = stream.getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setCameraModalOpen(false);
+  };
+  
+  // Take a photo from camera stream
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw video frame to canvas
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Create an image from the canvas
+        const img = new Image();
+        img.onload = () => {
+          processImage(img);
+          closeCamera();
+        };
+        img.src = canvas.toDataURL('image/jpeg', 0.9);
+      }
     }
   };
 
@@ -101,6 +246,25 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
           </ToggleGroup>
         </TooltipProvider>
         
+        {imagePreviewUrl && (
+          <div className="mb-3 relative rounded-lg overflow-hidden border border-border">
+            <img 
+              src={imagePreviewUrl} 
+              alt="Uploaded preview" 
+              className="max-h-64 max-w-full object-contain mx-auto"
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="destructive"
+              className="absolute top-2 right-2 h-8 w-8 rounded-full"
+              onClick={removeImage}
+            >
+              <X size={16} />
+            </Button>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="relative">
           <Textarea
             ref={textareaRef}
@@ -108,19 +272,44 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message GloriaMundo..."
-            className="w-full p-3 pr-12 min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50"
+            className={`w-full p-3 ${selectedModel === 'multimodal' ? 'pr-20' : 'pr-12'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
             disabled={isLoading}
           />
+          
+          {selectedModel === 'multimodal' && (
+            <>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                accept="image/*"
+                className="hidden"
+                id="image-upload"
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                disabled={isLoading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload size={18} />
+              </Button>
+            </>
+          )}
+          
           <Button
             type="submit"
             size="icon"
             variant="ghost"
             className="absolute right-3 bottom-3 text-primary hover:text-primary/80 transition-colors"
-            disabled={isLoading || !message.trim()}
+            disabled={(isLoading || (!message.trim() && !selectedImage))}
           >
             <Send size={18} />
           </Button>
         </form>
+        
         <p className="text-xs text-muted-foreground mt-2 text-center">
           For important decisions, always confirm information with trusted sources.
         </p>
