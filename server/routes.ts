@@ -7,6 +7,22 @@ import { insertMessageSchema } from "@shared/schema";
 type ModelType = "reasoning" | "search" | "multimodal";
 import 'express-session';
 
+// Define special types for multimodal API integration
+type MultimodalContentItem = 
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+// This represents the format expected by the Groq API for multimodal messages
+interface MultimodalMessage {
+  role: string;
+  content: MultimodalContentItem[];
+}
+
+// Union type for messages that can be either text-only or multimodal
+type ApiMessage = 
+  | { role: string; content: string }
+  | MultimodalMessage;
+
 // Extend SessionData interface for express-session
 declare module 'express-session' {
   interface SessionData {
@@ -373,7 +389,8 @@ Format your responses using markdown for better readability and organization.`;
         if (msg.role !== lastRole) {
           if (msg.role === "user" && msg.image && modelType === "multimodal") {
             // For multimodal model with image, format according to Llama 3.2 Vision requirements
-            messages.push({
+            // We need to use any type here since the API needs a different format for multimodal messages
+            (messages as any).push({
               role: msg.role,
               content: [
                 { type: "text", text: msg.content },
@@ -393,8 +410,9 @@ Format your responses using markdown for better readability and organization.`;
       // Ensure the last message is from the user
       if (lastRole !== "user") {
         if (image && modelType === "multimodal") {
-          // Add the image data for multimodal requests
-          messages.push({
+          // Add the image data for multimodal requests - using any to bypass type checking
+          // This is necessary because multimodal models expect a different content format
+          (messages as any).push({
             role: "user",
             content: [
               { type: "text", text: content },

@@ -1,5 +1,5 @@
-import { Sparkles } from "lucide-react";
-import { motion } from "framer-motion";
+import { Sparkles, ChevronRight, ImageIcon, SearchIcon, BrainCircuit } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, memo } from "react";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { ModelType } from "@/lib/types";
@@ -17,6 +17,7 @@ interface SuggestionData {
 
 // The suggestions data from CSV
 const SUGGESTIONS_DATA: SuggestionData[] = [
+  // Reasoning & Multimodal shared prompts
   { 
     shortQuestion: "Next Prime Number?", 
     fullQuestion: "Consider the following sequence: 2, 3, 5, 7, 11. What is the next prime number? Please explain your reasoning step by step.",
@@ -67,6 +68,50 @@ const SUGGESTIONS_DATA: SuggestionData[] = [
     fullQuestion: "In a simplified chess endgame with only a king and pawn, explain the strategy required to promote the pawn into a queen, detailing each necessary move.",
     modelTypes: ["reasoning", "multimodal"]
   },
+  
+  // Multimodal-specific prompts (with image capabilities)
+  {
+    shortQuestion: "Analyze this image",
+    fullQuestion: "I'll upload an image. Please analyze it in detail - describe what you see, any notable features, and what might be happening in the image.",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "Identify objects",
+    fullQuestion: "I'll upload a photo. Could you identify all the main objects present in the image and describe their spatial relationships?",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "Read text from image",
+    fullQuestion: "I'll share an image containing text. Please read and transcribe all the text visible in the image.",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "Explain this diagram",
+    fullQuestion: "I'm going to share a diagram or chart. Could you explain what information it's conveying and interpret any data or processes shown?",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "What's wrong with this code?",
+    fullQuestion: "I'll share a screenshot of code that isn't working. Could you identify any bugs or issues and suggest how to fix them?",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "Solve this math problem",
+    fullQuestion: "I'll upload a photo of a handwritten math problem. Could you solve it step by step and explain your solution?",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "Identify this location",
+    fullQuestion: "I'll share a photo of a place. Based on the visual elements, could you suggest where this might be located and what makes it distinctive?",
+    modelTypes: ["multimodal"]
+  },
+  {
+    shortQuestion: "Assess this design",
+    fullQuestion: "I'll upload a design mockup or product image. Could you provide a critique focusing on aesthetics, functionality, and potential improvements?",
+    modelTypes: ["multimodal"]
+  },
+  
+  // Search model prompts
   { 
     shortQuestion: "2023 IPCC Report Summary", 
     fullQuestion: "Find and summarize the key findings of the 2023 IPCC report on climate change, including major recommendations and data trends.",
@@ -122,47 +167,83 @@ const SUGGESTIONS_DATA: SuggestionData[] = [
 // Individual suggestion bubble component
 const SuggestionBubble = memo(({ 
   suggestion, 
-  isClicked,
+  fullSuggestion,
+  isExpanded,
   isLoading, 
-  onClick 
+  onClick,
+  onExpand,
+  modelType
 }: { 
   suggestion: string;
-  isClicked: boolean;
+  fullSuggestion: string;
+  isExpanded: boolean;
   isLoading: boolean;
   onClick: () => void;
+  onExpand: () => void;
+  modelType: ModelType;
 }) => {
+  const getModelIcon = () => {
+    if (modelType === "search") {
+      return <SearchIcon size={14} />;
+    } else if (modelType === "multimodal") {
+      return <ImageIcon size={14} />;
+    } else {
+      return <BrainCircuit size={14} />;
+    }
+  };
+
   return (
-    <motion.button
-      className={`px-4 py-3 rounded-2xl bg-primary/10 hover:bg-primary/20 transition-all
-                 text-sm md:text-base cursor-pointer shadow-sm
-        ${isClicked ? "bg-primary/30 text-primary font-medium" : ""}
-        ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
-      `}
-      disabled={isLoading}
-      onClick={onClick}
-      whileHover={{ scale: 1.03 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span>{suggestion}</span>
-        
-        {isClicked && (
+    <div className="flex flex-col w-full">
+      <motion.button
+        className={`px-4 py-3 rounded-t-2xl ${isExpanded ? '' : 'rounded-b-2xl'} bg-primary/10 hover:bg-primary/20 transition-all
+                  text-sm md:text-base cursor-pointer shadow-sm
+          ${isExpanded ? "bg-primary/20 text-primary font-medium" : ""}
+          ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
+        `}
+        disabled={isLoading}
+        onClick={onExpand}
+        whileHover={{ scale: 1.02 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-primary/70">{getModelIcon()}</span>
+            <span>{suggestion}</span>
+          </div>
+          
+          <ChevronRight 
+            size={16} 
+            className={`text-primary transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} 
+          />
+        </div>
+      </motion.button>
+      
+      <AnimatePresence>
+        {isExpanded && (
           <motion.div
-            animate={{ 
-              scale: [0.8, 1.2, 0.8],
-              opacity: [0.5, 1, 0.5]
-            }}
-            transition={{ 
-              duration: 1.5, 
-              repeat: Infinity 
-            }}
-            className="text-primary"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
           >
-            <Sparkles size={14} />
+            <div 
+              className="p-4 text-sm bg-primary/5 border-t border-primary/10 rounded-b-2xl"
+            >
+              <p className="mb-3">{fullSuggestion}</p>
+              <button
+                onClick={onClick}
+                disabled={isLoading}
+                className="flex items-center gap-1 text-primary hover:underline text-sm font-medium"
+              >
+                <Sparkles size={14} />
+                <span>Ask this question</span>
+              </button>
+            </div>
           </motion.div>
         )}
-      </div>
-    </motion.button>
+      </AnimatePresence>
+    </div>
   );
 });
 
@@ -170,6 +251,7 @@ SuggestionBubble.displayName = 'SuggestionBubble';
 
 // The main Welcome component
 export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomeProps) => {
+  const [expandedSuggestionId, setExpandedSuggestionId] = useState<number | null>(null);
   const [clickedSuggestionId, setClickedSuggestionId] = useState<number | null>(null);
   const [displayedSuggestions, setDisplayedSuggestions] = useState<SuggestionData[]>([]);
   const { selectedModel } = useModelSelection();
@@ -185,10 +267,16 @@ export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomePr
       // Shuffle array and pick first 4
       const shuffled = [...filteredSuggestions].sort(() => 0.5 - Math.random());
       setDisplayedSuggestions(shuffled.slice(0, 4));
+      // Reset expanded state when suggestions change
+      setExpandedSuggestionId(null);
     };
     
     getRandomSuggestionsForModel();
   }, [selectedModel]);
+  
+  const handleSuggestionExpand = (index: number) => {
+    setExpandedSuggestionId(prev => prev === index ? null : index);
+  };
   
   const handleSuggestionClick = (index: number, suggestion: SuggestionData) => {
     if (isLoading || clickedSuggestionId !== null) return; // Prevent multiple clicks
@@ -211,17 +299,21 @@ export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomePr
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-w-2xl">
+      <div className="flex flex-col gap-3 sm:gap-4 max-w-2xl w-full">
         {displayedSuggestions.map((suggestion, index) => {
+          const isThisExpanded = expandedSuggestionId === index;
           const isThisClicked = clickedSuggestionId === index;
           
           return (
             <SuggestionBubble
               key={index}
               suggestion={suggestion.shortQuestion}
-              isClicked={isThisClicked}
-              isLoading={isLoading}
+              fullSuggestion={suggestion.fullQuestion}
+              isExpanded={isThisExpanded}
+              isLoading={isLoading || isThisClicked}
               onClick={() => handleSuggestionClick(index, suggestion)}
+              onExpand={() => handleSuggestionExpand(index)}
+              modelType={suggestion.modelTypes[0]} // Use the first model type as the primary type
             />
           );
         })}
