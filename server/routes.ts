@@ -665,8 +665,8 @@ Format your responses using markdown for better readability and organization.`;
       // Get the model configuration based on the requested model type
       const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       
-      // Enable streaming for reasoning model
-      const shouldStream = modelType === "reasoning";
+      // Disable streaming (using standard requests only)
+      const shouldStream = false;
 
       // Create user message
       const userMessage = await storage.createMessage({

@@ -9,7 +9,6 @@ import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { useChat } from "@/hooks/useChat";
-import { useStreamingChat } from "@/hooks/useStreamingChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useTheme } from "@/hooks/use-theme";
 import { Menu, Globe, Sparkles, Sun, Moon } from "lucide-react";
@@ -67,20 +66,16 @@ export default function Chat() {
     toggleSidebarCollapse
   } = useConversations();
   
-  // Use the streaming chat hook for incremental response display
-  const streamingChat = useStreamingChat();
+  // Use the standard chat hook for message handling
   const { 
     messages, 
     isLoadingMessages,
     isLoadingResponse,
-    streamingComplete,
     sendMessage,
     loadConversation,
-    startNewConversation
-  } = streamingChat;
-  
-  // Get the active conversation ID from the streaming chat hook
-  const activeConversationId = streamingChat.activeConversationId;
+    startNewConversation,
+    activeConversationId
+  } = useChat();
   
   // Load conversation when ID changes in URL
   useEffect(() => {
@@ -108,31 +103,16 @@ export default function Chat() {
     }
   }, [isLoadingResponse]);
   
-  // Handle scrolling when streaming is complete
+  // Handle regular scrolling behavior when messages change
   useEffect(() => {
-    if (streamingComplete && latestMessageRef.current) {
-      // When streaming just finished, scroll to the completed AI message
-      latestMessageRef.current.scrollIntoView({ 
-        behavior: "smooth", 
-        block: "start" // Ensures we scroll to the top of the message
-      });
-    }
-  }, [streamingComplete]);
-  
-  // Handle regular scrolling behavior when messages change but not during streaming
-  useEffect(() => {
-    // Don't auto-scroll during streaming to avoid interfering with user scrolling
-    if (isLoadingResponse) return;
-    
-    if (messages.length > 0) {
-      // If user just loaded a conversation or new messages are added outside of streaming
+    // When loading is done, scroll to the latest message
+    if (!isLoadingResponse && messages.length > 0) {
       if (latestMessageRef.current) {
         latestMessageRef.current.scrollIntoView({ 
           behavior: "smooth", 
-          block: "start" // Ensures we scroll to the top of the element
+          block: "start" // Ensures we scroll to the top of the message
         });
       } else if (messagesEndRef.current) {
-        // Otherwise scroll to the bottom to see the latest user message
         messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
       }
     } else if (messagesEndRef.current) {
