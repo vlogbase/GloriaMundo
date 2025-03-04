@@ -145,8 +145,8 @@ export class MemStorage implements IStorage {
       throw new Error("role is required");
     }
     
-    if (!data.content) {
-      throw new Error("content is required");
+    if (!data.content && !data.image) {
+      throw new Error("Either content or image is required");
     }
     
     const id = this.messageId++;
@@ -156,7 +156,8 @@ export class MemStorage implements IStorage {
       id,
       conversationId: data.conversationId,
       role: data.role,
-      content: data.content,
+      content: data.content || "", // Default to empty string if only image is provided
+      image: data.image || null,
       citations: data.citations ?? null,
       createdAt: now
     };

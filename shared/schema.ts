@@ -34,6 +34,7 @@ export const messages = pgTable("messages", {
   conversationId: integer("conversation_id").references(() => conversations.id).notNull(),
   role: text("role").notNull(), // 'user' or 'assistant'
   content: text("content").notNull(),
+  image: text("image"), // Store base64 encoded image data for multimodal messages
   citations: jsonb("citations"), // Store API citation data
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -42,6 +43,7 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   conversationId: true,
   role: true,
   content: true,
+  image: true,
   citations: true,
 });
 

@@ -277,10 +277,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, modelType = "reasoning" } = req.body;
+      const { content, modelType = "reasoning", image } = req.body;
       
-      if (!content) {
-        return res.status(400).json({ message: "Message content is required" });
+      if (!content && !image) {
+        return res.status(400).json({ message: "Message content or image is required" });
       }
       
       // Get the model configuration based on the requested model type
@@ -291,6 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversationId,
         role: "user",
         content,
+        image, // Store the image data in the message
         citations: null,
       });
 
@@ -370,20 +371,42 @@ Format your responses using markdown for better readability and organization.`;
       for (const msg of filteredMessages) {
         // Only add message if it alternates properly
         if (msg.role !== lastRole) {
-          messages.push({
-            role: msg.role,
-            content: msg.content
-          });
+          if (msg.role === "user" && msg.image && modelType === "multimodal") {
+            // For multimodal model with image, format according to Llama 3.2 Vision requirements
+            messages.push({
+              role: msg.role,
+              content: [
+                { type: "text", text: msg.content },
+                { type: "image_url", image_url: { url: msg.image } }
+              ]
+            });
+          } else {
+            messages.push({
+              role: msg.role,
+              content: msg.content
+            });
+          }
           lastRole = msg.role;
         }
       }
       
       // Ensure the last message is from the user
       if (lastRole !== "user") {
-        messages.push({
-          role: "user",
-          content
-        });
+        if (image && modelType === "multimodal") {
+          // Add the image data for multimodal requests
+          messages.push({
+            role: "user",
+            content: [
+              { type: "text", text: content },
+              { type: "image_url", image_url: { url: image } }
+            ]
+          });
+        } else {
+          messages.push({
+            role: "user",
+            content
+          });
+        }
       }
 
       // Check if we have the required API key for the selected model
