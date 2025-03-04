@@ -1,7 +1,12 @@
 import { useState, FormEvent, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Send, Lightbulb, Search, Image } from "lucide-react";
+import { useModelSelection } from "@/hooks/useModelSelection";
+import { ModelType } from "@/lib/types";
+import { MODEL_OPTIONS } from "@/lib/models";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -11,6 +16,7 @@ interface ChatInputProps {
 export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { selectedModel, setSelectedModel } = useModelSelection();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -48,10 +54,51 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
       handleSubmit(e);
     }
   };
+  
+  // Get model icon based on id
+  const getModelIcon = (id: ModelType) => {
+    switch(id) {
+      case "reasoning":
+        return <Lightbulb size={18} />;
+      case "search":
+        return <Search size={18} />;
+      case "multimodal":
+        return <Image size={18} />;
+      default:
+        return <Lightbulb size={18} />;
+    }
+  };
 
   return (
     <div className="border-t border-border p-4">
       <div className="max-w-4xl mx-auto">
+        <TooltipProvider>
+          <ToggleGroup 
+            type="single" 
+            value={selectedModel}
+            onValueChange={(value) => value && setSelectedModel(value as ModelType)}
+            className="flex justify-center mb-3 space-x-1"
+          >
+            {Object.values(MODEL_OPTIONS).map((model) => (
+              <Tooltip key={model.id}>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem 
+                    value={model.id} 
+                    aria-label={model.name}
+                    className="flex items-center gap-1 px-3 py-1 text-sm"
+                  >
+                    {getModelIcon(model.id)}
+                    <span>{model.name}</span>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center">
+                  <p>{model.description}</p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </ToggleGroup>
+        </TooltipProvider>
+        
         <form onSubmit={handleSubmit} className="relative">
           <Textarea
             ref={textareaRef}

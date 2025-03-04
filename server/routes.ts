@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertMessageSchema } from "@shared/schema";
+
+type ModelType = "reasoning" | "search" | "multimodal";
 import 'express-session';
 
 // Extend SessionData interface for express-session
@@ -12,14 +14,31 @@ declare module 'express-session' {
   }
 }
 
-// Define API key environment variable
+// Define API keys
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || "";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 
-// Define the model to use
-const PERPLEXITY_MODEL = "llama-3.1-sonar-small-128k-online";
-
-// Perplexity API URL
-const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
+// Define model configurations
+const MODEL_CONFIGS = {
+  reasoning: {
+    apiProvider: "groq",
+    modelName: "deepseek-r1-distill-llama-70b",
+    apiUrl: "https://api.groq.com/openai/v1/chat/completions",
+    apiKey: GROQ_API_KEY
+  },
+  search: {
+    apiProvider: "perplexity",
+    modelName: "llama-3.1-sonar-small-128k-online",
+    apiUrl: "https://api.perplexity.ai/chat/completions",
+    apiKey: PERPLEXITY_API_KEY
+  },
+  multimodal: {
+    apiProvider: "groq",
+    modelName: "llama-3.3-70b-versatile",
+    apiUrl: "https://api.groq.com/openai/v1/chat/completions",
+    apiKey: GROQ_API_KEY
+  }
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
@@ -126,11 +145,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content } = req.body;
+      const { content, modelType = "reasoning" } = req.body;
       
       if (!content) {
         return res.status(400).json({ message: "Message content is required" });
       }
+      
+      // Get the model configuration based on the requested model type
+      const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
 
       // Create user message
       const userMessage = await storage.createMessage({

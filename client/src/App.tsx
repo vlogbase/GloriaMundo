@@ -7,6 +7,7 @@ import Chat from "@/pages/Chat";
 import Privacy from "@/pages/Privacy";
 import Contact from "@/pages/Contact";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { ModelSelectionProvider } from "@/hooks/useModelSelection";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
 
@@ -27,14 +28,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark">
-        <div className="flex flex-col min-h-screen">
-          <div className="flex-grow">
-            <Router />
+        <ModelSelectionProvider>
+          <div className="flex flex-col min-h-screen">
+            <div className="flex-grow">
+              <Router />
+            </div>
+            <Footer />
           </div>
-          <Footer />
-        </div>
-        <CookieConsent />
-        <Toaster />
+          <CookieConsent />
+          <Toaster />
+        </ModelSelectionProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

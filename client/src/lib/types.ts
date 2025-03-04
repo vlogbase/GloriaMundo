@@ -20,6 +20,16 @@ export interface Message {
   createdAt: string;
 }
 
+export type ModelType = "reasoning" | "search" | "multimodal";
+
+export interface ModelOption {
+  id: ModelType;
+  name: string;
+  description: string;
+  apiName: string;
+  apiProvider: "groq" | "perplexity";
+}
+
 export interface PerplexityResponse {
   id: string;
   model: string;
@@ -43,4 +53,24 @@ export interface PerplexityResponse {
     total_tokens: number;
   };
   citations?: string[];
+}
+
+export interface GroqResponse {
+  id: string;
+  model: string;
+  object: string;
+  created: number;
+  choices: {
+    index: number;
+    finish_reason: string;
+    message: {
+      role: string;
+      content: string;
+    };
+  }[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }

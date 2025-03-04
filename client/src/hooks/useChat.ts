@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Message } from "@/lib/types";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useModelSelection } from "@/hooks/useModelSelection";
 
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -11,6 +12,7 @@ export const useChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
+  const { selectedModel } = useModelSelection();
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (conversationId: number) => {
@@ -67,7 +69,10 @@ export const useChat = () => {
       const response = await apiRequest(
         "POST",
         `/api/conversations/${conversationId}/messages`,
-        { content }
+        { 
+          content,
+          modelType: selectedModel  // Include the selected model in the request
+        }
       );
       
       const data = await response.json();
@@ -96,7 +101,7 @@ export const useChat = () => {
     } finally {
       setIsLoadingResponse(false);
     }
-  }, [activeConversationId, setLocation, toast]);
+  }, [activeConversationId, selectedModel, setLocation, toast]);
 
   // Start a new conversation
   const startNewConversation = useCallback(async () => {
