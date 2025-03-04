@@ -63,15 +63,19 @@ export default function Chat() {
     toggleSidebarCollapse
   } = useConversations();
   
+  // Use the streaming chat hook for incremental response display
+  const streamingChat = useStreamingChat();
   const { 
     messages, 
     isLoadingMessages,
     isLoadingResponse,
-    activeConversationId,
     sendMessage,
     loadConversation,
     startNewConversation
-  } = useStreamingChat();
+  } = streamingChat;
+  
+  // Get the active conversation ID from the streaming chat hook
+  const activeConversationId = streamingChat.activeConversationId;
   
   // Load conversation when ID changes in URL
   useEffect(() => {
@@ -102,7 +106,7 @@ export default function Chat() {
   // Effect to show PWA install banner after first AI response
   useEffect(() => {
     // Check if we have at least one AI response in the messages
-    const hasAiResponse = messages.some(m => m.role === 'assistant');
+    const hasAiResponse = messages.some((m: Message) => m.role === 'assistant');
     
     if (hasAiResponse && !showPwaBanner) {
       // Set a small delay before showing the banner so it appears after the user has read the response
@@ -197,7 +201,7 @@ export default function Chat() {
             </div>
           ) : (
             <>
-              {messages.map((message, index) => {
+              {messages.map((message: Message, index: number) => {
                 // Add ref to the latest message (usually AI's message)
                 const isLatestMessage = index === messages.length - 1 && message.role === 'assistant';
                 return (

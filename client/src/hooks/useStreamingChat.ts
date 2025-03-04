@@ -257,6 +257,7 @@ export const useStreamingChat = () => {
     messages,
     isLoadingMessages,
     isLoadingResponse,
+    activeConversationId,
     loadConversation,
     sendMessage,
     startNewConversation,
