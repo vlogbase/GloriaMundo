@@ -111,12 +111,12 @@ export default function Chat() {
     }
   }, [messages, showPwaBanner]);
   
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, image?: string) => {
     if (!activeConversationId) {
       const newConversation = await createConversation("New Conversation");
-      await sendMessage(newConversation.id, content);
+      await sendMessage(newConversation.id, content, image);
     } else {
-      await sendMessage(activeConversationId, content);
+      await sendMessage(activeConversationId, content, image);
     }
   };
   

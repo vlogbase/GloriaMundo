@@ -167,7 +167,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         // Create an image from the canvas
-        const img = new Image();
+        const img = document.createElement('img');
         img.onload = () => {
           processImage(img);
           closeCamera();
@@ -217,6 +217,33 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
   return (
     <div className="border-t border-border p-4">
       <div className="max-w-4xl mx-auto">
+        {/* Camera Dialog */}
+        <Dialog open={cameraModalOpen} onOpenChange={open => !open && closeCamera()}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Take a Photo</DialogTitle>
+              <DialogDescription>
+                Center your subject in the frame and click the capture button.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="relative overflow-hidden rounded-md bg-background">
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                className="w-full h-auto aspect-video object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+            <div className="flex justify-center gap-4 mt-4">
+              <Button onClick={closeCamera} variant="outline">Cancel</Button>
+              <Button onClick={takePhoto} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                Capture
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        
         <TooltipProvider>
           <ToggleGroup 
             type="single" 
@@ -290,11 +317,23 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                className="absolute right-20 bottom-3 text-muted-foreground hover:text-primary transition-colors"
                 disabled={isLoading}
                 onClick={() => fileInputRef.current?.click()}
+                title="Upload image"
               >
                 <Upload size={18} />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                disabled={isLoading}
+                onClick={startCamera}
+                title="Take photo"
+              >
+                <Camera size={18} />
               </Button>
             </>
           )}
