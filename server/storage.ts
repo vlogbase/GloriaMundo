@@ -22,6 +22,7 @@ export interface IStorage {
   getMessage(id: number): Promise<Message | undefined>;
   getMessagesByConversation(conversationId: number): Promise<Message[]>;
   createMessage(message: Partial<InsertMessage>): Promise<Message>;
+  updateMessage(id: number, updates: Partial<InsertMessage>): Promise<Message | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -174,6 +175,24 @@ export class MemStorage implements IStorage {
     }
     
     return message;
+  }
+  
+  async updateMessage(id: number, updates: Partial<InsertMessage>): Promise<Message | undefined> {
+    const message = this.messages.get(id);
+    
+    if (!message) {
+      return undefined;
+    }
+    
+    const updatedMessage: Message = {
+      ...message,
+      content: updates.content !== undefined ? updates.content : message.content,
+      image: updates.image !== undefined ? updates.image : message.image,
+      citations: updates.citations !== undefined ? updates.citations : message.citations,
+    };
+    
+    this.messages.set(id, updatedMessage);
+    return updatedMessage;
   }
 }
 
