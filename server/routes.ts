@@ -46,7 +46,22 @@ console.log(`- Groq API Key: ${isGroqKeyValid ? "Valid" : "Invalid or Missing"}`
 function isValidApiKey(key: string | undefined | null): boolean {
   if (!key) return false;
   if (typeof key !== 'string') return false;
-  return key.length > 10;
+  
+  // Enhanced API key validation for better debugging
+  const isLongEnough = key.length > 10;
+  const hasValidPrefix = 
+    (key.startsWith('grk_') && key.length >= 50) || // Groq API key prefix
+    (key.startsWith('pplx-') && key.length >= 40);  // Perplexity API key prefix
+  
+  // Log detailed validation result for debugging
+  if (!isLongEnough) {
+    console.warn(`API key validation failed: Key length less than 10 (actual: ${key.length})`);
+  } else if (!hasValidPrefix) {
+    console.warn(`API key validation warning: Key doesn't have a recognized prefix`);
+  }
+  
+  // For production, we could be stricter, but for now just check length
+  return isLongEnough;
 }
 
 // Define model configurations
@@ -79,12 +94,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const perplexityKeyStatus = PERPLEXITY_API_KEY ? "exists (length: " + PERPLEXITY_API_KEY.length + ")" : "missing";
     const groqKeyStatus = GROQ_API_KEY ? "exists (length: " + GROQ_API_KEY.length + ")" : "missing";
     
+    // Get all environment variables with API or KEY in the name
+    const apiEnvVars = Object.keys(process.env).filter(key => 
+      key.includes("API") || key.includes("KEY") || key.includes("GROQ") || key.includes("PERPLEXITY")
+    );
+    
+    // Include deployment-specific information
+    const isDeployed = process.env.REPL_ID && process.env.REPL_OWNER;
+    const deploymentInfo = {
+      isDeployed,
+      replId: process.env.REPL_ID || "Not available",
+      replSlug: process.env.REPL_SLUG || "Not available",
+      nodeEnv: process.env.NODE_ENV || "Not set",
+      isProduction: process.env.NODE_ENV === "production"
+    };
+    
+    console.log(`Debug keys request from ${isDeployed ? 'deployed' : 'development'} environment`);
+    console.log(`API Key statuses: Perplexity: ${perplexityKeyStatus}, Groq: ${groqKeyStatus}`);
+    
     res.json({
       perplexityKey: perplexityKeyStatus,
       perplexityKeyValid: isValidApiKey(PERPLEXITY_API_KEY),
       groqKey: groqKeyStatus,
       groqKeyValid: isValidApiKey(GROQ_API_KEY),
-      envVars: Object.keys(process.env).filter(key => key.includes("API") || key.includes("KEY"))
+      envVars: apiEnvVars,
+      deployment: deploymentInfo
     });
   });
   
