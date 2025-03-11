@@ -1372,14 +1372,7 @@ Format your responses using markdown for better readability and organization.`;
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
-          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
-          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
-        }
+        headers: getSkimlinksHeaders()
       });
       
       // Create a copy of the response body before reading it
@@ -1445,14 +1438,7 @@ Format your responses using markdown for better readability and organization.`;
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
-          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
-          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
-        }
+        headers: getSkimlinksHeaders()
       });
       
       // Create a copy of the response body before reading it
@@ -1533,14 +1519,7 @@ Format your responses using markdown for better readability and organization.`;
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
-          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
-          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
-        }
+        headers: getSkimlinksHeaders()
       });
       
       // Create a copy of the response body before reading it
@@ -1605,14 +1584,7 @@ Format your responses using markdown for better readability and organization.`;
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
-          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
-          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
-        }
+        headers: getSkimlinksHeaders()
       });
       
       // Create a copy of the response body before reading it
