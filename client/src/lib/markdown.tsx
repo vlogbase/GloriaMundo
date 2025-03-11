@@ -1,38 +1,31 @@
 import ReactMarkdown from "react-markdown";
 import { CodeBlock } from "@/components/CodeBlock";
+import rehypeRaw from "rehype-raw";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { refreshSkimlinks } from "./utils";
+import { useEffect, useRef } from "react";
 
 interface MarkdownRendererProps {
   children: string;
 }
 
-// Process the content to handle HTML and convert URLs to links
-const processContent = (content: string): string => {
-  let processed = content;
-  
-  // Add target and rel attributes to any existing <a> tags that don't have them
-  processed = processed.replace(
-    /<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/gi, 
-    (match, url, rest) => {
-      // Only add the attributes if they don't already exist
-      if (!rest.includes('target=') && !rest.includes('rel=')) {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer"${rest}>`;
-      }
-      return match;
-    }
-  );
-  
-  // Convert plain URLs to clickable links
-  const urlRegex = /(?<!["\w])(https?:\/\/[^\s<]+)(?![^<]*>)/g;
-  processed = processed.replace(urlRegex, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-  });
-  
-  return processed;
-};
-
 export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
+  // Keep a reference to the container div to help with Skimlinks integration
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Setup effect to call refreshSkimlinks after component renders/updates
+  useEffect(() => {
+    // Wait briefly for the DOM to update before triggering refreshSkimlinks
+    const timer = setTimeout(() => {
+      refreshSkimlinks();
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [children]);
+
+  // Define the components for ReactMarkdown
   const components = {
-    // Define custom components for markdown rendering
     h1: (props: any) => (
       <h1 className="text-2xl font-bold mt-6 mb-4" {...props} />
     ),
@@ -83,15 +76,21 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
         {alt && <p className="text-xs text-muted-foreground mt-1">{alt}</p>}
       </div>
     ),
-    code: ({ className, children, ...props }: any) => {
-      // Check if it's a code block or inline code
+    code: ({ node, inline, className, children, ...props }: any) => {
       const match = /language-(\w+)/.exec(className || "");
       const language = match ? match[1] : "";
       const content = String(children).replace(/\n$/, "");
-      const isCodeBlock = match || content.includes('\n');
-
-      return isCodeBlock ? (
-        <CodeBlock language={language} value={content} />
+      
+      return !inline && (match || content.includes('\n')) ? (
+        <SyntaxHighlighter
+          style={atomDark}
+          language={language || "text"}
+          PreTag="div"
+          className="rounded-md my-4"
+          {...props}
+        >
+          {content}
+        </SyntaxHighlighter>
       ) : (
         <code
           className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono"
@@ -132,12 +131,14 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
     ),
   };
 
-  // Process the markdown content for HTML and links
-  const processedContent = processContent(children);
-
   return (
-    <div className="w-full overflow-hidden break-words">
-      <div dangerouslySetInnerHTML={{ __html: processedContent }} />
+    <div className="w-full overflow-hidden break-words" ref={containerRef}>
+      <ReactMarkdown 
+        components={components} 
+        rehypePlugins={[rehypeRaw]}
+      >
+        {children}
+      </ReactMarkdown>
     </div>
   );
 };
