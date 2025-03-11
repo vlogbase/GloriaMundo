@@ -1443,19 +1443,18 @@ Format your responses using markdown for better readability and organization.`;
         }
       });
       
+      // Create a copy of the response body before reading it
+      const responseBody = await response.text();
+      
       if (!response.ok) {
+        // Attempt to parse the error response
         let errorData;
         try {
-          // Clone the response before reading it to avoid the "Body has already been read" error
-          const responseClone = response.clone();
-          try {
-            errorData = await responseClone.json();
-          } catch (e) {
-            errorData = await response.text();
-          }
+          errorData = JSON.parse(responseBody);
         } catch (e) {
-          errorData = `Status: ${response.status} ${response.statusText}`;
+          errorData = responseBody || `Status: ${response.status} ${response.statusText}`;
         }
+        
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error fetching domain info", 
@@ -1465,7 +1464,17 @@ Format your responses using markdown for better readability and organization.`;
         });
       }
       
-      const domainData = await response.json();
+      // Parse the successful response
+      let domainData;
+      try {
+        domainData = JSON.parse(responseBody);
+      } catch (e) {
+        console.error("Error parsing Skimlinks API response:", e);
+        return res.status(500).json({ 
+          error: "Failed to parse domain information",
+          message: "Invalid JSON response from API"
+        });
+      }
       
       // Process the response to extract domain approval status
       const domainInfo = {
@@ -1522,19 +1531,18 @@ Format your responses using markdown for better readability and organization.`;
         }
       });
       
+      // Create a copy of the response body before reading it
+      const responseBody = await response.text();
+      
       if (!response.ok) {
+        // Attempt to parse the error response
         let errorData;
         try {
-          // Clone the response before reading it to avoid the "Body has already been read" error
-          const responseClone = response.clone();
-          try {
-            errorData = await responseClone.json();
-          } catch (e) {
-            errorData = await response.text();
-          }
+          errorData = JSON.parse(responseBody);
         } catch (e) {
-          errorData = `Status: ${response.status} ${response.statusText}`;
+          errorData = responseBody || `Status: ${response.status} ${response.statusText}`;
         }
+        
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error fetching merchants", 
@@ -1544,7 +1552,17 @@ Format your responses using markdown for better readability and organization.`;
         });
       }
       
-      const merchantData = await response.json();
+      // Parse the successful response
+      let merchantData;
+      try {
+        merchantData = JSON.parse(responseBody);
+      } catch (e) {
+        console.error("Error parsing Skimlinks API response:", e);
+        return res.status(500).json({ 
+          error: "Failed to parse merchant information",
+          message: "Invalid JSON response from API"
+        });
+      }
       console.log(`Successfully retrieved ${merchantData.merchants?.length || 0} merchants`);
       return res.json(merchantData);
     } catch (error) {
@@ -1585,19 +1603,18 @@ Format your responses using markdown for better readability and organization.`;
         }
       });
       
+      // Create a copy of the response body before reading it
+      const responseBody = await response.text();
+      
       if (!response.ok) {
+        // Attempt to parse the error response
         let errorData;
         try {
-          // Clone the response before reading it to avoid the "Body has already been read" error
-          const responseClone = response.clone();
-          try {
-            errorData = await responseClone.json();
-          } catch (e) {
-            errorData = await response.text();
-          }
+          errorData = JSON.parse(responseBody);
         } catch (e) {
-          errorData = `Status: ${response.status} ${response.statusText}`;
+          errorData = responseBody || `Status: ${response.status} ${response.statusText}`;
         }
+        
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error converting URL", 
@@ -1607,7 +1624,17 @@ Format your responses using markdown for better readability and organization.`;
         });
       }
       
-      const conversionData = await response.json();
+      // Parse the successful response
+      let conversionData;
+      try {
+        conversionData = JSON.parse(responseBody);
+      } catch (e) {
+        console.error("Error parsing Skimlinks API response:", e);
+        return res.status(500).json({ 
+          error: "Failed to parse URL conversion response",
+          message: "Invalid JSON response from API"
+        });
+      }
       console.log(`URL converted successfully: ${!!conversionData.skimlinks_url}`);
       return res.json({
         originalUrl: url,
