@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Message } from "@/lib/types";
 import { apiRequest } from "@/lib/queryClient";
+import { refreshSkimlinks } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
 
@@ -32,6 +33,14 @@ export const useChat = () => {
       const data = await response.json();
       setMessages(data);
       setActiveConversationId(conversationId);
+      
+      // Check if there are any AI responses in the loaded conversation
+      if (data.some((message: Message) => message.role === 'assistant')) {
+        // Wait for the DOM to update with the loaded messages before refreshing Skimlinks
+        setTimeout(() => {
+          refreshSkimlinks();
+        }, 1000);
+      }
     } catch (error) {
       console.error("Error loading messages:", error);
       toast({
@@ -99,6 +108,12 @@ export const useChat = () => {
       window.dispatchEvent(new CustomEvent('message-sent', {
         detail: { conversationId }
       }));
+      
+      // Refresh Skimlinks after getting an AI response
+      // Using a slight delay to ensure the DOM has been updated
+      setTimeout(() => {
+        refreshSkimlinks();
+      }, 1000);
     } catch (error) {
       console.error("Error sending message:", error);
       

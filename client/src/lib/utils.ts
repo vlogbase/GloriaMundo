@@ -139,3 +139,40 @@ export const cookieUtils = {
     Cookies.remove(name, options);
   }
 };
+
+/**
+ * Utility to re-process Skimlinks after dynamic content is added
+ * Triggers Skimlinks to process links that were added to the page after initial load
+ */
+export const refreshSkimlinks = (): void => {
+  try {
+    // Check if window is available (for SSR safety)
+    if (typeof window !== 'undefined') {
+      // Call the official reinitialize method if it exists
+      if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reprocess === 'function') {
+        // Use the official reprocess method
+        (window as any).skimlinksAPI.reprocess();
+        console.debug('Skimlinks reprocessed successfully');
+      } else if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reinitialize === 'function') {
+        // Fallback to reinitialize if reprocess isn't available
+        (window as any).skimlinksAPI.reinitialize();
+        console.debug('Skimlinks reinitialized successfully');
+      } else {
+        // Last resort: reload the script to process new links
+        const existingScript = document.querySelector('script[src*="skimresources.com"]');
+        if (existingScript) {
+          existingScript.remove();
+        }
+        
+        const skimlinksScript = document.createElement('script');
+        skimlinksScript.type = 'text/javascript';
+        skimlinksScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
+        skimlinksScript.async = true;
+        document.body.appendChild(skimlinksScript);
+        console.debug('Skimlinks script reloaded');
+      }
+    }
+  } catch (error) {
+    console.error('Error refreshing Skimlinks:', error);
+  }
+};

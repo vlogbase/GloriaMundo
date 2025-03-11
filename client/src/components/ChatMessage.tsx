@@ -1,7 +1,8 @@
+import { useEffect } from "react";
 import { Message } from "@/lib/types";
 import { MarkdownRenderer } from "@/lib/markdown";
 import { MessageActions } from "@/components/MessageActions";
-import { formatTime } from "@/lib/utils";
+import { formatTime, refreshSkimlinks } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { AdSense } from "@/components/AdSense";
 
@@ -11,6 +12,19 @@ interface ChatMessageProps {
 
 export const ChatMessage = ({ message }: ChatMessageProps) => {
   const isUser = message.role === "user";
+  
+  // Use effect to refresh Skimlinks when an AI message is rendered
+  useEffect(() => {
+    // Only trigger Skimlinks refresh for AI (assistant) messages
+    if (!isUser) {
+      // Small delay to ensure content is fully rendered
+      const timer = setTimeout(() => {
+        refreshSkimlinks();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isUser, message.id]);
   
   return (
     <>
