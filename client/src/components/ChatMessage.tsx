@@ -48,7 +48,8 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
         ) : (
           <div className="w-full">
             <div className="markdown break-words">
-              <MarkdownRenderer>{message.content}</MarkdownRenderer>
+              {/* Pass citations to MarkdownRenderer for processing reference links */}
+              <MarkdownRenderer citations={message.citations}>{message.content}</MarkdownRenderer>
               
               {/* Display citations if available */}
               {message.citations && message.citations.length > 0 && (

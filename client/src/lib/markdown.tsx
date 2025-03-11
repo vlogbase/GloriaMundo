@@ -8,9 +8,32 @@ import { useEffect, useRef } from "react";
 
 interface MarkdownRendererProps {
   children: string;
+  citations?: string[] | null;
 }
 
-export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
+// Process the content to make citation references clickable
+const processCitationReferences = (content: string, citations?: string[] | null): string => {
+  if (!citations || citations.length === 0) {
+    return content;
+  }
+
+  // Replace citation references [1], [2], etc. with clickable links
+  // This uses lookahead/lookbehind to ensure we only match standalone citations
+  return content.replace(
+    /(\[)(\d+)(\])/g, 
+    (match, openBracket, num, closeBracket) => {
+      const index = parseInt(num, 10);
+      // Check if this is a valid citation index (1-based indexing in UI, 0-based in array)
+      if (index > 0 && index <= citations.length) {
+        const url = citations[index - 1];
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">${openBracket}${num}${closeBracket}</a>`;
+      }
+      return match; // Return unchanged if not a valid citation
+    }
+  );
+};
+
+export const MarkdownRenderer = ({ children, citations }: MarkdownRendererProps) => {
   // Keep a reference to the container div to help with Skimlinks integration
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -23,6 +46,9 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
     
     return () => clearTimeout(timer);
   }, [children]);
+
+  // Process the markdown content to make citation references clickable
+  const processedContent = processCitationReferences(children, citations);
 
   // Define the components for ReactMarkdown
   const components = {
@@ -137,7 +163,7 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
         components={components} 
         rehypePlugins={[rehypeRaw]}
       >
-        {children}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
