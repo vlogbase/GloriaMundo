@@ -9,6 +9,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { SkimlinksDebug } from "@/components/SkimlinksDebug";
+import { SkimlinksTestLinks } from "@/components/SkimlinksTestLinks";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useTheme } from "@/hooks/use-theme";
@@ -263,8 +264,9 @@ export default function Chat() {
               {/* Auto-scroll anchor */}
               <div ref={messagesEndRef} />
               
-              {/* Skimlinks Diagnostics - Always showing for testing */}
-              <div className="mt-8">
+              {/* Skimlinks Tools - For testing and diagnostics */}
+              <div className="mt-8 space-y-4">
+                <SkimlinksTestLinks />
                 <SkimlinksDebug />
               </div>
             </>

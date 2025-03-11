@@ -148,28 +148,46 @@ export const refreshSkimlinks = (): void => {
   try {
     // Check if window is available (for SSR safety)
     if (typeof window !== 'undefined') {
-      // Call the official reinitialize method if it exists
+      // Call the official method if it exists
       if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reprocess === 'function') {
         // Use the official reprocess method
         (window as any).skimlinksAPI.reprocess();
-        console.debug('Skimlinks reprocessed successfully');
+        console.debug('Skimlinks reprocessed successfully via reprocess()');
       } else if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reinitialize === 'function') {
         // Fallback to reinitialize if reprocess isn't available
         (window as any).skimlinksAPI.reinitialize();
-        console.debug('Skimlinks reinitialized successfully');
+        console.debug('Skimlinks reinitialized successfully via reinitialize()');
       } else {
-        // Last resort: reload the script to process new links
+        console.debug('Skimlinks API methods not available, reloading script');
+        
+        // Load or reload the Skimlinks script
         const existingScript = document.querySelector('script[src*="skimresources.com"]');
         if (existingScript) {
+          console.debug('Removing existing Skimlinks script');
           existingScript.remove();
         }
         
         const skimlinksScript = document.createElement('script');
+        skimlinksScript.id = 'skimlinks-script';
         skimlinksScript.type = 'text/javascript';
         skimlinksScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
         skimlinksScript.async = true;
         document.body.appendChild(skimlinksScript);
         console.debug('Skimlinks script reloaded');
+      }
+      
+      // Important: Try to set skimwords to true manually if API is available
+      // This is a last-resort attempt to enable word-level monetization
+      try {
+        if ((window as any).skimlinksAPI && (window as any).skimlinksAPI.settings) {
+          // Force enable skimwords if it's not already enabled
+          if (!(window as any).skimlinksAPI.settings.skimwords_enabled) {
+            console.debug('Manually enabling skimwords');
+            (window as any).skimlinksAPI.settings.skimwords_enabled = true;
+          }
+        }
+      } catch (settingsError) {
+        console.error('Error trying to modify Skimlinks settings:', settingsError);
       }
     }
   } catch (error) {
