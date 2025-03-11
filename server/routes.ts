@@ -87,15 +87,15 @@ const MODEL_CONFIGS = {
 };
 
 // Define Skimlinks API credentials
-// Skimlinks credentials with clear naming aligned to their terminology
-const SKIMLINKS_API_KEY = process.env.SKIMLINKS_API_KEY || ""; // Client ID in Skimlinks terms
-const SKIMLINKS_PRIVATE_KEY = process.env.SKIMLINKS_PRIVATE_KEY || ""; // Client Secret in Skimlinks terms
-const SKIMLINKS_PUBLISHER_ID = "44501"; // Publisher ID from Skimlinks account
-const SKIMLINKS_USER_ID = "238619"; // User ID from Skimlinks account
+// Skimlinks credentials with updated naming convention
+const SKIMLINKS_CLIENT_ID = process.env.SKIMLINKS_CLIENT_ID || ""; 
+const SKIMLINKS_CLIENT_SECRET = process.env.SKIMLINKS_CLIENT_SECRET || "";
+const SKIMLINKS_PUBLISHER_ID = process.env.SKIMLINKS_PUBLISHER_ID || "44501";
+const SKIMLINKS_USER_ID = process.env.SKIMLINKS_USER_ID || "238619";
 
 // Validate Skimlinks API keys
-const isSkimlinksKeyValid = SKIMLINKS_API_KEY && SKIMLINKS_API_KEY.length > 10;
-const isSkimlinksPrivateKeyValid = SKIMLINKS_PRIVATE_KEY && SKIMLINKS_PRIVATE_KEY.length > 10;
+const isSkimlinksKeyValid = SKIMLINKS_CLIENT_ID && SKIMLINKS_CLIENT_ID.length > 10;
+const isSkimlinksPrivateKeyValid = SKIMLINKS_CLIENT_SECRET && SKIMLINKS_CLIENT_SECRET.length > 10;
 
 console.log(`- Skimlinks API Key (Client ID): ${isSkimlinksKeyValid ? "Valid" : "Invalid or Missing"}`);
 console.log(`- Skimlinks Private Key (Client Secret): ${isSkimlinksPrivateKeyValid ? "Valid" : "Invalid or Missing"}`);
