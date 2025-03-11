@@ -1,38 +1,38 @@
 import ReactMarkdown from "react-markdown";
 import { CodeBlock } from "@/components/CodeBlock";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
 
 interface MarkdownRendererProps {
   children: string;
 }
 
-export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
-  // Define a custom sanitization schema that allows links with target and rel attributes
-  const sanitizeSchema = {
-    ...rehypeSanitize.defaultSchema,
-    attributes: {
-      ...rehypeSanitize.defaultSchema.attributes,
-      a: [
-        // Allow these attributes for links
-        'href', 'name', 'target', 'rel', 'title', 'className'
-      ]
+// Process the content to handle HTML and convert URLs to links
+const processContent = (content: string): string => {
+  let processed = content;
+  
+  // Add target and rel attributes to any existing <a> tags that don't have them
+  processed = processed.replace(
+    /<a\s+(?:[^>]*?\s+)?href="([^"]*)"([^>]*)>/gi, 
+    (match, url, rest) => {
+      // Only add the attributes if they don't already exist
+      if (!rest.includes('target=') && !rest.includes('rel=')) {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer"${rest}>`;
+      }
+      return match;
     }
-  };
+  );
+  
+  // Convert plain URLs to clickable links
+  const urlRegex = /(?<!["\w])(https?:\/\/[^\s<]+)(?![^<]*>)/g;
+  processed = processed.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+  });
+  
+  return processed;
+};
 
-  // Function to detect and convert plain URLs in text to clickable links
-  const enhanceContentWithLinks = (content: string): string => {
-    // Regular expression to match URLs not already wrapped in HTML tags
-    const urlRegex = /(?<!["'=])(https?:\/\/[^\s<]+)(?![^<]*>)/g;
-    
-    // Replace plain URLs with anchor tags
-    return content.replace(urlRegex, (url) => {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-    });
-  };
-
-  // Define the components for ReactMarkdown
-  const components: any = {
+export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
+  const components = {
+    // Define custom components for markdown rendering
     h1: (props: any) => (
       <h1 className="text-2xl font-bold mt-6 mb-4" {...props} />
     ),
@@ -132,18 +132,12 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
     ),
   };
 
-  // Process the content to enhance any plain URLs with clickable links
-  const enhancedContent = enhanceContentWithLinks(children);
+  // Process the markdown content for HTML and links
+  const processedContent = processContent(children);
 
   return (
     <div className="w-full overflow-hidden break-words">
-      <ReactMarkdown 
-        components={components} 
-        rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeRaw]} 
-        remarkPlugins={[]}
-      >
-        {enhancedContent}
-      </ReactMarkdown>
+      <div dangerouslySetInnerHTML={{ __html: processedContent }} />
     </div>
   );
 };
