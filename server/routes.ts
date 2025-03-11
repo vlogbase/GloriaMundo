@@ -97,6 +97,18 @@ const SKIMLINKS_USER_ID = process.env.SKIMLINKS_USER_ID || "238619";
 const isSkimlinksKeyValid = SKIMLINKS_CLIENT_ID && SKIMLINKS_CLIENT_ID.length > 10;
 const isSkimlinksPrivateKeyValid = SKIMLINKS_CLIENT_SECRET && SKIMLINKS_CLIENT_SECRET.length > 10;
 
+// Helper function to generate Skimlinks API headers
+function getSkimlinksHeaders() {
+  return {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-Skimlinks-Auth": SKIMLINKS_CLIENT_ID,
+    "X-Skimlinks-Auth-Private": SKIMLINKS_CLIENT_SECRET,
+    "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
+    "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
+  };
+}
+
 console.log(`- Skimlinks API Key (Client ID): ${isSkimlinksKeyValid ? "Valid" : "Invalid or Missing"}`);
 console.log(`- Skimlinks Private Key (Client Secret): ${isSkimlinksPrivateKeyValid ? "Valid" : "Invalid or Missing"}`);
 console.log(`- Skimlinks Publisher ID: ${SKIMLINKS_PUBLISHER_ID}`);
