@@ -106,7 +106,7 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
 
   return (
     <div className="w-full overflow-hidden break-words">
-      <ReactMarkdown components={components}>
+      <ReactMarkdown components={components} rehypePlugins={[]} remarkPlugins={[]} unwrapDisallowed={false} skipHtml={false}>
         {children}
       </ReactMarkdown>
     </div>
