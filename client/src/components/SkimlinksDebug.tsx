@@ -6,6 +6,13 @@ import { refreshSkimlinks } from "@/lib/utils";
 export const SkimlinksDebug = () => {
   const [skimlinksStatus, setSkimlinksStatus] = useState<{
     loaded: boolean;
+    scriptStatus: {
+      found: boolean;
+      src: string | null;
+      async: boolean | null;
+      id: string | null;
+      loadTime: string | null;
+    };
     apiExists: boolean;
     reprocessExists: boolean;
     reinitializeExists: boolean;
@@ -15,6 +22,13 @@ export const SkimlinksDebug = () => {
     settings: Record<string, any> | null;
   }>({
     loaded: false,
+    scriptStatus: {
+      found: false,
+      src: null,
+      async: null,
+      id: null,
+      loadTime: null,
+    },
     apiExists: false,
     reprocessExists: false,
     reinitializeExists: false,
@@ -39,9 +53,18 @@ export const SkimlinksDebug = () => {
   }, []);
 
   const checkSkimlinksStatus = () => {
-    // Check if Skimlinks script is loaded
-    const skimlinksScript = document.querySelector('script[src*="skimresources.com"]');
+    // Check if Skimlinks script is loaded and get detailed script info
+    const skimlinksScript = document.querySelector('script[src*="skimresources.com"]') as HTMLScriptElement;
     const scriptLoaded = !!skimlinksScript;
+    
+    // Get detailed script information
+    const scriptStatus = {
+      found: scriptLoaded,
+      src: scriptLoaded ? skimlinksScript.src : null,
+      async: scriptLoaded ? skimlinksScript.async : null,
+      id: scriptLoaded ? skimlinksScript.id || null : null,
+      loadTime: scriptLoaded ? skimlinksScript.getAttribute('data-loaded-at') || null : null,
+    };
     
     // Check if skimlinksAPI exists
     const apiExists = typeof (window as any).skimlinksAPI !== 'undefined';
@@ -68,6 +91,21 @@ export const SkimlinksDebug = () => {
         domains = api.domains || [];
         pubcode = api.publisher_id || api.pubcode || null;
         settings = api.settings || null;
+        
+        // Check for alternative properties
+        if (settings === null && typeof api.getSettings === 'function') {
+          try {
+            settings = api.getSettings();
+          } catch (e) {
+            console.debug('Could not get settings via getSettings()');
+          }
+        }
+        
+        // Look for domains in alternative properties
+        if (!domains || domains.length === 0) {
+          if (api.merchant_domains) domains = api.merchant_domains;
+          else if (api.config && api.config.domains) domains = api.config.domains;
+        }
       } catch (error) {
         console.error('Error reading Skimlinks settings:', error);
       }
@@ -75,6 +113,7 @@ export const SkimlinksDebug = () => {
     
     setSkimlinksStatus({
       loaded: scriptLoaded,
+      scriptStatus,
       apiExists,
       reprocessExists,
       reinitializeExists,
@@ -87,6 +126,7 @@ export const SkimlinksDebug = () => {
     // Log to console for deeper debugging
     console.debug('Skimlinks Debug:', {
       scriptLoaded,
+      scriptStatus,
       apiExists,
       api: apiExists ? (window as any).skimlinksAPI : undefined,
       reprocessExists,
@@ -144,6 +184,11 @@ export const SkimlinksDebug = () => {
       skimlinksScript.type = 'text/javascript';
       skimlinksScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
       skimlinksScript.async = true;
+      skimlinksScript.id = 'skimlinks-script';
+      
+      // Add data attribute to track when script was loaded
+      skimlinksScript.setAttribute('data-loaded-at', new Date().toISOString());
+      
       document.body.appendChild(skimlinksScript);
       
       console.debug('Manually reloaded Skimlinks script');
@@ -196,6 +241,20 @@ export const SkimlinksDebug = () => {
             <>
               <span>Publisher Code:</span>
               <span>{skimlinksStatus.pubcode}</span>
+            </>
+          )}
+          
+          {skimlinksStatus.scriptStatus.src && (
+            <>
+              <span>Script Source:</span>
+              <span className="truncate max-w-[200px]">{skimlinksStatus.scriptStatus.src}</span>
+            </>
+          )}
+          
+          {skimlinksStatus.scriptStatus.loadTime && (
+            <>
+              <span>Script Load Time:</span>
+              <span>{skimlinksStatus.scriptStatus.loadTime}</span>
             </>
           )}
         </div>

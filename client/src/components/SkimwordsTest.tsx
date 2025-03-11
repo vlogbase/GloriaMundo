@@ -183,9 +183,11 @@ export const SkimwordsTest = () => {
               These product references should be monetized if Skimwords is working properly:
             </p>
             <div className="text-sm p-3 bg-background rounded-md">
-              Check out the latest Apple iPhone models, Samsung Galaxy devices, Nintendo Switch games,
-              Meta Quest headsets, or Google Pixel phones. You might also be interested in
-              Microsoft Surface laptops, Sony PlayStation 5, or Amazon Kindle readers.
+              <p className="mb-2">The Origin Pro Mattress is one of the most comfortable mattresses available at Origin.</p>
+              <p className="mb-2">If you need to run Windows on your Mac, Parallels Desktop for Mac is a great virtualization solution.</p>
+              <p className="mb-2">You can earn rewards and gift cards by participating in surveys on Swagbucks.</p>
+              <p className="mb-2">For premium underwear, Dead Good Undies offers a wide selection of brands.</p>
+              <p className="mb-2">Also popular: Apple iPhone, Samsung Galaxy devices, Nintendo Switch games, and Amazon Kindle readers.</p>
             </div>
           </div>
           

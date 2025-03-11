@@ -94,22 +94,60 @@ export const SkimlinksTestLinks = () => {
             </div>
             
             <div>
-              <h4 className="font-medium mb-1">Amazon Product Example</h4>
+              <h4 className="font-medium mb-1">Verified Skimlinks Merchant Links</h4>
+              <div className="space-y-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <a 
+                  href="https://originmattress.co.uk/product/the-origin-hybrid-pro-mattress/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-primary hover:underline block"
+                >
+                  Origin Pro Mattress
+                </a>
+                
+                <a 
+                  href="https://www.parallels.com/products/desktop/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-primary hover:underline block"
+                >
+                  Parallels Desktop for Mac
+                </a>
+                
+                <a 
+                  href="https://www.swagbucks.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-primary hover:underline block"
+                >
+                  Swagbucks
+                </a>
+                
+                <a 
+                  href="https://www.deadgoodundies.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-primary hover:underline block"
+                >
+                  Dead Good Undies
+                </a>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-medium mb-1">Additional Product Examples</h4>
               <a 
                 href="https://www.amazon.com/dp/B07ZPML7NP" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="text-primary hover:underline"
+                className="text-primary hover:underline block mb-1"
               >
                 Apple AirPods Pro
               </a>
-            </div>
-            
-            <div>
-              <h4 className="font-medium mb-1">Text with Brand Mentions</h4>
-              <p className="text-sm">
-                Here are some popular tech products: Apple iPhone, Samsung Galaxy, Meta Quest, Google Pixel,
-                and Microsoft Surface. These should be monetized by Skimwords if working correctly.
+              
+              <p className="text-sm mt-2">
+                Text with brand mentions: Apple iPhone, Samsung Galaxy, Nintendo Switch,
+                Google Pixel, and Microsoft Surface. These should be monetized by Skimwords if working correctly.
               </p>
             </div>
           </div>
