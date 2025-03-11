@@ -144,51 +144,93 @@ export const cookieUtils = {
  * Utility to re-process Skimlinks after dynamic content is added
  * Triggers Skimlinks to process links that were added to the page after initial load
  */
-export const refreshSkimlinks = (): void => {
+export const refreshSkimlinks = (options: {
+  forceReload?: boolean;
+  debug?: boolean;
+} = {}): void => {
+  const { forceReload = false, debug = false } = options;
+  const log = debug ? console.log : console.debug;
+  
   try {
     // Check if window is available (for SSR safety)
-    if (typeof window !== 'undefined') {
-      // Call the official method if it exists
-      if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reprocess === 'function') {
-        // Use the official reprocess method
-        (window as any).skimlinksAPI.reprocess();
-        console.debug('Skimlinks reprocessed successfully via reprocess()');
-      } else if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reinitialize === 'function') {
-        // Fallback to reinitialize if reprocess isn't available
-        (window as any).skimlinksAPI.reinitialize();
-        console.debug('Skimlinks reinitialized successfully via reinitialize()');
-      } else {
-        console.debug('Skimlinks API methods not available, reloading script');
-        
-        // Load or reload the Skimlinks script
-        const existingScript = document.querySelector('script[src*="skimresources.com"]');
-        if (existingScript) {
-          console.debug('Removing existing Skimlinks script');
-          existingScript.remove();
-        }
-        
-        const skimlinksScript = document.createElement('script');
-        skimlinksScript.id = 'skimlinks-script';
-        skimlinksScript.type = 'text/javascript';
-        skimlinksScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
-        skimlinksScript.async = true;
-        document.body.appendChild(skimlinksScript);
-        console.debug('Skimlinks script reloaded');
-      }
+    if (typeof window === 'undefined') return;
+    
+    log('Refreshing Skimlinks...');
+    
+    // 1. Check if Skimlinks API is available
+    const skimlinksAvailable = typeof (window as any).skimlinksAPI !== 'undefined';
+    log('Skimlinks API available:', skimlinksAvailable);
+    
+    // 2. If requested or API not available, reload the script
+    if (forceReload || !skimlinksAvailable) {
+      log('Reloading Skimlinks script...');
       
-      // Important: Try to set skimwords to true manually if API is available
-      // This is a last-resort attempt to enable word-level monetization
+      // Remove existing script(s) if present
+      const existingScripts = document.querySelectorAll('script[src*="skimresources.com"]');
+      existingScripts.forEach(script => {
+        log('Removing existing script:', script);
+        script.remove();
+      });
+      
+      // Create and add fresh script
+      const skimlinksScript = document.createElement('script');
+      skimlinksScript.id = 'skimlinks-script';
+      skimlinksScript.type = 'text/javascript';
+      skimlinksScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
+      skimlinksScript.async = true;
+      
+      // Add data attribute to help with debugging
+      skimlinksScript.setAttribute('data-loaded-at', new Date().toISOString());
+      
+      // Insert script before end of body for optimal load timing
+      document.body.appendChild(skimlinksScript);
+      log('Skimlinks script reloaded');
+      
+      // Return early - the newly loaded script will initialize itself
+      return;
+    }
+    
+    // 3. If API is available, try using official methods
+    if (skimlinksAvailable) {
+      const api = (window as any).skimlinksAPI;
+      
+      // Try to enable skimwords before reprocessing
       try {
-        if ((window as any).skimlinksAPI && (window as any).skimlinksAPI.settings) {
-          // Force enable skimwords if it's not already enabled
-          if (!(window as any).skimlinksAPI.settings.skimwords_enabled) {
-            console.debug('Manually enabling skimwords');
-            (window as any).skimlinksAPI.settings.skimwords_enabled = true;
+        if (api.settings) {
+          // Check if skimwords is already enabled
+          const wasEnabled = !!api.settings.skimwords_enabled;
+          
+          // Force enable skimwords
+          api.settings.skimwords_enabled = true;
+          
+          // Try to enable through API method if available
+          if (typeof api.setOption === 'function') {
+            api.setOption('skimwords_enabled', true);
           }
+          
+          log(`Skimwords was ${wasEnabled ? 'already' : 'not'} enabled, now set to enabled`);
         }
       } catch (settingsError) {
-        console.error('Error trying to modify Skimlinks settings:', settingsError);
+        console.error('Error trying to enable skimwords:', settingsError);
       }
+      
+      // Now try to reprocess with the API methods
+      // Use the most specific method available
+      if (typeof api.reprocess === 'function') {
+        api.reprocess();
+        log('Skimlinks reprocessed via reprocess()');
+      } else if (typeof api.reinitialize === 'function') {
+        api.reinitialize();
+        log('Skimlinks reinitialized via reinitialize()');
+      } else if (typeof api.init === 'function') {
+        api.init();
+        log('Skimlinks initialized via init()');
+      } else {
+        console.warn('No Skimlinks processing method found');
+      }
+      
+      // Return the current state for debugging
+      return;
     }
   } catch (error) {
     console.error('Error refreshing Skimlinks:', error);
