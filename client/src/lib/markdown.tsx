@@ -1,11 +1,36 @@
 import ReactMarkdown from "react-markdown";
 import { CodeBlock } from "@/components/CodeBlock";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 
 interface MarkdownRendererProps {
   children: string;
 }
 
 export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
+  // Define a custom sanitization schema that allows links with target and rel attributes
+  const sanitizeSchema = {
+    ...rehypeSanitize.defaultSchema,
+    attributes: {
+      ...rehypeSanitize.defaultSchema.attributes,
+      a: [
+        // Allow these attributes for links
+        'href', 'name', 'target', 'rel', 'title', 'className'
+      ]
+    }
+  };
+
+  // Function to detect and convert plain URLs in text to clickable links
+  const enhanceContentWithLinks = (content: string): string => {
+    // Regular expression to match URLs not already wrapped in HTML tags
+    const urlRegex = /(?<!["'=])(https?:\/\/[^\s<]+)(?![^<]*>)/g;
+    
+    // Replace plain URLs with anchor tags
+    return content.replace(urlRegex, (url) => {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    });
+  };
+
   // Define the components for ReactMarkdown
   const components: any = {
     h1: (props: any) => (
@@ -23,13 +48,16 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
     p: (props: any) => (
       <p className="mb-4 leading-relaxed" {...props} />
     ),
-    a: (props: any) => (
+    a: ({ href, children, ...props }: any) => (
       <a
+        href={href}
         className="text-primary hover:underline break-all"
         target="_blank"
         rel="noopener noreferrer"
         {...props}
-      />
+      >
+        {children}
+      </a>
     ),
     ul: (props: any) => (
       <ul className="list-disc pl-5 mb-4 space-y-2" {...props} />
@@ -104,10 +132,17 @@ export const MarkdownRenderer = ({ children }: MarkdownRendererProps) => {
     ),
   };
 
+  // Process the content to enhance any plain URLs with clickable links
+  const enhancedContent = enhanceContentWithLinks(children);
+
   return (
     <div className="w-full overflow-hidden break-words">
-      <ReactMarkdown components={components} rehypePlugins={[]} remarkPlugins={[]} unwrapDisallowed={false} skipHtml={false}>
-        {children}
+      <ReactMarkdown 
+        components={components} 
+        rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeRaw]} 
+        remarkPlugins={[]}
+      >
+        {enhancedContent}
       </ReactMarkdown>
     </div>
   );
