@@ -18,6 +18,9 @@ export const Footer = () => {
         <Link href="/contact">
           <span className="hover:text-muted-foreground cursor-pointer transition-colors">Contact</span>
         </Link>
+        <Link href="/skimlinks-test">
+          <span className="hover:text-muted-foreground cursor-pointer transition-colors">Skimlinks Test</span>
+        </Link>
         <button 
           onClick={openCookieSettings}
           className="hover:text-muted-foreground cursor-pointer transition-colors flex items-center"

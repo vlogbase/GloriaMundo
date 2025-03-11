@@ -1339,6 +1339,211 @@ Format your responses using markdown for better readability and organization.`;
     }
   });
 
+  // ----- Skimlinks API Routes -----
+  
+  // Get account information
+  app.get("/api/skimlinks/account", async (req, res) => {
+    try {
+      if (!isSkimlinksKeyValid || !isSkimlinksPrivateKeyValid) {
+        return res.status(401).json({ error: "Missing Skimlinks API credentials" });
+      }
+      
+      // Construct the Skimlinks API URL with authentication
+      const apiUrl = "https://api-merchants.skimlinks.com/publisher/account";
+      
+      console.log("Fetching Skimlinks account information...");
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Skimlinks API error:", error);
+        return res.status(response.status).json({ 
+          error: "Error fetching account info", 
+          details: error 
+        });
+      }
+      
+      const accountData = await response.json();
+      console.log("Skimlinks account info received successfully");
+      return res.json(accountData);
+    } catch (error) {
+      console.error("Error calling Skimlinks API:", error);
+      return res.status(500).json({ 
+        error: "Failed to fetch account information",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
+  // Get domain information
+  app.get("/api/skimlinks/domain", async (req, res) => {
+    try {
+      if (!isSkimlinksKeyValid || !isSkimlinksPrivateKeyValid) {
+        return res.status(401).json({ error: "Missing Skimlinks API credentials" });
+      }
+      
+      const domain = req.query.domain as string;
+      if (!domain) {
+        return res.status(400).json({ error: "Domain parameter is required" });
+      }
+      
+      console.log(`Checking domain status for ${domain}...`);
+      
+      // Check domain status in Skimlinks
+      const apiUrl = `https://api-merchants.skimlinks.com/publisher/domains?q=${encodeURIComponent(domain)}`;
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Skimlinks API error:", error);
+        return res.status(response.status).json({ 
+          error: "Error fetching domain info", 
+          details: error 
+        });
+      }
+      
+      const domainData = await response.json();
+      
+      // Process the response to extract domain approval status
+      const domainInfo = {
+        domain,
+        approved: false,
+        status: "unknown"
+      };
+      
+      if (domainData && domainData.domains && domainData.domains.length > 0) {
+        const matchedDomain = domainData.domains.find((d: any) => 
+          d.domain === domain || domain.endsWith(d.domain)
+        );
+        
+        if (matchedDomain) {
+          domainInfo.approved = matchedDomain.approved === true;
+          domainInfo.status = matchedDomain.status || "unknown";
+        }
+      }
+      
+      console.log(`Domain ${domain} status: ${domainInfo.approved ? 'Approved' : 'Not Approved'}`);
+      return res.json(domainInfo);
+    } catch (error) {
+      console.error("Error calling Skimlinks API:", error);
+      return res.status(500).json({ 
+        error: "Failed to fetch domain information",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
+  // Get top merchants
+  app.get("/api/skimlinks/merchants", async (req, res) => {
+    try {
+      if (!isSkimlinksKeyValid || !isSkimlinksPrivateKeyValid) {
+        return res.status(401).json({ error: "Missing Skimlinks API credentials" });
+      }
+      
+      const limit = Number(req.query.limit) || 10;
+      
+      console.log(`Fetching top ${limit} merchants from Skimlinks...`);
+      
+      // Get top merchants from Skimlinks
+      const apiUrl = `https://api-merchants.skimlinks.com/merchants?limit=${limit}`;
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Skimlinks API error:", error);
+        return res.status(response.status).json({ 
+          error: "Error fetching merchants", 
+          details: error 
+        });
+      }
+      
+      const merchantData = await response.json();
+      console.log(`Successfully retrieved ${merchantData.merchants?.length || 0} merchants`);
+      return res.json(merchantData);
+    } catch (error) {
+      console.error("Error calling Skimlinks API:", error);
+      return res.status(500).json({ 
+        error: "Failed to fetch merchants",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
+  // Convert URL to affiliate link
+  app.post("/api/skimlinks/convert", async (req, res) => {
+    try {
+      if (!isSkimlinksKeyValid || !isSkimlinksPrivateKeyValid) {
+        return res.status(401).json({ error: "Missing Skimlinks API credentials" });
+      }
+      
+      const { url } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+      
+      console.log(`Converting URL: ${url}`);
+      
+      // Convert URL using Skimlinks API
+      const apiUrl = `https://api-merchants.skimlinks.com/v3/link?url=${encodeURIComponent(url)}`;
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Skimlinks API error:", error);
+        return res.status(response.status).json({ 
+          error: "Error converting URL", 
+          details: error 
+        });
+      }
+      
+      const conversionData = await response.json();
+      console.log(`URL converted successfully: ${!!conversionData.skimlinks_url}`);
+      return res.json({
+        originalUrl: url,
+        convertedUrl: conversionData.skimlinks_url || url,
+        merchantInfo: conversionData.merchant || null
+      });
+    } catch (error) {
+      console.error("Error calling Skimlinks API:", error);
+      return res.status(500).json({ 
+        error: "Failed to convert URL",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
