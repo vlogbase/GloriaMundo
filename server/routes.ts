@@ -87,6 +87,7 @@ const MODEL_CONFIGS = {
 };
 
 // Define Skimlinks API credentials
+// Skimlinks credentials with clear naming aligned to their terminology
 const SKIMLINKS_API_KEY = process.env.SKIMLINKS_API_KEY || ""; // Client ID in Skimlinks terms
 const SKIMLINKS_PRIVATE_KEY = process.env.SKIMLINKS_PRIVATE_KEY || ""; // Client Secret in Skimlinks terms
 const SKIMLINKS_PUBLISHER_ID = "44501"; // Publisher ID from Skimlinks account
@@ -1361,17 +1362,27 @@ Format your responses using markdown for better readability and organization.`;
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
+          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
+          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
         }
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        console.error("Skimlinks API error:", error);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = await response.text();
+        }
+        console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error fetching account info", 
-          details: error 
+          details: errorData,
+          statusCode: response.status,
+          statusText: response.statusText 
         });
       }
       
@@ -1408,17 +1419,27 @@ Format your responses using markdown for better readability and organization.`;
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
+          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
+          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
         }
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        console.error("Skimlinks API error:", error);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = await response.text();
+        }
+        console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error fetching domain info", 
-          details: error 
+          details: errorData,
+          statusCode: response.status,
+          statusText: response.statusText
         });
       }
       
@@ -1471,17 +1492,27 @@ Format your responses using markdown for better readability and organization.`;
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
+          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
+          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
         }
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        console.error("Skimlinks API error:", error);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = await response.text();
+        }
+        console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error fetching merchants", 
-          details: error 
+          details: errorData,
+          statusCode: response.status,
+          statusText: response.statusText
         });
       }
       
@@ -1518,17 +1549,27 @@ Format your responses using markdown for better readability and organization.`;
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "X-Skimlinks-Auth": SKIMLINKS_API_KEY,
-          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY
+          "X-Skimlinks-Auth-Private": SKIMLINKS_PRIVATE_KEY,
+          "X-Skimlinks-Auth-Publisher-ID": SKIMLINKS_PUBLISHER_ID,
+          "X-Skimlinks-Auth-User-ID": SKIMLINKS_USER_ID
         }
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        console.error("Skimlinks API error:", error);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = await response.text();
+        }
+        console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error converting URL", 
-          details: error 
+          details: errorData,
+          statusCode: response.status,
+          statusText: response.statusText
         });
       }
       
