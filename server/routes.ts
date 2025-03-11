@@ -86,6 +86,17 @@ const MODEL_CONFIGS = {
   }
 };
 
+// Define Skimlinks API credentials
+const SKIMLINKS_API_KEY = process.env.SKIMLINKS_API_KEY || "";
+const SKIMLINKS_PRIVATE_KEY = process.env.SKIMLINKS_PRIVATE_KEY || "";
+
+// Validate Skimlinks API keys
+const isSkimlinksKeyValid = SKIMLINKS_API_KEY && SKIMLINKS_API_KEY.length > 10;
+const isSkimlinksPrivateKeyValid = SKIMLINKS_PRIVATE_KEY && SKIMLINKS_PRIVATE_KEY.length > 10;
+
+console.log(`- Skimlinks API Key: ${isSkimlinksKeyValid ? "Valid" : "Invalid or Missing"}`);
+console.log(`- Skimlinks Private Key: ${isSkimlinksPrivateKeyValid ? "Valid" : "Invalid or Missing"}`);
+
 export async function registerRoutes(app: Express): Promise<Server> {
 
   // Debug API keys route
