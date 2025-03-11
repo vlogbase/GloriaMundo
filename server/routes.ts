@@ -1370,13 +1370,18 @@ Format your responses using markdown for better readability and organization.`;
         }
       });
       
+      // Create a copy of the response body before reading it
+      const responseBody = await response.text();
+      
       if (!response.ok) {
+        // Attempt to parse the error response
         let errorData;
         try {
-          errorData = await response.json();
+          errorData = JSON.parse(responseBody);
         } catch (e) {
-          errorData = await response.text();
+          errorData = responseBody || `Status: ${response.status} ${response.statusText}`;
         }
+        
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
           error: "Error fetching account info", 
@@ -1386,7 +1391,18 @@ Format your responses using markdown for better readability and organization.`;
         });
       }
       
-      const accountData = await response.json();
+      // Parse the successful response
+      let accountData;
+      try {
+        accountData = JSON.parse(responseBody);
+      } catch (e) {
+        console.error("Error parsing Skimlinks API response:", e);
+        return res.status(500).json({ 
+          error: "Failed to parse account information",
+          message: "Invalid JSON response from API"
+        });
+      }
+      
       console.log("Skimlinks account info received successfully");
       return res.json(accountData);
     } catch (error) {
@@ -1430,9 +1446,15 @@ Format your responses using markdown for better readability and organization.`;
       if (!response.ok) {
         let errorData;
         try {
-          errorData = await response.json();
+          // Clone the response before reading it to avoid the "Body has already been read" error
+          const responseClone = response.clone();
+          try {
+            errorData = await responseClone.json();
+          } catch (e) {
+            errorData = await response.text();
+          }
         } catch (e) {
-          errorData = await response.text();
+          errorData = `Status: ${response.status} ${response.statusText}`;
         }
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
@@ -1503,9 +1525,15 @@ Format your responses using markdown for better readability and organization.`;
       if (!response.ok) {
         let errorData;
         try {
-          errorData = await response.json();
+          // Clone the response before reading it to avoid the "Body has already been read" error
+          const responseClone = response.clone();
+          try {
+            errorData = await responseClone.json();
+          } catch (e) {
+            errorData = await response.text();
+          }
         } catch (e) {
-          errorData = await response.text();
+          errorData = `Status: ${response.status} ${response.statusText}`;
         }
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
@@ -1560,9 +1588,15 @@ Format your responses using markdown for better readability and organization.`;
       if (!response.ok) {
         let errorData;
         try {
-          errorData = await response.json();
+          // Clone the response before reading it to avoid the "Body has already been read" error
+          const responseClone = response.clone();
+          try {
+            errorData = await responseClone.json();
+          } catch (e) {
+            errorData = await response.text();
+          }
         } catch (e) {
-          errorData = await response.text();
+          errorData = `Status: ${response.status} ${response.statusText}`;
         }
         console.error("Skimlinks API error:", errorData);
         return res.status(response.status).json({ 
