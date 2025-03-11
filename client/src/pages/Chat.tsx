@@ -8,15 +8,12 @@ import { Welcome } from "@/components/Welcome";
 import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
-import { SkimlinksDebug } from "@/components/SkimlinksDebug";
-import { SkimlinksTestLinks } from "@/components/SkimlinksTestLinks";
-import { SkimwordsTest } from "@/components/SkimwordsTest";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useTheme } from "@/hooks/use-theme";
 import { Menu, Globe, Sparkles, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
-import { cn, refreshSkimlinks } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { Message } from "@/lib/types";
 
@@ -56,21 +53,6 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
   const userMessageRef = useRef<HTMLDivElement>(null);
-  
-  // Initialize Skimlinks when the component mounts
-  useEffect(() => {
-    console.log("Initializing Skimlinks on page load");
-    
-    // Try initial refresh
-    refreshSkimlinks({ debug: true });
-    
-    // Set up a delayed refresh for after the page has fully loaded
-    const initialTimer = setTimeout(() => {
-      refreshSkimlinks();
-    }, 3000);
-    
-    return () => clearTimeout(initialTimer);
-  }, []);
   
   // Add a ref to track if we've already scrolled to the user message
   const hasScrolledToUserMessageRef = useRef<boolean>(false);
@@ -153,25 +135,6 @@ export default function Chat() {
       return () => clearTimeout(timer);
     }
   }, [messages, showPwaBanner]);
-  
-  // Effect to initialize and refresh Skimlinks when messages change
-  useEffect(() => {
-    // Only attempt to refresh Skimlinks if we have assistant messages to monetize
-    if (messages.some(m => m.role === 'assistant')) {
-      // Initial delay to let the DOM settle
-      const timer = setTimeout(() => {
-        // Refresh Skimlinks with debug enabled for development
-        refreshSkimlinks({ debug: true });
-        
-        // Additional refresh after a longer delay to catch any late renders
-        setTimeout(() => {
-          refreshSkimlinks();
-        }, 2000);
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [messages]);
   
   const handleSendMessage = async (content: string, image?: string) => {
     if (!activeConversationId) {
@@ -298,13 +261,6 @@ export default function Chat() {
               
               {/* Auto-scroll anchor */}
               <div ref={messagesEndRef} />
-              
-              {/* Skimlinks Tools - For testing and diagnostics */}
-              <div className="mt-8 space-y-4">
-                <SkimlinksTestLinks />
-                <SkimwordsTest />
-                <SkimlinksDebug />
-              </div>
             </>
           )}
         </div>

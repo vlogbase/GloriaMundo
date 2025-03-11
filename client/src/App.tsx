@@ -10,7 +10,6 @@ import { ThemeProvider } from "@/hooks/use-theme";
 import { ModelSelectionProvider } from "@/hooks/useModelSelection";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
-import SkimlinksApiTest from "@/components/SkimlinksApiTest";
 
 function Router() {
   return (
@@ -20,7 +19,6 @@ function Router() {
       <Route path="/conversation/:id" component={Chat} /> {/* Keep old route for backward compatibility */}
       <Route path="/privacy" component={Privacy} />
       <Route path="/contact" component={Contact} />
-      <Route path="/skimlinks-test" component={SkimlinksApiTest} />
       <Route component={NotFound} />
     </Switch>
   );
