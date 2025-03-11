@@ -157,8 +157,12 @@ export const refreshSkimlinks = (options: {
     
     log('Refreshing Skimlinks...');
     
-    // 1. Check if Skimlinks API is available
-    const skimlinksAvailable = typeof (window as any).skimlinksAPI !== 'undefined';
+    // 1. Check if Skimlinks object exists - it could be under different names
+    let skimObj = (window as any).skimlinksAPI;
+    if (!skimObj) skimObj = (window as any).skimlinks;
+    
+    // Check if any Skimlinks API is available
+    const skimlinksAvailable = typeof skimObj !== 'undefined';
     log('Skimlinks API available:', skimlinksAvailable);
     
     // 2. If requested or API not available, reload the script
@@ -190,47 +194,123 @@ export const refreshSkimlinks = (options: {
       return;
     }
     
-    // 3. If API is available, try using official methods
+    // 3. If API is available, try to force initialization
     if (skimlinksAvailable) {
-      const api = (window as any).skimlinksAPI;
+      // Try multiple initialization approaches
+      
+      // Check if publisherID needs to be set (might be needed for new accounts)
+      if (!skimObj.publisher_id && !skimObj.pubcode) {
+        log('Publisher ID missing, attempting to set manually');
+        skimObj.publisher_id = '44501X1766367';
+        skimObj.pubcode = '44501X1766367';
+      }
+      
+      // Check if domain allowlist exists, create if not
+      if (!skimObj.domains || skimObj.domains.length === 0) {
+        log('Domain allowlist missing, setting default domains');
+        skimObj.domains = [
+          'originmattress.co.uk', 'parallels.com', 'swagbucks.com', 
+          'deadgoodundies.com', 'amazon.com', 'apple.com'
+        ];
+      }
       
       // Try to enable skimwords before reprocessing
       try {
-        if (api.settings) {
-          // Check if skimwords is already enabled
-          const wasEnabled = !!api.settings.skimwords_enabled;
-          
-          // Force enable skimwords
-          api.settings.skimwords_enabled = true;
-          
-          // Try to enable through API method if available
-          if (typeof api.setOption === 'function') {
-            api.setOption('skimwords_enabled', true);
-          }
-          
-          log(`Skimwords was ${wasEnabled ? 'already' : 'not'} enabled, now set to enabled`);
+        log('Attempting to enable skimwords');
+        
+        // Method 1: Through settings
+        if (skimObj.settings) {
+          skimObj.settings.skimwords_enabled = true;
+          log('Enabled skimwords through settings object');
+        }
+        
+        // Method 2: Through config
+        if (skimObj.config && skimObj.config.settings) {
+          skimObj.config.settings.skimwords_enabled = true;
+          log('Enabled skimwords through config.settings');
+        }
+        
+        // Method 3: Through setOption
+        if (typeof skimObj.setOption === 'function') {
+          skimObj.setOption('skimwords_enabled', true);
+          log('Enabled skimwords through setOption method');
+        }
+        
+        // Method 4: Try to access through getSettings/setSettings
+        if (typeof skimObj.getSettings === 'function' && typeof skimObj.setSettings === 'function') {
+          const currentSettings = skimObj.getSettings() || {};
+          currentSettings.skimwords_enabled = true;
+          skimObj.setSettings(currentSettings);
+          log('Enabled skimwords through getSettings/setSettings');
         }
       } catch (settingsError) {
         console.error('Error trying to enable skimwords:', settingsError);
       }
       
-      // Now try to reprocess with the API methods
-      // Use the most specific method available
-      if (typeof api.reprocess === 'function') {
-        api.reprocess();
-        log('Skimlinks reprocessed via reprocess()');
-      } else if (typeof api.reinitialize === 'function') {
-        api.reinitialize();
-        log('Skimlinks reinitialized via reinitialize()');
-      } else if (typeof api.init === 'function') {
-        api.init();
-        log('Skimlinks initialized via init()');
-      } else {
-        console.warn('No Skimlinks processing method found');
+      // Try to force manual initialization through various methods
+      let initialized = false;
+      
+      // Method 1: Call reprocess
+      if (typeof skimObj.reprocess === 'function') {
+        try {
+          skimObj.reprocess();
+          log('Skimlinks reprocessed via reprocess()');
+          initialized = true;
+        } catch (e) {
+          log('Error using reprocess method:', e);
+        }
       }
       
-      // Return the current state for debugging
-      return;
+      // Method 2: Call reinitialize
+      if (!initialized && typeof skimObj.reinitialize === 'function') {
+        try {
+          skimObj.reinitialize();
+          log('Skimlinks reinitialized via reinitialize()');
+          initialized = true;
+        } catch (e) {
+          log('Error using reinitialize method:', e);
+        }
+      }
+      
+      // Method 3: Call init
+      if (!initialized && typeof skimObj.init === 'function') {
+        try {
+          skimObj.init();
+          log('Skimlinks initialized via init()');
+          initialized = true;
+        } catch (e) {
+          log('Error using init method:', e);
+        }
+      }
+      
+      // Method 4: Manual initialization attempt
+      if (!initialized) {
+        try {
+          log('Attempting manual initialization');
+          
+          // This is a last resort approach - create a dummy element and try to trigger autotagging
+          const dummyEl = document.createElement('div');
+          dummyEl.innerHTML = '<a href="https://www.amazon.com/test">Test Link</a>';
+          document.body.appendChild(dummyEl);
+          
+          // Force manually update all links
+          if (typeof skimObj.markLinks === 'function') {
+            skimObj.markLinks();
+            log('Marked links manually');
+            initialized = true;
+          }
+          
+          // Cleanup
+          setTimeout(() => dummyEl.remove(), 1000);
+          
+        } catch (e) {
+          log('Error during manual initialization:', e);
+        }
+      }
+      
+      if (!initialized) {
+        console.warn('No viable Skimlinks processing method found');
+      }
     }
   } catch (error) {
     console.error('Error refreshing Skimlinks:', error);
