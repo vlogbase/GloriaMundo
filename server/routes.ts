@@ -715,9 +715,28 @@ Format your responses using markdown for better readability and organization.`;
           console.log(`Streaming OpenRouter request using model ID: ${modelId}`);
         }
         
+        // Create a cleaned version of the messages array for the payload
+        // This is especially important for OpenRouter to ensure proper message format
+        const cleanMessages = modelConfig.apiProvider === "openrouter" 
+          ? messages.map(msg => {
+              if (typeof msg.content === 'string') {
+                return {
+                  role: msg.role,
+                  content: msg.content
+                };
+              }
+              // Handle multimodal content (array of content items)
+              return msg;
+            })
+          : messages;
+        
+        if (modelConfig.apiProvider === "openrouter") {
+          console.log('Created clean messages for OpenRouter streaming API');
+        }
+        
         const payload = {
           model: modelParam,
-          messages,
+          messages: cleanMessages,
           temperature: 0.2,
           top_p: 0.9,
           stream: true
@@ -1268,10 +1287,29 @@ Format your responses using markdown for better readability and organization.`;
           modelParam = modelConfig.modelName;
         }
         
+        // Create a cleaned version of the messages array for the payload
+        // This is especially important for OpenRouter to ensure proper message format
+        const cleanMessages = modelConfig.apiProvider === "openrouter" 
+          ? messages.map(msg => {
+              if (typeof msg.content === 'string') {
+                return {
+                  role: msg.role,
+                  content: msg.content
+                };
+              }
+              // Handle multimodal content (array of content items)
+              return msg;
+            })
+          : messages;
+        
+        if (modelConfig.apiProvider === "openrouter") {
+          console.log('Created clean messages for OpenRouter API');
+        }
+        
         // Construct the API payload
         const payload = {
           model: modelParam,
-          messages,
+          messages: cleanMessages,
           temperature: 0.2,
           top_p: 0.9,
           stream: shouldStream
