@@ -107,10 +107,13 @@ export const ModelPresets = () => {
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     // Get the model ID associated with this preset
-    const modelId = activatePreset(presetKey);
+    const modelId = presets[presetKey];
     
     // If a valid model ID was returned from the preset
     if (modelId) {
+      // First activate the preset in our context (this sets the activePreset state)
+      activatePreset(presetKey);
+      
       // Set the selected model type to 'openrouter' 
       setSelectedModel('openrouter');
       

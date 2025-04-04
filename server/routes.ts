@@ -184,6 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update user model presets
   app.put('/api/user/presets', isAuthenticated, async (req, res) => {
     try {
+      // Define schema using camelCase to match front-end naming
       const presetsSchema = z.object({
         preset1: z.string().nullable(),
         preset2: z.string().nullable(),
@@ -204,6 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const { preset1, preset2, preset3, preset4, preset5 } = validationResult.data;
       
+      // Update the database using the snake_case column names
       await db.update(users).set({
         preset1ModelId: preset1,
         preset2ModelId: preset2,
