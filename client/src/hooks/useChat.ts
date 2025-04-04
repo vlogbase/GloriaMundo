@@ -83,8 +83,7 @@ export const useChat = () => {
       // Log request details for debugging
       console.log(`Sending message to conversation ${conversationId} with model: ${selectedModel}`);
       
-      // Check if this is a JSON string with OpenRouter metadata
-      let contentToSend = content;
+      // Prepare model metadata
       let modelMetadata = {};
       
       // If using OpenRouter, include model ID in the request
@@ -93,52 +92,46 @@ export const useChat = () => {
         modelMetadata = { modelId: selectedModelId };
       }
       
-      // Try to parse message for OpenRouter metadata if it's in JSON format
-      if (typeof content === 'string' && content.trim().startsWith('{') && content.trim().endsWith('}')) {
-        try {
-          const parsedContent = JSON.parse(content);
-          if (parsedContent.content !== undefined) {
-            contentToSend = parsedContent.content;
-            
-            // Extract model metadata if present
-            if (parsedContent.modelId) {
-              modelMetadata = { 
-                modelId: parsedContent.modelId,
-                modelType: parsedContent.modelType || 'openrouter'
-              };
-            }
-          }
-        } catch (e) {
-          // Not valid JSON, use content as is
-          console.log('Failed to parse message as JSON, using as plain text');
-        }
-      }
-      
       const response = await apiRequest(
         "POST",
         `/api/conversations/${conversationId}/messages`,
         { 
-          content: contentToSend,
+          content: content, // Use content directly - no parsing needed
           image,
           modelType: selectedModel,
           ...modelMetadata // Include any model-specific metadata
         }
       );
       
-      // Extract and validate response data
+      // Extract response data
       const data = await response.json();
       
-      if (!data || !data.userMessage || !data.assistantMessage) {
-        console.error("Invalid API response format:", data);
-        throw new Error("The server returned an invalid response format");
+      // Add assistant message from response
+      // Handle different possible response formats
+      let assistantMessage;
+      
+      if (data && data.assistantMessage) {
+        // Response format: { assistantMessage: {...} }
+        assistantMessage = data.assistantMessage;
+      } else if (data && data.role === 'assistant') {
+        // Response format: the message object directly
+        assistantMessage = data;
+      } else if (Array.isArray(data) && data.length > 0 && data[data.length - 1].role === 'assistant') {
+        // Response format: array of messages with assistant message last
+        assistantMessage = data[data.length - 1];
+      } else {
+        console.warn("Unexpected response format, attempting to use anyway:", data);
+        // Try to use the data as is if it seems to have required fields
+        assistantMessage = data;
       }
       
-      // We already added the user message optimistically - just replace it with the real one and add assistant message
-      setMessages((prev) => 
-        prev
-          .map(msg => msg.id === tempUserMessage.id ? data.userMessage : msg)
-          .concat([data.assistantMessage])
-      );
+      // Always keep the user's message and append the assistant's response
+      if (assistantMessage) {
+        setMessages((prev) => [...prev, assistantMessage]);
+      } else {
+        console.error("Could not extract assistant message from response:", data);
+        // Don't throw error here - we'll keep the user message even without assistant response
+      }
       
       // Dispatch a custom event to notify that a message was sent (for conversation title updates)
       window.dispatchEvent(new CustomEvent('message-sent', {
@@ -154,7 +147,7 @@ export const useChat = () => {
       console.error("Error sending message:", error);
       
       // Create a more helpful error message
-      let errorMessage = "Failed to send message";
+      let errorMessage = "Failed to get AI response";
       
       if (error instanceof Error) {
         // Check for specific error patterns
@@ -180,8 +173,9 @@ export const useChat = () => {
         description: errorMessage,
       });
       
-      // Remove the optimistic message on error
-      setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessage.id));
+      // Keep the user message visible even if assistant response fails
+      // Only remove in case of critical errors
+      // setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessage.id));
     } finally {
       setIsLoadingResponse(false);
     }
