@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useModelPresets } from '@/hooks/useModelPresets';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
@@ -61,22 +61,36 @@ export const ModelPresets = () => {
     formatModelName
   } = useModelPresets();
   
-  const { models, selectedModelId, setSelectedModelId } = useOpenRouterModels();
+  const { models } = useOpenRouterModels();
   const { setSelectedModel } = useModelSelection();
   
+  // Separate state management for dialogs
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFreeTierDialogOpen, setIsFreeTierDialogOpen] = useState(false);
   const [currentPresetKey, setCurrentPresetKey] = useState<'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5'>('preset1');
-  const [searchTerm, setSearchTerm] = useState('');
   
-  // Filter models based on search term
+  // Separate search terms for each dialog
+  const [presetSearchTerm, setPresetSearchTerm] = useState('');
+  const [freeTierSearchTerm, setFreeTierSearchTerm] = useState('');
+  
+  // Separate selectedModelId state for dialogs
+  const [dialogSelectedModelId, setDialogSelectedModelId] = useState<string | null>(null);
+  
+  // Filter models based on preset search term
   const filteredModels = models.filter(model => 
-    model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    model.id.toLowerCase().includes(searchTerm.toLowerCase())
+    model.name.toLowerCase().includes(presetSearchTerm.toLowerCase()) ||
+    model.id.toLowerCase().includes(presetSearchTerm.toLowerCase())
+  );
+  
+  // Filter free models based on free tier search term
+  const filteredFreeModels = freeModels.filter(model => 
+    model.name.toLowerCase().includes(freeTierSearchTerm.toLowerCase()) ||
+    model.id.toLowerCase().includes(freeTierSearchTerm.toLowerCase())
   );
   
   // Group models by provider for the preset selection dialog
   const groupedModels = groupModelsByProvider(filteredModels);
+  const groupedFreeModels = groupModelsByProvider(filteredFreeModels);
   
   // Handle edit button click to open dialog for assigning model
   const handleEditClick = (
@@ -85,7 +99,8 @@ export const ModelPresets = () => {
   ) => {
     e.stopPropagation(); // Prevent triggering the preset button click
     setCurrentPresetKey(presetKey);
-    setSelectedModelId(presets[presetKey] || '');
+    setDialogSelectedModelId(presets[presetKey] || null);
+    setPresetSearchTerm(''); // Clear search when opening dialog
     setIsDialogOpen(true);
   };
   
@@ -93,7 +108,6 @@ export const ModelPresets = () => {
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     const modelId = activatePreset(presetKey);
     if (modelId) {
-      setSelectedModelId(modelId);
       // Always set the model type to 'openrouter' when a preset is activated
       setSelectedModel('openrouter');
     }
@@ -103,10 +117,10 @@ export const ModelPresets = () => {
   const handleFreeTierClick = () => {
     // If no free tier model is active, open the selection dialog
     if (!activeFreeTierModel) {
+      setFreeTierSearchTerm(''); // Clear search when opening dialog
       setIsFreeTierDialogOpen(true);
     } else {
-      // If a free tier model is already active, activate it again
-      setSelectedModelId(activeFreeTierModel);
+      // If a free tier model is already active, use it again
       setSelectedModel('openrouter');
     }
   };
@@ -114,15 +128,14 @@ export const ModelPresets = () => {
   // Handle selecting a free model
   const handleSelectFreeModel = (modelId: string) => {
     activateFreeTierModel(modelId);
-    setSelectedModelId(modelId);
     setSelectedModel('openrouter');
     setIsFreeTierDialogOpen(false);
   };
   
   // Save selected model to preset
   const saveModelToPreset = () => {
-    if (selectedModelId) {
-      assignModelToPreset(currentPresetKey, selectedModelId);
+    if (dialogSelectedModelId) {
+      assignModelToPreset(currentPresetKey, dialogSelectedModelId);
       setIsDialogOpen(false);
     }
   };
@@ -210,14 +223,14 @@ export const ModelPresets = () => {
           <div className="py-4">
             <Input
               placeholder="Search models..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={presetSearchTerm}
+              onChange={(e) => setPresetSearchTerm(e.target.value)}
               className="mb-4"
             />
             
             <Select
-              value={selectedModelId || undefined}
-              onValueChange={(value) => setSelectedModelId(value)}
+              value={dialogSelectedModelId || undefined}
+              onValueChange={(value) => setDialogSelectedModelId(value)}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a model" />
@@ -227,7 +240,7 @@ export const ModelPresets = () => {
                   <SelectGroup key={provider}>
                     <SelectLabel>{provider}</SelectLabel>
                     {providerModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id} className="flex justify-between">
+                      <SelectItem key={model.id} value={model.id}>
                         <div className="flex flex-col">
                           <span>{model.name}</span>
                           <span className="text-xs text-muted-foreground">{model.id}</span>
@@ -254,7 +267,7 @@ export const ModelPresets = () => {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={saveModelToPreset} disabled={!selectedModelId || isPending}>
+            <Button onClick={saveModelToPreset} disabled={!dialogSelectedModelId || isPending}>
               Save
             </Button>
           </DialogFooter>
@@ -274,17 +287,14 @@ export const ModelPresets = () => {
           <div className="py-4">
             <Input
               placeholder="Search free models..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={freeTierSearchTerm}
+              onChange={(e) => setFreeTierSearchTerm(e.target.value)}
               className="mb-4"
             />
             
             <div className="space-y-4">
               {freeModels.length > 0 ? (
-                Object.entries(groupModelsByProvider(freeModels.filter(model => 
-                  model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  model.id.toLowerCase().includes(searchTerm.toLowerCase())
-                ))).map(([provider, providerModels]) => (
+                Object.entries(groupedFreeModels).map(([provider, providerModels]) => (
                   <div key={provider} className="space-y-2">
                     <h3 className="text-sm font-medium">{provider}</h3>
                     <div className="space-y-1">
@@ -311,6 +321,9 @@ export const ModelPresets = () => {
                 ))
               ) : (
                 <p className="text-center text-muted-foreground">No free models found</p>
+              )}
+              {filteredFreeModels.length === 0 && freeModels.length > 0 && (
+                <p className="text-center text-muted-foreground">No free models match your search</p>
               )}
             </div>
           </div>

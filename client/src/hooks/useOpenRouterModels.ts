@@ -19,13 +19,21 @@ export const useOpenRouterModels = () => {
   // Process the model data
   useEffect(() => {
     if (data && Array.isArray(data)) {
-      // Process models to identify free ones
+      // Process models - ensure free models are correctly identified
       const processedModels = data.map(model => {
-        // A model is free if all prices are zero or null/undefined
-        const isFree = 
-          (!model.pricing?.prompt || model.pricing.prompt === 0) && 
-          (!model.pricing?.completion || model.pricing.completion === 0) && 
-          (!model.pricing?.request || model.pricing.request === 0);
+        // A model is free if all pricing properties are either 0, null, or undefined
+        const promptCost = model.pricing?.prompt;
+        const completionCost = model.pricing?.completion;
+        const requestCost = model.pricing?.request;
+        
+        const isPromptFree = promptCost === 0 || promptCost === null || promptCost === undefined || 
+                            (typeof promptCost === 'string' && parseFloat(promptCost) === 0);
+        const isCompletionFree = completionCost === 0 || completionCost === null || completionCost === undefined || 
+                                (typeof completionCost === 'string' && parseFloat(completionCost) === 0);
+        const isRequestFree = requestCost === 0 || requestCost === null || requestCost === undefined || 
+                            (typeof requestCost === 'string' && parseFloat(requestCost) === 0);
+        
+        const isFree = isPromptFree && isCompletionFree && isRequestFree;
         
         return {
           ...model,
@@ -33,11 +41,26 @@ export const useOpenRouterModels = () => {
         };
       });
       
-      setModels(processedModels);
+      // Sort models: show free models first, then alphabetically by provider
+      const sortedModels = processedModels.sort((a, b) => {
+        // First by free status (free models first)
+        if (a.isFree && !b.isFree) return -1;
+        if (!a.isFree && b.isFree) return 1;
+        
+        // Then by provider name
+        const providerA = a.id.split('/')[0] || '';
+        const providerB = b.id.split('/')[0] || '';
+        if (providerA !== providerB) return providerA.localeCompare(providerB);
+        
+        // Then by model name
+        return a.name.localeCompare(b.name);
+      });
+      
+      setModels(sortedModels);
       
       // Set the first model as default if we have no selection yet
-      if (!selectedModelId && processedModels.length > 0) {
-        setSelectedModelId(processedModels[0].id);
+      if (!selectedModelId && sortedModels.length > 0) {
+        setSelectedModelId(sortedModels[0].id);
       }
     }
   }, [data, selectedModelId]);

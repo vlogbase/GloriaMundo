@@ -298,16 +298,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = await response.json();
       
       // Extract more information including pricing from each model for the frontend
-      const models = data.data.map((model: any) => ({
-        id: model.id,
-        name: model.name,
-        pricing: model.pricing || null,
-        context_length: model.context_length || null,
-        isFree: model.pricing && 
-                (parseFloat(model.pricing.prompt) === 0 || !model.pricing.prompt) && 
-                (parseFloat(model.pricing.completion) === 0 || !model.pricing.completion) &&
-                (parseFloat(model.pricing.request) === 0 || !model.pricing.request)
-      }));
+      const models = data.data.map((model: any) => {
+        // Properly determine if a model is free by checking all pricing properties
+        const promptCost = model.pricing?.prompt;
+        const completionCost = model.pricing?.completion;
+        const requestCost = model.pricing?.request;
+        
+        const isPromptFree = promptCost === 0 || promptCost === null || promptCost === undefined || 
+                            (typeof promptCost === 'string' && parseFloat(promptCost) === 0);
+        const isCompletionFree = completionCost === 0 || completionCost === null || completionCost === undefined || 
+                                (typeof completionCost === 'string' && parseFloat(completionCost) === 0);
+        const isRequestFree = requestCost === 0 || requestCost === null || requestCost === undefined || 
+                            (typeof requestCost === 'string' && parseFloat(requestCost) === 0);
+        
+        const isFree = isPromptFree && isCompletionFree && isRequestFree;
+        
+        return {
+          id: model.id,
+          name: model.name,
+          pricing: model.pricing || null,
+          context_length: model.context_length || null,
+          isFree
+        };
+      });
 
       return res.json(models);
     } catch (error) {
