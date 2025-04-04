@@ -2,11 +2,10 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertMessageSchema, TRANSACTION_TYPES, CREDIT_PACKAGES } from "@shared/schema";
+import { insertMessageSchema } from "@shared/schema";
 import passport from "passport";
 import { db } from "./db";
 import { users } from "../shared/schema";
-import { createOrder, captureOrder, getCreditPackage } from "./paypal";
 import { eq } from "drizzle-orm";
 
 type ModelType = "reasoning" | "search" | "multimodal";
