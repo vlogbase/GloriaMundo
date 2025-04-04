@@ -11,6 +11,9 @@ import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
 
 const app = express();
+// Trust the proxy headers set by Replit (to fix https redirect issues)
+app.set('trust proxy', 1);
+
 // Increase the request size limit for JSON and URL encoded data to handle larger images
 // Default is 100kb, increasing to 50MB for multimodal content
 app.use(express.json({ limit: '50mb' }));
@@ -34,7 +37,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production', 
+    // Enable secure cookies when running on HTTPS (Replit serves with HTTPS)
+    secure: true, 
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     sameSite: 'lax'
   }
