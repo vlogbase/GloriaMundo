@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useModelPresets } from '@/hooks/useModelPresets';
+import { useModelPresets } from '@/hooks/useModelPresets.fixed';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
 import { useModelSelection } from '@/hooks/useModelSelection';
 import {
@@ -107,16 +107,13 @@ export const ModelPresets = () => {
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     // Get the model ID associated with this preset
-    const modelId = presets[presetKey];
+    const modelId = activatePreset(presetKey);
     
     console.log(`Attempting to activate preset ${presetKey}...`);
     console.log(`Preset contains model ID: ${modelId}`);
     
     // If a valid model ID was returned from the preset
     if (modelId) {
-      // First activate the preset in our context (this sets the activePreset state)
-      activatePreset(presetKey);
-      
       // Important: We must set the selected model type to 'openrouter' first
       // so the chat component knows to use the custom model ID
       console.log(`Setting selected model to 'openrouter'`);

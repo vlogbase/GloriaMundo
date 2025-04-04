@@ -8,7 +8,7 @@ import Privacy from "@/pages/Privacy";
 import Contact from "@/pages/Contact";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ModelSelectionProvider } from "@/hooks/useModelSelection";
-import { ModelPresetsProvider } from "@/hooks/useModelPresets";
+import { ModelPresetsProvider } from "@/hooks/useModelPresets.fixed";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
 
