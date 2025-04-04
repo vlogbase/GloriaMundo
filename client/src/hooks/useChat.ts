@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Message } from "@/lib/types";
+import { Message, ModelType } from "@/lib/types";
 import { apiRequest } from "@/lib/queryClient";
 import { refreshSkimlinks } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -88,20 +88,40 @@ export const useChat = () => {
       // If using OpenRouter, include model ID in the request
       if (selectedModel === 'openrouter' && customOpenRouterModelId) {
         console.log(`Using OpenRouter model: ${customOpenRouterModelId}`);
+        // Always pass explicitly the modelId parameter in the expected format
         modelMetadata = { modelId: customOpenRouterModelId };
       } else if (selectedModel === 'openrouter' && !customOpenRouterModelId) {
         // Safety catch - if we're set to OpenRouter but don't have a model ID, log warning
         console.warn("OpenRouter selected but no model ID provided");
+        // Set a default free model to ensure we don't leave modelId undefined
+        console.log("Using default free model as fallback");
+        modelMetadata = { modelId: "allenai/molmo-7b-d:free" };
       }
       
-      const payload = { 
+      // Define the proper type for our payload
+      interface MessagePayload {
+        content: string;
+        image?: string;
+        modelType: ModelType | 'openrouter';
+        modelId?: string;
+      }
+      
+      // Create a properly typed payload
+      const payload: MessagePayload = { 
         content: content, // Use content directly - no parsing needed
         image,
         modelType: selectedModel,
         ...modelMetadata // Include any model-specific metadata
       };
       
-      console.log("Request payload:", payload);
+      // Enhanced logging to explicitly show the model ID being sent to the backend
+      console.log("Request payload:", {
+        ...payload,
+        modelType: selectedModel,
+        modelId: payload.modelId || 'not set',
+        isOpenRouterSelected: selectedModel === 'openrouter',
+        storedCustomModelId: customOpenRouterModelId
+      });
       
       const response = await apiRequest(
         "POST",

@@ -568,9 +568,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content, modelType = "reasoning", image } = req.query as { 
+      const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
         content?: string;
         modelType?: string;
+        modelId?: string;
         image?: string;
       };
       
@@ -704,8 +705,18 @@ Format your responses using markdown for better readability and organization.`;
           messagesCount: messages.length
         });
 
+        // Determine the correct model parameter to use
+        // For OpenRouter, we MUST use the exact modelId passed from the client
+        let modelParam = modelConfig.modelName;
+        
+        // For OpenRouter, ensure we use the correct model ID
+        if (modelConfig.apiProvider === "openrouter" && modelId) {
+          modelParam = modelId;
+          console.log(`Streaming OpenRouter request using model ID: ${modelId}`);
+        }
+        
         const payload = {
-          model: modelConfig.modelName,
+          model: modelParam,
           messages,
           temperature: 0.2,
           top_p: 0.9,
@@ -1245,9 +1256,21 @@ Format your responses using markdown for better readability and organization.`;
           })
         );
 
-        // For OpenRouter, we need to use the exact modelId as the model parameter
+        // Determine the correct model parameter to use
+        // For OpenRouter, we MUST use the exact modelId passed from the client
+        let modelParam;
+        if (modelConfig.apiProvider === "openrouter") {
+          // Ensure we're using the correct modelId for OpenRouter
+          modelParam = modelId;
+          console.log(`OpenRouter request using explicit model ID: ${modelId}`);
+        } else {
+          // For other providers, use the modelName from the config
+          modelParam = modelConfig.modelName;
+        }
+        
+        // Construct the API payload
         const payload = {
-          model: modelConfig.apiProvider === "openrouter" ? modelId : modelConfig.modelName,
+          model: modelParam,
           messages,
           temperature: 0.2,
           top_p: 0.9,
@@ -1255,7 +1278,12 @@ Format your responses using markdown for better readability and organization.`;
         };
         
         // Log the actual model being used for debugging
-        console.log('Using model for OpenRouter API call:', payload.model);
+        console.log('API request with model parameter:', {
+          apiProvider: modelConfig.apiProvider,
+          modelParameter: payload.model,
+          originalModelId: modelId,
+          isOpenRouter: modelConfig.apiProvider === "openrouter"
+        });
 
         // Log the API request details for debugging (without exposing the full key)
         const keyLength = modelConfig.apiKey.length;
