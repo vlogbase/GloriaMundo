@@ -1,7 +1,8 @@
 import { 
   users, type User, type InsertUser, 
   conversations, type Conversation, type InsertConversation,
-  messages, type Message, type InsertMessage
+  messages, type Message, type InsertMessage,
+  transactions, type Transaction, type InsertTransaction
 } from "@shared/schema";
 
 // Define the user presets interface
@@ -20,6 +21,12 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getUserPresets(userId: number): Promise<UserPresets>;
   updateUserPresets(userId: number, presets: UserPresets): Promise<UserPresets>;
+  updateUserCreditBalance(userId: number, amount: number): Promise<User | undefined>;
+  
+  // Transaction methods
+  createTransaction(transaction: Partial<InsertTransaction>): Promise<Transaction>;
+  getTransactionsByUser(userId: number): Promise<Transaction[]>;
+  getTransactionByPayPalOrderId(paypalOrderId: string): Promise<Transaction | undefined>;
   
   // Conversation methods
   getConversations(): Promise<Conversation[]>;
@@ -40,19 +47,23 @@ export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private conversations: Map<number, Conversation>;
   private messages: Map<number, Message>;
+  private transactions: Map<number, Transaction>;
   
   private userId: number;
   private conversationId: number;
   private messageId: number;
+  private transactionId: number;
 
   constructor() {
     this.users = new Map();
     this.conversations = new Map();
     this.messages = new Map();
+    this.transactions = new Map();
     
     this.userId = 1;
     this.conversationId = 1;
     this.messageId = 1;
+    this.transactionId = 1;
   }
 
   // User methods
@@ -264,6 +275,68 @@ export class MemStorage implements IStorage {
     
     this.messages.set(id, updatedMessage);
     return updatedMessage;
+  }
+
+  // Credit and Transaction Methods
+  async updateUserCreditBalance(userId: number, amount: number): Promise<User | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      return undefined;
+    }
+
+    const updatedUser = {
+      ...user,
+      creditBalance: user.creditBalance + amount,
+      updatedAt: new Date()
+    };
+
+    this.users.set(userId, updatedUser);
+    return updatedUser;
+  }
+
+  async createTransaction(data: Partial<InsertTransaction>): Promise<Transaction> {
+    if (!data.userId) {
+      throw new Error("userId is required");
+    }
+
+    if (!data.type) {
+      throw new Error("type is required");
+    }
+
+    if (data.amount === undefined) {
+      throw new Error("amount is required");
+    }
+
+    const id = this.transactionId++;
+    const now = new Date();
+
+    const transaction: Transaction = {
+      id,
+      userId: data.userId,
+      type: data.type,
+      amount: data.amount,
+      paypalOrderId: data.paypalOrderId || null,
+      modelId: data.modelId || null,
+      promptTokens: data.promptTokens || null,
+      completionTokens: data.completionTokens || null,
+      baseAmount: data.baseAmount || null,
+      description: data.description || null,
+      createdAt: now
+    };
+
+    this.transactions.set(id, transaction);
+    return transaction;
+  }
+
+  async getTransactionsByUser(userId: number): Promise<Transaction[]> {
+    return Array.from(this.transactions.values())
+      .filter(transaction => transaction.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getTransactionByPayPalOrderId(paypalOrderId: string): Promise<Transaction | undefined> {
+    return Array.from(this.transactions.values())
+      .find(transaction => transaction.paypalOrderId === paypalOrderId);
   }
 }
 

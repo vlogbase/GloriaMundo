@@ -75,6 +75,25 @@ async function main() {
     `);
     console.log("Messages table created");
     
+    // Create transactions table
+    await migrationClient.unsafe(`
+      DROP TABLE IF EXISTS "transactions" CASCADE;
+      CREATE TABLE IF NOT EXISTS "transactions" (
+        "id" serial PRIMARY KEY,
+        "user_id" integer REFERENCES "users"("id") NOT NULL,
+        "type" varchar(50) NOT NULL,
+        "amount" integer NOT NULL,
+        "paypal_order_id" varchar(255),
+        "model_id" varchar(255),
+        "prompt_tokens" integer,
+        "completion_tokens" integer,
+        "base_amount" decimal(10, 6),
+        "description" text,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    console.log("Transactions table created");
+    
     console.log("Schema push completed successfully!");
   } catch (error) {
     console.error("Schema push failed:", error);
