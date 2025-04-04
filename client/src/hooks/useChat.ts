@@ -106,24 +106,14 @@ export const useChat = () => {
       // Extract response data
       const data = await response.json();
       
-      // Add assistant message from response
-      // Handle different possible response formats
-      let assistantMessage;
+      // Log the received data for debugging
+      console.log("Received response from server:", data);
       
-      if (data && data.assistantMessage) {
-        // Response format: { assistantMessage: {...} }
-        assistantMessage = data.assistantMessage;
-      } else if (data && data.role === 'assistant') {
-        // Response format: the message object directly
-        assistantMessage = data;
-      } else if (Array.isArray(data) && data.length > 0 && data[data.length - 1].role === 'assistant') {
-        // Response format: array of messages with assistant message last
-        assistantMessage = data[data.length - 1];
-      } else {
-        console.warn("Unexpected response format, attempting to use anyway:", data);
-        // Try to use the data as is if it seems to have required fields
-        assistantMessage = data;
-      }
+      // The backend has been updated to return just the assistant message
+      // Check if the response has necessary Message properties
+      const assistantMessage = data && data.role === 'assistant' && data.id && data.content
+        ? data  // Data is already the expected Message format
+        : null;
       
       // Always keep the user's message and append the assistant's response
       if (assistantMessage) {

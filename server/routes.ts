@@ -1169,10 +1169,14 @@ Format your responses using markdown for better readability and organization.`;
           await storage.updateConversationTitle(conversationId, generatedTitle);
         }
         
-        return res.json({
-          userMessage,
-          assistantMessage
+        // Log the no-API-key response we're sending
+        console.log("Sending no-API-key response to client:", {
+          assistantMessageId: assistantMessage.id,
+          noApiKeyResponseStructure: "assistantMessage only"
         });
+        
+        // Send only the assistant message as the response to match other cases
+        return res.json(assistantMessage);
       }
 
       // Call AI API based on the selected model
@@ -1470,10 +1474,16 @@ Format your responses using markdown for better readability and organization.`;
           await storage.updateConversationTitle(conversationId, generatedTitle);
         }
 
-        res.json({
-          userMessage,
-          assistantMessage,
+        // Log the response structure we're about to send to the client
+        console.log("Sending response to client:", {
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          responseStructure: "{ userMessage, assistantMessage }"
         });
+        
+        // Send only the assistant message as the response
+        // This matches what the frontend expects in useChat.ts
+        res.json(assistantMessage);
       } catch (error) {
         // Log error with additional diagnostic information
         console.error(`Error with ${modelType} model (${modelConfig.apiProvider}):`, {
@@ -1514,10 +1524,14 @@ Format your responses using markdown for better readability and organization.`;
           citations: null,
         });
         
-        res.json({
-          userMessage,
-          assistantMessage
+        // Log the error response we're sending
+        console.log("Sending error response to client:", {
+          assistantMessageId: assistantMessage.id,
+          errorResponseStructure: "assistantMessage only"
         });
+        
+        // Send only the assistant message as the response to match the success case
+        res.json(assistantMessage);
       }
     } catch (error) {
       console.error('Server error:', error);
