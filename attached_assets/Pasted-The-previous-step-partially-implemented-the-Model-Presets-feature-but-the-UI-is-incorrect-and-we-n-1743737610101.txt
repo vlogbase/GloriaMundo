@@ -1,0 +1,34 @@
+The previous step partially implemented the Model Presets feature, but the UI is incorrect, and we need to adjust for 5 presets instead of 4.
+
+Please perform the following actions:
+
+1.  **Update Database Schema:**
+    * Modify `shared/schema.ts` to add a fifth preset column to the `users` table (e.g., `preset5_model_id TEXT`).
+    * Run `npx drizzle-kit push:pg` to apply this schema change to the database. Confirm it runs successfully.
+
+2.  **Update Backend API:**
+    * Modify the backend logic (likely in `server/storage.ts` and `server/routes.ts`) for the `GET /api/users/me/presets` and `PUT /api/users/me/presets` endpoints to handle 5 preset slots (`preset1` to `preset5`).
+
+3.  **Correct Frontend UI Layout:**
+    * Modify the component where the model selection UI resides (identified previously as likely `client/src/components/ChatInput.tsx` or similar).
+    * **REMOVE** the old `ToggleGroup` containing the "Reasoning", "Search", and "Multimodal" buttons.
+    * **REMOVE** the simple "OpenRouter" label and the associated `<select>` dropdown element that was added in Phase 2.
+    * Ensure the `ModelPresets` component (which should now contain 5 buttons) is rendered in the correct location, replacing the controls that were just removed.
+
+4.  **Implement 5 Preset Buttons:**
+    * Update the `client/src/components/ModelPresets.tsx` component to render 5 preset buttons instead of 4.
+    * Update the corresponding state management and logic in `client/src/hooks/useModelPresets.tsx` to handle 5 presets.
+
+5.  **Set Default Presets (Frontend):**
+    * In the frontend hook (`client/src/hooks/useModelPresets.tsx` or the `ModelPresetsProvider`), set default values for the 5 presets to be used if a user hasn't saved any custom presets yet (i.e., when the data fetched from `GET /api/users/me/presets` is null or incomplete). Use these specific model IDs as defaults:
+        * Preset 1: `openai/gpt-3.5-turbo`
+        * Preset 2: `anthropic/claude-3.5-sonnet`
+        * Preset 3: `deepseek/deepseek-chat`
+        * Preset 4: `google/gemini-1.5-pro-latest` (Verify this is the correct ID on OpenRouter)
+        * Preset 5: `perplexity/sonar-medium-online` (Verify this is the correct ID on OpenRouter)
+
+6.  **Display Model Names on Buttons:**
+    * Ensure the `ModelPresets.tsx` component displays the actual *name* of the assigned OpenRouter model on each preset button, not just "Preset 1", "Preset 2", etc. This will likely involve using the list of models fetched from `/api/openrouter/models` to map the saved model ID (e.g., `openai/gpt-3.5-turbo`) to its display name (e.g., "GPT-3.5 Turbo"). Handle cases where a preset might be unassigned or the model name isn't found.
+    * The *active* preset button should still be visually highlighted.
+
+Please apply these fixes and updates. The goal is to have only the 5 preset buttons visible for model selection, replacing the old controls entirely, and have them configured with the specified defaults and display correct model names.

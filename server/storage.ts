@@ -10,6 +10,7 @@ export interface UserPresets {
   preset2ModelId: string | null;
   preset3ModelId: string | null;
   preset4ModelId: string | null;
+  preset5ModelId: string | null;
 }
 
 export interface IStorage {
@@ -80,6 +81,7 @@ export class MemStorage implements IStorage {
       preset2ModelId: null,
       preset3ModelId: null,
       preset4ModelId: null,
+      preset5ModelId: null,
       createdAt: now,
       updatedAt: now
     };
@@ -99,7 +101,8 @@ export class MemStorage implements IStorage {
       preset1ModelId: user.preset1ModelId || null,
       preset2ModelId: user.preset2ModelId || null,
       preset3ModelId: user.preset3ModelId || null,
-      preset4ModelId: user.preset4ModelId || null
+      preset4ModelId: user.preset4ModelId || null,
+      preset5ModelId: user.preset5ModelId || null
     };
   }
   
@@ -115,6 +118,7 @@ export class MemStorage implements IStorage {
       preset2ModelId: presets.preset2ModelId,
       preset3ModelId: presets.preset3ModelId,
       preset4ModelId: presets.preset4ModelId,
+      preset5ModelId: presets.preset5ModelId,
       updatedAt: new Date()
     };
     
@@ -124,7 +128,8 @@ export class MemStorage implements IStorage {
       preset1ModelId: updatedUser.preset1ModelId,
       preset2ModelId: updatedUser.preset2ModelId,
       preset3ModelId: updatedUser.preset3ModelId,
-      preset4ModelId: updatedUser.preset4ModelId
+      preset4ModelId: updatedUser.preset4ModelId,
+      preset5ModelId: updatedUser.preset5ModelId
     };
   }
   

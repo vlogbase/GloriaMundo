@@ -159,7 +159,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           preset1ModelId: true,
           preset2ModelId: true,
           preset3ModelId: true,
-          preset4ModelId: true
+          preset4ModelId: true,
+          preset5ModelId: true
         }
       });
       
@@ -171,7 +172,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         preset1: userPresets.preset1ModelId,
         preset2: userPresets.preset2ModelId,
         preset3: userPresets.preset3ModelId,
-        preset4: userPresets.preset4ModelId
+        preset4: userPresets.preset4ModelId,
+        preset5: userPresets.preset5ModelId
       });
     } catch (error) {
       console.error("Error getting user presets:", error);
@@ -186,7 +188,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         preset1: z.string().nullable(),
         preset2: z.string().nullable(),
         preset3: z.string().nullable(),
-        preset4: z.string().nullable()
+        preset4: z.string().nullable(),
+        preset5: z.string().nullable()
       });
       
       const validationResult = presetsSchema.safeParse(req.body);
@@ -199,13 +202,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user!.id;
-      const { preset1, preset2, preset3, preset4 } = validationResult.data;
+      const { preset1, preset2, preset3, preset4, preset5 } = validationResult.data;
       
       await db.update(users).set({
         preset1ModelId: preset1,
         preset2ModelId: preset2,
         preset3ModelId: preset3,
         preset4ModelId: preset4,
+        preset5ModelId: preset5,
         updatedAt: new Date()
       }).where(eq(users.id, userId));
       
@@ -213,7 +217,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         preset1,
         preset2,
         preset3,
-        preset4
+        preset4,
+        preset5
       });
     } catch (error) {
       console.error("Error updating user presets:", error);

@@ -10,6 +10,7 @@ export interface ModelPresets {
   preset2: string | null;
   preset3: string | null;
   preset4: string | null;
+  preset5: string | null;
 }
 
 // Default empty presets
@@ -17,7 +18,8 @@ const defaultPresets: ModelPresets = {
   preset1: null,
   preset2: null,
   preset3: null,
-  preset4: null
+  preset4: null,
+  preset5: null
 };
 
 interface ModelPresetsContextType {
@@ -46,7 +48,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       preset1: data?.preset1 || null,
       preset2: data?.preset2 || null,
       preset3: data?.preset3 || null,
-      preset4: data?.preset4 || null
+      preset4: data?.preset4 || null,
+      preset5: data?.preset5 || null
     })
   });
 
@@ -65,7 +68,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
         preset1_model_id: newPresets.preset1,
         preset2_model_id: newPresets.preset2,
         preset3_model_id: newPresets.preset3,
-        preset4_model_id: newPresets.preset4
+        preset4_model_id: newPresets.preset4,
+        preset5_model_id: newPresets.preset5
       };
       
       return await apiRequest('PUT', '/api/user/presets', apiPresets);
@@ -148,7 +152,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       preset1: data?.preset1 || null,
       preset2: data?.preset2 || null,
       preset3: data?.preset3 || null,
-      preset4: data?.preset4 || null
+      preset4: data?.preset4 || null,
+      preset5: data?.preset5 || null
     })
   });
   
@@ -167,7 +172,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
         preset1_model_id: newPresets.preset1,
         preset2_model_id: newPresets.preset2,
         preset3_model_id: newPresets.preset3,
-        preset4_model_id: newPresets.preset4
+        preset4_model_id: newPresets.preset4,
+        preset5_model_id: newPresets.preset5
       };
       
       return await apiRequest('PUT', '/api/user/presets', apiPresets);

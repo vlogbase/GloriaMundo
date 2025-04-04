@@ -15,6 +15,7 @@ export const users = pgTable("users", {
   preset2ModelId: text("preset2_model_id"),
   preset3ModelId: text("preset3_model_id"),
   preset4ModelId: text("preset4_model_id"),
+  preset5ModelId: text("preset5_model_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

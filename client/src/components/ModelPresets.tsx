@@ -39,7 +39,7 @@ export const ModelPresets = () => {
   const { models, selectedModelId, setSelectedModelId } = useOpenRouterModels();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [currentPresetKey, setCurrentPresetKey] = useState<'preset1' | 'preset2' | 'preset3' | 'preset4'>('preset1');
+  const [currentPresetKey, setCurrentPresetKey] = useState<'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5'>('preset1');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filter models based on search term
@@ -50,7 +50,7 @@ export const ModelPresets = () => {
   // Handle right-click to open dialog for assigning model
   const handleContextMenu = (
     e: React.MouseEvent<HTMLButtonElement>, 
-    presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4'
+    presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5'
   ) => {
     e.preventDefault();
     setCurrentPresetKey(presetKey);
@@ -58,13 +58,13 @@ export const ModelPresets = () => {
   };
   
   // Handle long press for mobile devices
-  const handleLongPress = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4') => {
+  const handleLongPress = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     setCurrentPresetKey(presetKey);
     setIsDialogOpen(true);
   };
   
   // Handle click to activate a preset
-  const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4') => {
+  const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     const modelId = activatePreset(presetKey);
     if (modelId) {
       setSelectedModelId(modelId);
@@ -83,7 +83,7 @@ export const ModelPresets = () => {
   const renderPresets = () => {
     return Object.entries(presets).map(([key, modelId]) => {
       const isActive = activePreset === key;
-      const presetKey = key as 'preset1' | 'preset2' | 'preset3' | 'preset4';
+      const presetKey = key as 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5';
       
       return (
         <Button
@@ -99,14 +99,14 @@ export const ModelPresets = () => {
             return () => clearTimeout(timer);
           }}
           variant={isActive ? "default" : "outline"}
-          className={`flex items-center gap-1 py-2 px-4 text-sm transition-all duration-200 ${
+          className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
             isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
           }`}
           disabled={isLoading || isPending}
         >
           <Network size={16} className="mr-1" />
           {modelId ? (
-            <span className="truncate max-w-[120px]">{getModelNameById(modelId)}</span>
+            <span className="truncate max-w-[100px]">{getModelNameById(modelId)}</span>
           ) : (
             <span className="text-muted-foreground">Preset {getPresetNumber(key)}</span>
           )}
@@ -117,7 +117,7 @@ export const ModelPresets = () => {
   
   return (
     <>
-      <div className="flex justify-center gap-2 mb-3">
+      <div className="flex flex-wrap justify-center gap-2 mb-3">
         {renderPresets()}
       </div>
       
