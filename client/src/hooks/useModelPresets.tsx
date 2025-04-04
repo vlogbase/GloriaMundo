@@ -73,13 +73,14 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
     mutationFn: async (newPresets: ModelPresets) => {
       console.log('Sending presets data to server:', newPresets);
       
-      // Format presets for the server as expected in server/storage.ts (UserPresets interface)
+      // Format presets exactly as the backend schema expects (preset1, preset2, etc.)
+      // The backend validation expects this format according to server/routes.ts
       const formattedPresets = {
-        preset1ModelId: newPresets.preset1,
-        preset2ModelId: newPresets.preset2,
-        preset3ModelId: newPresets.preset3,
-        preset4ModelId: newPresets.preset4,
-        preset5ModelId: newPresets.preset5,
+        preset1: newPresets.preset1,
+        preset2: newPresets.preset2,
+        preset3: newPresets.preset3,
+        preset4: newPresets.preset4,
+        preset5: newPresets.preset5,
       };
       
       console.log('Formatted presets for API:', formattedPresets);
@@ -250,13 +251,14 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
     mutationFn: async (newPresets: ModelPresets) => {
       console.log('Sending presets data to server:', newPresets);
       
-      // Format presets for the server as expected in server/storage.ts (UserPresets interface)
+      // Format presets exactly as the backend schema expects (preset1, preset2, etc.)
+      // The backend validation expects this format according to server/routes.ts
       const formattedPresets = {
-        preset1ModelId: newPresets.preset1,
-        preset2ModelId: newPresets.preset2,
-        preset3ModelId: newPresets.preset3,
-        preset4ModelId: newPresets.preset4,
-        preset5ModelId: newPresets.preset5,
+        preset1: newPresets.preset1,
+        preset2: newPresets.preset2,
+        preset3: newPresets.preset3,
+        preset4: newPresets.preset4,
+        preset5: newPresets.preset5,
       };
       
       console.log('Formatted presets for API:', formattedPresets);

@@ -95,7 +95,7 @@ export const useChat = () => {
         console.warn("OpenRouter selected but no model ID provided");
         // Set a default free model to ensure we don't leave modelId undefined
         console.log("Using default free model as fallback");
-        modelMetadata = { modelId: "allenai/molmo-7b-d:free" };
+        modelMetadata = { modelId: "openai/o3-mini" }; // Using a more reliable free model
       }
       
       // Define the proper type for our payload

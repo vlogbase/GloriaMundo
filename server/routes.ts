@@ -1289,21 +1289,49 @@ Format your responses using markdown for better readability and organization.`;
         
         // Create a cleaned version of the messages array for the payload
         // This is especially important for OpenRouter to ensure proper message format
+        // Make extra sure we're only sending correctly formatted messages with no metadata embedded in content
         const cleanMessages = modelConfig.apiProvider === "openrouter" 
           ? messages.map(msg => {
               if (typeof msg.content === 'string') {
+                // For text messages, ensure no metadata is embedded in the content
                 return {
                   role: msg.role,
-                  content: msg.content
+                  content: msg.content // Keep content as plain string without modifications
                 };
               }
               // Handle multimodal content (array of content items)
+              if (Array.isArray(msg.content)) {
+                return {
+                  role: msg.role,
+                  content: msg.content.map(item => {
+                    // Ensure each content item is properly formatted
+                    if (item.type === 'text') {
+                      return { type: 'text', text: item.text };
+                    } else if (item.type === 'image_url') {
+                      return { type: 'image_url', image_url: { url: item.image_url.url } };
+                    }
+                    return item;
+                  })
+                };
+              }
+              // Fallback to original message if structure is unexpected
               return msg;
             })
           : messages;
         
         if (modelConfig.apiProvider === "openrouter") {
           console.log('Created clean messages for OpenRouter API');
+          // Log the first and last message for debugging without exposing full content
+          const firstMsg = cleanMessages[0];
+          const lastMsg = cleanMessages[cleanMessages.length - 1];
+          console.log('OpenRouter message format check:', {
+            messageCount: cleanMessages.length,
+            firstMessageRole: firstMsg?.role,
+            firstMessageContentType: typeof firstMsg?.content,
+            lastMessageRole: lastMsg?.role,
+            lastMessageContentType: typeof lastMsg?.content,
+            isLastMessageMultimodal: Array.isArray(lastMsg?.content)
+          });
         }
         
         // Construct the API payload
