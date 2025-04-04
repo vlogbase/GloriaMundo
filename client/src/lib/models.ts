@@ -21,6 +21,13 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
     description: "Vision capabilities for analyzing images and text (Llama 3.2 Vision)",
     apiName: "llama-3.2-90b-vision-preview",
     apiProvider: "groq"
+  },
+  openrouter: {
+    id: "openrouter",
+    name: "OpenRouter",
+    description: "Access to various AI models through OpenRouter",
+    apiName: "dynamic",
+    apiProvider: "openrouter"
   }
 };
 

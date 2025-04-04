@@ -21,14 +21,19 @@ export interface Message {
   createdAt: string;
 }
 
-export type ModelType = "reasoning" | "search" | "multimodal";
+export type ModelType = "reasoning" | "search" | "multimodal" | "openrouter";
 
 export interface ModelOption {
-  id: ModelType;
+  id: ModelType | string;
   name: string;
   description: string;
   apiName: string;
-  apiProvider: "groq" | "perplexity";
+  apiProvider: "groq" | "perplexity" | "openrouter";
+}
+
+export interface OpenRouterModel {
+  id: string;
+  name: string;
 }
 
 export interface PerplexityResponse {

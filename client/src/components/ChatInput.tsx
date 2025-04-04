@@ -2,8 +2,9 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Send, Lightbulb, Search, Image, X, Upload, Camera } from "lucide-react";
+import { Send, Lightbulb, Search, Image, X, Upload, Camera, Network } from "lucide-react";
 import { useModelSelection } from "@/hooks/useModelSelection";
+import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
 import { ModelType } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,6 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ChatInputProps {
   onSendMessage: (message: string, image?: string) => void;
@@ -25,18 +33,33 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [showOpenRouterModels, setShowOpenRouterModels] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { selectedModel, setSelectedModel } = useModelSelection();
+  const { models, selectedModelId, setSelectedModelId, isLoading: modelsLoading } = useOpenRouterModels();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     
     if ((!message.trim() && !selectedImage) || isLoading) return;
     
-    onSendMessage(message, selectedImage || undefined);
+    // If OpenRouter model is selected, pass the selected model ID in the message metadata
+    if (selectedModel === 'openrouter' && selectedModelId) {
+      // We'll extend this method later to handle OpenRouter models
+      const modelMetadata = { modelId: selectedModelId, modelType: 'openrouter' };
+      // Append the model metadata to the message - this will be handled in the API call
+      const messageWithMetadata = JSON.stringify({ 
+        content: message, 
+        ...modelMetadata 
+      });
+      onSendMessage(messageWithMetadata, selectedImage || undefined);
+    } else {
+      onSendMessage(message, selectedImage || undefined);
+    }
+    
     setMessage("");
     setSelectedImage(null);
     setImagePreviewUrl(null);
@@ -210,7 +233,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
   };
   
   // Get model icon based on id
-  const getModelIcon = (id: ModelType) => {
+  const getModelIcon = (id: ModelType | string) => {
     switch(id) {
       case "reasoning":
         return <Lightbulb size={18} />;
@@ -218,6 +241,8 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
         return <Search size={18} />;
       case "multimodal":
         return <Image size={18} />;
+      case "openrouter":
+        return <Network size={18} />;
       default:
         return <Lightbulb size={18} />;
     }
@@ -257,7 +282,17 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
           <ToggleGroup 
             type="single" 
             value={selectedModel}
-            onValueChange={(value) => value && setSelectedModel(value as ModelType)}
+            onValueChange={(value) => {
+              if (value) {
+                setSelectedModel(value as ModelType);
+                // If selecting OpenRouter, show model dropdown
+                if (value === 'openrouter') {
+                  setShowOpenRouterModels(true);
+                } else {
+                  setShowOpenRouterModels(false);
+                }
+              }
+            }}
             className="flex justify-center mb-3 space-x-1 select-none"
           >
             {Object.values(MODEL_OPTIONS).map((model) => (
@@ -270,7 +305,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
                     ${selectedModel === model.id ? 'bg-primary/20 border-primary/50 ring-1 ring-primary/30 font-medium' : 'hover:bg-primary/10'}
                     transition-all duration-200`}
                   >
-                    {getModelIcon(model.id)}
+                    {getModelIcon(model.id as ModelType)}
                     <span>{model.name}</span>
                   </ToggleGroupItem>
                 </TooltipTrigger>
@@ -280,6 +315,33 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
               </Tooltip>
             ))}
           </ToggleGroup>
+          
+          {/* OpenRouter models dropdown */}
+          {selectedModel === 'openrouter' && (
+            <div className="mb-3">
+              <Select
+                value={selectedModelId || undefined}
+                onValueChange={(value) => setSelectedModelId(value)}
+                disabled={isLoading || modelsLoading}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={modelsLoading ? "Loading models..." : "Select a model"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                  {models.length === 0 && !modelsLoading && (
+                    <SelectItem value="none" disabled>
+                      No models available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </TooltipProvider>
         
         {imagePreviewUrl && (

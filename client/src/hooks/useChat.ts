@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { refreshSkimlinks } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
+import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
 
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -14,6 +15,7 @@ export const useChat = () => {
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedModel } = useModelSelection();
+  const { selectedModelId } = useOpenRouterModels();
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (conversationId: number) => {
@@ -91,13 +93,45 @@ export const useChat = () => {
       // Log request details for debugging
       console.log(`Sending message to conversation ${conversationId} with model: ${selectedModel}`);
       
+      // Check if this is a JSON string with OpenRouter metadata
+      let contentToSend = content;
+      let modelMetadata = {};
+      
+      // If using OpenRouter, include model ID in the request
+      if (selectedModel === 'openrouter' && selectedModelId) {
+        console.log(`Using OpenRouter model: ${selectedModelId}`);
+        modelMetadata = { modelId: selectedModelId };
+      }
+      
+      // Try to parse message for OpenRouter metadata if it's in JSON format
+      if (typeof content === 'string' && content.trim().startsWith('{') && content.trim().endsWith('}')) {
+        try {
+          const parsedContent = JSON.parse(content);
+          if (parsedContent.content !== undefined) {
+            contentToSend = parsedContent.content;
+            
+            // Extract model metadata if present
+            if (parsedContent.modelId) {
+              modelMetadata = { 
+                modelId: parsedContent.modelId,
+                modelType: parsedContent.modelType || 'openrouter'
+              };
+            }
+          }
+        } catch (e) {
+          // Not valid JSON, use content as is
+          console.log('Failed to parse message as JSON, using as plain text');
+        }
+      }
+      
       const response = await apiRequest(
         "POST",
         `/api/conversations/${conversationId}/messages`,
         { 
-          content,
+          content: contentToSend,
           image,
-          modelType: selectedModel  // Include the selected model in the request
+          modelType: selectedModel,
+          ...modelMetadata // Include any model-specific metadata
         }
       );
       
@@ -167,7 +201,7 @@ export const useChat = () => {
     } finally {
       setIsLoadingResponse(false);
     }
-  }, [activeConversationId, selectedModel, setLocation, toast]);
+  }, [activeConversationId, selectedModel, selectedModelId, setLocation, toast]);
 
   // Start a new conversation
   const startNewConversation = useCallback(async () => {

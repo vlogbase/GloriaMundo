@@ -61,14 +61,18 @@ declare module 'express-session' {
 // Define API keys with proper validation
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || "";
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
+const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
 // Validate API keys on startup
 const isPerplexityKeyValid = PERPLEXITY_API_KEY && PERPLEXITY_API_KEY.length > 10;
 const isGroqKeyValid = GROQ_API_KEY && GROQ_API_KEY.length > 10;
+const isOpenRouterKeyValid = OPENROUTER_API_KEY && OPENROUTER_API_KEY.length > 10;
 
 console.log("API Key Status:");
 console.log(`- Perplexity API Key: ${isPerplexityKeyValid ? "Valid" : "Invalid or Missing"}`);
 console.log(`- Groq API Key: ${isGroqKeyValid ? "Valid" : "Invalid or Missing"}`);
+console.log(`- OpenRouter API Key: ${isOpenRouterKeyValid ? "Valid" : "Invalid or Missing"}`);
 
 // Function to validate API key at request time
 function isValidApiKey(key: string | undefined | null): boolean {
@@ -190,6 +194,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Test API connections without sending real messages
+  // OpenRouter Models endpoint
+  app.get("/api/openrouter/models", async (req, res) => {
+    if (!isOpenRouterKeyValid) {
+      return res.status(401).json({ message: "Valid OpenRouter API key is required" });
+    }
+
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/models", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("OpenRouter API error:", errorText);
+        return res.status(response.status).json({ 
+          message: "Failed to fetch models from OpenRouter", 
+          error: errorText 
+        });
+      }
+
+      const data = await response.json();
+      
+      // Extract just the id and name of each model for the frontend
+      const models = data.data.map((model: any) => ({
+        id: model.id,
+        name: model.name
+      }));
+
+      return res.json(models);
+    } catch (error) {
+      console.error("Error fetching OpenRouter models:", error);
+      return res.status(500).json({ 
+        message: "Failed to fetch models from OpenRouter", 
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/debug/test-connection/:provider", async (req, res) => {
     const { provider } = req.params;
     
@@ -204,8 +250,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         apiUrl = "https://api.perplexity.ai/chat/completions";
         apiKey = PERPLEXITY_API_KEY;
         modelName = "test connection";
+      } else if (provider === "openrouter") {
+        apiUrl = "https://openrouter.ai/api/v1/models";
+        apiKey = OPENROUTER_API_KEY;
+        modelName = "models list";
       } else {
-        return res.status(400).json({ error: "Invalid provider. Use 'groq' or 'perplexity'." });
+        return res.status(400).json({ error: "Invalid provider. Use 'groq', 'perplexity', or 'openrouter'." });
       }
       
       if (!isValidApiKey(apiKey)) {
@@ -751,7 +801,7 @@ Format your responses using markdown for better readability and organization.`;
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      let { content = "", modelType = "reasoning", image } = req.body;
+      let { content = "", modelType = "reasoning", modelId = "", image } = req.body;
       
       // Ensure content is a string (even if empty)
       content = content || "";
@@ -766,8 +816,25 @@ Format your responses using markdown for better readability and organization.`;
         modelType = "multimodal";
       }
       
-      // Get the model configuration based on the requested model type
-      const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
+      // Check if we're using OpenRouter (custom modelId is provided)
+      const isOpenRouter = modelId && modelId !== "" && isOpenRouterKeyValid;
+      
+      // For OpenRouter, we'll use custom configurations
+      let modelConfig;
+      
+      if (isOpenRouter) {
+        // Use OpenRouter configuration
+        modelConfig = {
+          apiProvider: "openrouter",
+          modelName: modelId, // Use the specific model ID from OpenRouter
+          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+          apiKey: OPENROUTER_API_KEY
+        };
+        console.log(`Using OpenRouter with model: ${modelId}`);
+      } else {
+        // Use standard model configurations
+        modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
+      }
       
       // Disable streaming (using standard requests only)
       const shouldStream = false;

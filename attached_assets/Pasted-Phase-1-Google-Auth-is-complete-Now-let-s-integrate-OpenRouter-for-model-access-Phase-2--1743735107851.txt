@@ -1,0 +1,25 @@
+Phase 1 (Google Auth) is complete. Now, let's integrate OpenRouter for model access (Phase 2).
+
+**1. Backend Changes (Node.js/Express):**
+
+   a.  **API Key:** Ensure the application expects an OpenRouter API key from an environment variable named `OPENROUTER_API_KEY`. (Advise me to add this to Replit Secrets).
+   b.  **Fetch Models Route:** Create a new backend route `GET /api/openrouter/models`. This route should:
+      * Make an authenticated GET request to the OpenRouter models endpoint (`https://openrouter.ai/api/v1/models`). Include the `Authorization: Bearer $OPENROUTER_API_KEY` header.
+      * Parse the response and return the list of models (specifically their `id` and `name`) as JSON to the frontend. Handle potential errors during the API call.
+   c.  **Modify Chat Endpoint:** Locate the existing backend endpoint that handles processing chat messages (it likely receives message history and sends requests to AI models). Modify this endpoint to:
+      * Accept an additional `modelId` field in the request body from the frontend.
+      * Instead of calling previous model APIs, make a POST request to the OpenRouter Chat Completions endpoint (`https://openrouter.ai/api/v1/chat/completions`).
+      * Include the necessary headers: `Authorization: Bearer $OPENROUTER_API_KEY` and `Content-Type: application/json`.
+      * The request body should be JSON containing at least the `model` (using the `modelId` received from the frontend) and the `messages` array (formatted according to the API requirements). If the app supports streaming, ensure the `stream: true` parameter is included and the response is handled appropriately.
+      * Forward the response (or stream) from OpenRouter back to the frontend. Handle potential errors from the OpenRouter API call.
+
+**2. Frontend Changes (React/TypeScript):**
+
+   a.  **Model Selection UI:** In the main chat interface component (likely `client/src/pages/Chat.tsx` or a component within its header/settings area):
+      * Add a `<select>` dropdown element. This dropdown should only be visible/enabled when the user is logged in.
+      * When the component mounts (and the user is logged in), fetch the list of available models by calling the backend `GET /api/openrouter/models` endpoint you created.
+      * Populate the dropdown options with the fetched models, showing the model name and using the model ID as the option value. Include a default or initial selection.
+   b.  **State Management:** Store the currently selected `modelId` from the dropdown in the component's state.
+   c.  **Send Model ID:** When the user sends a chat message, ensure the currently selected `modelId` from the state is included in the request payload sent to the backend chat processing endpoint.
+
+Please implement these backend and frontend changes. Let me know which files you modified significantly and confirm when ready. Remember to advise me about adding the `OPENROUTER_API_KEY` to Replit Secrets.
