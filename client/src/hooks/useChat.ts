@@ -34,18 +34,8 @@ export const useChat = () => {
       
       const data = await response.json();
       
-      // Add test Skimlinks link to all AI messages in loaded conversations
-      const messagesWithTestLinks = data.map((message: Message) => {
-        if (message.role === 'assistant') {
-          return {
-            ...message,
-            content: message.content + '\n\n<a href="http://test.skimlinks.com">Skimlinks Test</a>'
-          };
-        }
-        return message;
-      });
-      
-      setMessages(messagesWithTestLinks);
+      // Set the messages directly without adding test links
+      setMessages(data);
       setActiveConversationId(conversationId);
       
       // Check if there are any AI responses in the loaded conversation
@@ -143,17 +133,11 @@ export const useChat = () => {
         throw new Error("The server returned an invalid response format");
       }
       
-      // Append the Skimlinks test link to the assistant message content
-      const assistantMessageWithTestLink = {
-        ...data.assistantMessage,
-        content: data.assistantMessage.content + '\n\n<a href="http://test.skimlinks.com">Skimlinks Test</a>'
-      };
-      
       // We already added the user message optimistically - just replace it with the real one and add assistant message
       setMessages((prev) => 
         prev
           .map(msg => msg.id === tempUserMessage.id ? data.userMessage : msg)
-          .concat([assistantMessageWithTestLink])
+          .concat([data.assistantMessage])
       );
       
       // Dispatch a custom event to notify that a message was sent (for conversation title updates)
