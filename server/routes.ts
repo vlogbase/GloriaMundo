@@ -205,16 +205,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const { preset1, preset2, preset3, preset4, preset5 } = validationResult.data;
       
-      // Update the database using the snake_case column names
-      await db.update(users).set({
+      // Create a transformed object mapping frontend keys to database column names
+      const dbPresets = {
         preset1ModelId: preset1,
         preset2ModelId: preset2,
         preset3ModelId: preset3,
         preset4ModelId: preset4,
         preset5ModelId: preset5,
         updatedAt: new Date()
-      }).where(eq(users.id, userId));
+      };
       
+      console.log('Updating user presets in database:', {
+        userId,
+        presetCount: Object.keys(validationResult.data).length,
+        dbColumns: Object.keys(dbPresets)
+      });
+      
+      try {
+        // Update the database using the transformed object
+        await db.update(users)
+          .set(dbPresets)
+          .where(eq(users.id, userId));
+          
+        console.log('User presets updated successfully');
+      } catch (dbError) {
+        console.error('Database error while updating presets:', dbError);
+        throw new Error(`Database update failed: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+      }
+      
+      // Return the data in the format expected by the frontend
       res.json({
         preset1,
         preset2,
@@ -224,7 +243,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error updating user presets:", error);
-      res.status(500).json({ message: "Error updating user presets" });
+      res.status(500).json({ 
+        message: "Error updating user presets",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
   

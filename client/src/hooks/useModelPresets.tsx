@@ -13,12 +13,12 @@ export interface ModelPresets {
   preset5: string | null;
 }
 
-// Default model presets with updated model IDs
+// Default model presets with verified valid model IDs from OpenRouter
 const defaultPresets: ModelPresets = {
   preset1: 'openai/o3-mini',
   preset2: 'anthropic/claude-3.7-sonnet',
   preset3: 'deepseek/deepseek-r1',
-  preset4: 'google/gemini-2.0-flash',
+  preset4: 'google/gemini-2.0-flash-001',
   preset5: 'perplexity/sonar-pro'
 };
 
@@ -102,7 +102,7 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       return 'Claude 3.7 Sonnet';
     } else if (modelId.includes('deepseek/deepseek-r1')) {
       return 'Deepseek R1';
-    } else if (modelId.includes('google/gemini-2.0-flash')) {
+    } else if (modelId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
     } else if (modelId.includes('perplexity/sonar-pro')) {
       return 'Sonar Pro';
@@ -255,7 +255,7 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       return 'Claude 3.7 Sonnet';
     } else if (modelId.includes('deepseek/deepseek-r1')) {
       return 'Deepseek R1';
-    } else if (modelId.includes('google/gemini-2.0-flash')) {
+    } else if (modelId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
     } else if (modelId.includes('perplexity/sonar-pro')) {
       return 'Sonar Pro';
