@@ -20,6 +20,8 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getUserPresets(userId: number): Promise<UserPresets>;
   updateUserPresets(userId: number, presets: UserPresets): Promise<UserPresets>;
+  addUserCredits(userId: number, credits: number): Promise<User>;
+  deductUserCredits(userId: number, credits: number): Promise<User>;
   
   // Conversation methods
   getConversations(): Promise<Conversation[]>;
@@ -131,6 +133,62 @@ export class MemStorage implements IStorage {
       preset4ModelId: updatedUser.preset4ModelId,
       preset5ModelId: updatedUser.preset5ModelId
     };
+  }
+  
+  /**
+   * Add credits to a user's balance
+   */
+  async addUserCredits(userId: number, credits: number): Promise<User> {
+    const user = await this.getUser(userId);
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    if (credits < 0) {
+      throw new Error("Cannot add negative credits");
+    }
+    
+    const updatedUser = {
+      ...user,
+      creditBalance: user.creditBalance + credits,
+      updatedAt: new Date()
+    };
+    
+    this.users.set(userId, updatedUser);
+    console.log(`Added ${credits} credits to user ${userId}. New balance: ${updatedUser.creditBalance}`);
+    
+    return updatedUser;
+  }
+  
+  /**
+   * Deduct credits from a user's balance
+   */
+  async deductUserCredits(userId: number, credits: number): Promise<User> {
+    const user = await this.getUser(userId);
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    if (credits < 0) {
+      throw new Error("Cannot deduct negative credits");
+    }
+    
+    if (user.creditBalance < credits) {
+      throw new Error("Insufficient credits");
+    }
+    
+    const updatedUser = {
+      ...user,
+      creditBalance: user.creditBalance - credits,
+      updatedAt: new Date()
+    };
+    
+    this.users.set(userId, updatedUser);
+    console.log(`Deducted ${credits} credits from user ${userId}. New balance: ${updatedUser.creditBalance}`);
+    
+    return updatedUser;
   }
   
   // Conversation methods

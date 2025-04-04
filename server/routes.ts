@@ -7,6 +7,14 @@ import passport from "passport";
 import { db } from "./db";
 import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
+import {
+  isPayPalConfigValid,
+  CREDIT_PACKAGES,
+  calculateCreditsToCharge,
+  createPayPalOrder,
+  capturePayPalOrder,
+  verifyPayPalWebhook
+} from "./paypal";
 
 type ModelType = "reasoning" | "search" | "multimodal";
 import 'express-session';
@@ -468,6 +476,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get("/sitemap.xml", (req, res) => {
     res.sendFile("client/public/sitemap.xml", { root: "." });
+  });
+  
+  // PayPal integration routes
+  
+  // Get available credit packages
+  app.get("/api/credits/packages", (req, res) => {
+    res.json(CREDIT_PACKAGES);
+  });
+  
+  // Create a PayPal order for purchasing credits
+  app.post("/api/paypal/create-order", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPayPalConfigValid) {
+        return res.status(500).json({ message: "PayPal is not properly configured" });
+      }
+      
+      const packageIdSchema = z.object({
+        packageId: z.string()
+      });
+      
+      const validationResult = packageIdSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid package ID", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const { packageId } = validationResult.data;
+      const orderId = await createPayPalOrder(packageId);
+      
+      res.json({ orderId });
+    } catch (error) {
+      console.error("Error creating PayPal order:", error);
+      res.status(500).json({ 
+        message: "Failed to create PayPal order", 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+  
+  // Capture a PayPal order and add credits to user account
+  app.post("/api/paypal/capture-order", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPayPalConfigValid) {
+        return res.status(500).json({ message: "PayPal is not properly configured" });
+      }
+      
+      const orderIdSchema = z.object({
+        orderId: z.string()
+      });
+      
+      const validationResult = orderIdSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid order ID", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const { orderId } = validationResult.data;
+      const captureResult = await capturePayPalOrder(orderId);
+      
+      if (!captureResult.success) {
+        return res.status(400).json({ message: "Failed to capture order" });
+      }
+      
+      // Add credits to user account if package was identified
+      if (captureResult.credits) {
+        const userId = req.user!.id;
+        await storage.addUserCredits(userId, captureResult.credits);
+        
+        // Get updated user info
+        const updatedUser = await storage.getUser(userId);
+        
+        return res.json({
+          success: true,
+          message: `Added ${captureResult.credits} credits to your account`,
+          captureId: captureResult.captureId,
+          newBalance: updatedUser?.creditBalance || 0
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: "Payment completed but could not identify credit package",
+        captureId: captureResult.captureId
+      });
+    } catch (error) {
+      console.error("Error capturing PayPal order:", error);
+      res.status(500).json({ 
+        message: "Failed to capture PayPal order", 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+  
+  // PayPal webhook handler for backup payment verification
+  app.post("/api/paypal/webhook", async (req, res) => {
+    try {
+      if (!isPayPalConfigValid) {
+        return res.status(500).json({ message: "PayPal is not properly configured" });
+      }
+      
+      const isValid = verifyPayPalWebhook(req.body, req.headers);
+      
+      if (!isValid) {
+        console.warn("Invalid PayPal webhook signature");
+        return res.status(400).json({ message: "Invalid webhook signature" });
+      }
+      
+      const eventType = req.body.event_type;
+      
+      // Process webhook event
+      console.log(`Received PayPal webhook event: ${eventType}`);
+      
+      // We primarily process credits in the capture-order endpoint
+      // This webhook serves as a backup for payment verification
+      
+      // Return 200 to acknowledge receipt
+      return res.status(200).send();
+    } catch (error) {
+      console.error("Error processing PayPal webhook:", error);
+      res.status(500).json({ 
+        message: "Failed to process PayPal webhook", 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
   });
 
   // API routes

@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 import Chat from "@/pages/Chat";
 import Privacy from "@/pages/Privacy";
 import Contact from "@/pages/Contact";
+import { CreditsPage } from "@/pages/CreditsPage";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ModelSelectionProvider } from "@/hooks/useModelSelection";
 import { ModelPresetsProvider } from "@/hooks/useModelPresets.fixed";
