@@ -5,7 +5,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { refreshSkimlinks } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
-import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
 
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -14,8 +13,7 @@ export const useChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
-  const { selectedModel } = useModelSelection();
-  const { selectedModelId } = useOpenRouterModels();
+  const { selectedModel, customOpenRouterModelId } = useModelSelection();
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (conversationId: number) => {
@@ -87,9 +85,9 @@ export const useChat = () => {
       let modelMetadata = {};
       
       // If using OpenRouter, include model ID in the request
-      if (selectedModel === 'openrouter' && selectedModelId) {
-        console.log(`Using OpenRouter model: ${selectedModelId}`);
-        modelMetadata = { modelId: selectedModelId };
+      if (selectedModel === 'openrouter' && customOpenRouterModelId) {
+        console.log(`Using OpenRouter model: ${customOpenRouterModelId}`);
+        modelMetadata = { modelId: customOpenRouterModelId };
       }
       
       const response = await apiRequest(
@@ -109,18 +107,14 @@ export const useChat = () => {
       // Log the received data for debugging
       console.log("Received response from server:", data);
       
-      // The backend has been updated to return just the assistant message
+      // The backend returns the assistant message directly
       // Check if the response has necessary Message properties
-      const assistantMessage = data && data.role === 'assistant' && data.id && data.content
-        ? data  // Data is already the expected Message format
-        : null;
-      
-      // Always keep the user's message and append the assistant's response
-      if (assistantMessage) {
-        setMessages((prev) => [...prev, assistantMessage]);
+      if (data && data.role === 'assistant' && data.id) {
+        // Add the assistant message to our messages array
+        setMessages((prev) => [...prev, data]);
       } else {
-        console.error("Could not extract assistant message from response:", data);
-        // Don't throw error here - we'll keep the user message even without assistant response
+        console.error("Invalid response format from server:", data);
+        // We'll keep the user message even without a valid assistant response
       }
       
       // Dispatch a custom event to notify that a message was sent (for conversation title updates)
@@ -169,7 +163,7 @@ export const useChat = () => {
     } finally {
       setIsLoadingResponse(false);
     }
-  }, [activeConversationId, selectedModel, selectedModelId, setLocation, toast]);
+  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
 
   // Start a new conversation
   const startNewConversation = useCallback(async () => {

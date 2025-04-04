@@ -62,7 +62,7 @@ export const ModelPresets = () => {
   } = useModelPresets();
   
   const { models } = useOpenRouterModels();
-  const { setSelectedModel } = useModelSelection();
+  const { setSelectedModel, setCustomOpenRouterModelId } = useModelSelection();
   
   // Separate state management for dialogs
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -106,10 +106,21 @@ export const ModelPresets = () => {
   
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
+    // Get the model ID associated with this preset
     const modelId = activatePreset(presetKey);
+    
+    // If a valid model ID was returned from the preset
     if (modelId) {
-      // Always set the model type to 'openrouter' when a preset is activated
+      // Set the selected model type to 'openrouter' 
       setSelectedModel('openrouter');
+      
+      // Also update the custom OpenRouter model ID
+      setCustomOpenRouterModelId(modelId);
+      
+      console.log(`Activated preset ${presetKey} with model: ${modelId}`);
+    } else {
+      console.warn(`Preset ${presetKey} has no model assigned.`);
+      // Optionally show a toast notification here
     }
   };
   
@@ -122,6 +133,8 @@ export const ModelPresets = () => {
     } else {
       // If a free tier model is already active, use it again
       setSelectedModel('openrouter');
+      setCustomOpenRouterModelId(activeFreeTierModel);
+      console.log(`Activated free tier model: ${activeFreeTierModel}`);
     }
   };
   
@@ -129,6 +142,8 @@ export const ModelPresets = () => {
   const handleSelectFreeModel = (modelId: string) => {
     activateFreeTierModel(modelId);
     setSelectedModel('openrouter');
+    setCustomOpenRouterModelId(modelId);
+    console.log(`Selected free tier model: ${modelId}`);
     setIsFreeTierDialogOpen(false);
   };
   
