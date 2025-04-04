@@ -50,11 +50,11 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const { data, isLoading } = useQuery({
     queryKey: ['/api/user/presets'],
     select: (data: any) => ({
-      preset1: data?.preset1ModelId || defaultPresets.preset1,
-      preset2: data?.preset2ModelId || defaultPresets.preset2,
-      preset3: data?.preset3ModelId || defaultPresets.preset3,
-      preset4: data?.preset4ModelId || defaultPresets.preset4,
-      preset5: data?.preset5ModelId || defaultPresets.preset5
+      preset1: data?.preset1 || defaultPresets.preset1,
+      preset2: data?.preset2 || defaultPresets.preset2,
+      preset3: data?.preset3 || defaultPresets.preset3,
+      preset4: data?.preset4 || defaultPresets.preset4,
+      preset5: data?.preset5 || defaultPresets.preset5
     })
   });
 
@@ -71,22 +71,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Mutation to update presets
   const { mutate, isPending } = useMutation({
     mutationFn: async (newPresets: ModelPresets) => {
-      console.log('Sending presets data to server:', newPresets);
-      
-      // Format presets for the server as expected in server/storage.ts (UserPresets interface)
-      const formattedPresets = {
-        preset1ModelId: newPresets.preset1,
-        preset2ModelId: newPresets.preset2,
-        preset3ModelId: newPresets.preset3,
-        preset4ModelId: newPresets.preset4,
-        preset5ModelId: newPresets.preset5,
-      };
-      
-      console.log('Formatted presets for API:', formattedPresets);
-      const response = await apiRequest('PUT', '/api/user/presets', formattedPresets);
-      
-      console.log('Server response:', response);
-      return response;
+      // Send the data directly matching the expected server format
+      return await apiRequest('PUT', '/api/user/presets', newPresets);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/presets'] });
@@ -96,22 +82,12 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       });
     },
     onError: (error) => {
-      // Log the detailed error for debugging
-      console.error('Error updating preset:', error);
-      let errorMsg = 'Failed to update preset. Please try again.';
-      
-      // Try to extract more useful error information if available
-      if (error instanceof Error) {
-        errorMsg = error.message || errorMsg;
-      } else if (typeof error === 'object' && error !== null) {
-        errorMsg = JSON.stringify(error);
-      }
-      
       toast({
         title: 'Error',
-        description: errorMsg,
+        description: 'Failed to update preset. Please try again.',
         variant: 'destructive',
       });
+      console.error('Error updating preset:', error);
     }
   });
 
@@ -227,11 +203,11 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
   const { data, isLoading } = useQuery({
     queryKey: ['/api/user/presets'],
     select: (data: any) => ({
-      preset1: data?.preset1ModelId || defaultPresets.preset1,
-      preset2: data?.preset2ModelId || defaultPresets.preset2,
-      preset3: data?.preset3ModelId || defaultPresets.preset3,
-      preset4: data?.preset4ModelId || defaultPresets.preset4,
-      preset5: data?.preset5ModelId || defaultPresets.preset5
+      preset1: data?.preset1 || defaultPresets.preset1,
+      preset2: data?.preset2 || defaultPresets.preset2,
+      preset3: data?.preset3 || defaultPresets.preset3,
+      preset4: data?.preset4 || defaultPresets.preset4,
+      preset5: data?.preset5 || defaultPresets.preset5
     })
   });
   
@@ -248,22 +224,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
   // Mutation to update presets
   const { mutate, isPending } = useMutation({
     mutationFn: async (newPresets: ModelPresets) => {
-      console.log('Sending presets data to server:', newPresets);
-      
-      // Format presets for the server as expected in server/storage.ts (UserPresets interface)
-      const formattedPresets = {
-        preset1ModelId: newPresets.preset1,
-        preset2ModelId: newPresets.preset2,
-        preset3ModelId: newPresets.preset3,
-        preset4ModelId: newPresets.preset4,
-        preset5ModelId: newPresets.preset5,
-      };
-      
-      console.log('Formatted presets for API:', formattedPresets);
-      const response = await apiRequest('PUT', '/api/user/presets', formattedPresets);
-      
-      console.log('Server response:', response);
-      return response;
+      // Send the data directly matching the expected server format
+      return await apiRequest('PUT', '/api/user/presets', newPresets);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/presets'] });
@@ -273,22 +235,12 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       });
     },
     onError: (error) => {
-      // Log the detailed error for debugging
-      console.error('Error updating preset:', error);
-      let errorMsg = 'Failed to update preset. Please try again.';
-      
-      // Try to extract more useful error information if available
-      if (error instanceof Error) {
-        errorMsg = error.message || errorMsg;
-      } else if (typeof error === 'object' && error !== null) {
-        errorMsg = JSON.stringify(error);
-      }
-      
       toast({
         title: 'Error',
-        description: errorMsg,
+        description: 'Failed to update preset. Please try again.',
         variant: 'destructive',
       });
+      console.error('Error updating preset:', error);
     }
   });
 

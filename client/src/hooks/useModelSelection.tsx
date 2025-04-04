@@ -40,7 +40,16 @@ export const ModelSelectionProvider: React.FC<{ children: ReactNode }> = ({ chil
   };
   
   const setCustomOpenRouterModelId = (modelId: string | null) => {
+    console.log(`Setting custom OpenRouter model ID to: ${modelId}`);
     setCustomOpenRouterModelIdState(modelId);
+    
+    // When setting a custom model ID, we should also ensure the model type is set to openrouter
+    if (modelId && selectedModel !== 'openrouter') {
+      setSelectedModelState('openrouter');
+      cookieUtils.set(MODEL_SELECTION_COOKIE, 'openrouter', { expires: 365 });
+      console.log('Automatically setting selected model to openrouter');
+    }
+    
     if (modelId) {
       cookieUtils.set(OPENROUTER_MODEL_COOKIE, modelId, { expires: 365 }); // Save preference for 1 year
     } else {

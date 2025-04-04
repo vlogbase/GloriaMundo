@@ -1,0 +1,21 @@
+Okay, previous attempts to fix the model selection and preset issues haven't worked. Please analyze the complete current codebase provided in `gloriamundo codebase 4 4 evening (1).txt` to diagnose and fix the following observed problems:
+
+**Problem 1: Chat Model Does Not Change**
+* **Symptom:** When I click a preset button (e.g., the one for 'Claude 3.7 Sonnet' or 'Dolphin'), the UI button might visually highlight, but subsequent chat messages sent to the backend still use an incorrect/old model ID (like `allenai/molmo-7b-d:free`) when calling the OpenRouter API.
+* **Evidence:** The AI's own responses sometimes indicate it received malformed input mentioning the wrong model ID (see previous interactions/screenshots like `image_9a7593.png` and `image_9894bb.png`).
+* **Goal:** Clicking a preset button should correctly update the active model ID used for subsequent chat API calls, so the selected model is actually used.
+
+**Problem 2: Preset Saving Fails**
+* **Symptom:** When I right-click a preset button, open the modal, select a model from the dropdown list, and click 'Save', a toast notification appears with the error "Failed to update preset. Please try again."
+* **Goal:** Saving a model assignment to a preset slot via the modal should work correctly and update the user's saved presets without error.
+
+**Instructions for Agent:**
+
+1.  **Analyze:** Examine the provided codebase (`gloriamundo codebase 4 4 evening (1).txt`).
+2.  **Diagnose:** Find the root causes for both Problem 1 (incorrect model usage despite preset clicks) and Problem 2 (preset saving API failure).
+    * For Problem 1, focus on the state management flow: how is the active model ID set when a preset button is clicked (`ModelPresets.tsx`, `useModelPresets.tsx`, `useModelSelection.tsx`) and how is it read/used by the chat function (`useChat.ts`) when calling the backend (`server/routes.ts`)? Identify the disconnect.
+    * For Problem 2, investigate the `PUT /api/user/presets` endpoint in `server/routes.ts`, the `mutate` function in `useModelPresets.tsx`, and the associated database update logic (`storage.updateUserPresets`). Why is the API call failing?
+3.  **Implement Fixes:** Apply the necessary code changes across all relevant files (frontend hooks, components, backend routes, storage logic) to resolve both problems.
+4.  **Confirm:** After applying the fixes, please confirm what changes were made and restart the application.
+
+Please focus on making the preset selection reliably control the model used for chat requests and ensuring preset assignments can be saved successfully.

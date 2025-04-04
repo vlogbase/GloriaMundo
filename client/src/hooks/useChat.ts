@@ -80,6 +80,7 @@ export const useChat = () => {
     try {
       // Log request details for debugging
       console.log(`Sending message to conversation ${conversationId} with model: ${selectedModel}`);
+      console.log(`Current customOpenRouterModelId: ${customOpenRouterModelId}`);
       
       // Prepare model metadata
       let modelMetadata = {};
@@ -88,17 +89,24 @@ export const useChat = () => {
       if (selectedModel === 'openrouter' && customOpenRouterModelId) {
         console.log(`Using OpenRouter model: ${customOpenRouterModelId}`);
         modelMetadata = { modelId: customOpenRouterModelId };
+      } else if (selectedModel === 'openrouter' && !customOpenRouterModelId) {
+        // Safety catch - if we're set to OpenRouter but don't have a model ID, log warning
+        console.warn("OpenRouter selected but no model ID provided");
       }
+      
+      const payload = { 
+        content: content, // Use content directly - no parsing needed
+        image,
+        modelType: selectedModel,
+        ...modelMetadata // Include any model-specific metadata
+      };
+      
+      console.log("Request payload:", payload);
       
       const response = await apiRequest(
         "POST",
         `/api/conversations/${conversationId}/messages`,
-        { 
-          content: content, // Use content directly - no parsing needed
-          image,
-          modelType: selectedModel,
-          ...modelMetadata // Include any model-specific metadata
-        }
+        payload
       );
       
       // Extract response data

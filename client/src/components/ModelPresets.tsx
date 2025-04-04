@@ -109,15 +109,21 @@ export const ModelPresets = () => {
     // Get the model ID associated with this preset
     const modelId = presets[presetKey];
     
+    console.log(`Attempting to activate preset ${presetKey}...`);
+    console.log(`Preset contains model ID: ${modelId}`);
+    
     // If a valid model ID was returned from the preset
     if (modelId) {
       // First activate the preset in our context (this sets the activePreset state)
       activatePreset(presetKey);
       
-      // Set the selected model type to 'openrouter' 
+      // Important: We must set the selected model type to 'openrouter' first
+      // so the chat component knows to use the custom model ID
+      console.log(`Setting selected model to 'openrouter'`);
       setSelectedModel('openrouter');
       
-      // Also update the custom OpenRouter model ID
+      // Now set the specific model ID to use with OpenRouter
+      console.log(`Setting custom OpenRouter model ID to: ${modelId}`);
       setCustomOpenRouterModelId(modelId);
       
       console.log(`Activated preset ${presetKey} with model: ${modelId}`);
@@ -131,21 +137,40 @@ export const ModelPresets = () => {
   const handleFreeTierClick = () => {
     // If no free tier model is active, open the selection dialog
     if (!activeFreeTierModel) {
+      console.log('No active free tier model, opening selection dialog');
       setFreeTierSearchTerm(''); // Clear search when opening dialog
       setIsFreeTierDialogOpen(true);
     } else {
       // If a free tier model is already active, use it again
+      console.log(`Re-using active free tier model: ${activeFreeTierModel}`);
+      
+      // Same order as preset selection - first set model type to openrouter
+      console.log(`Setting selected model to 'openrouter'`);
       setSelectedModel('openrouter');
+      
+      // Then set the specific model ID
+      console.log(`Setting custom OpenRouter model ID to: ${activeFreeTierModel}`);
       setCustomOpenRouterModelId(activeFreeTierModel);
+      
       console.log(`Activated free tier model: ${activeFreeTierModel}`);
     }
   };
   
   // Handle selecting a free model
   const handleSelectFreeModel = (modelId: string) => {
+    console.log(`User selected free model: ${modelId}`);
+    
+    // Update the active free tier model in our context
     activateFreeTierModel(modelId);
+    
+    // Same order as preset selection - first set model type to openrouter
+    console.log(`Setting selected model to 'openrouter'`);
     setSelectedModel('openrouter');
+    
+    // Then set the specific model ID
+    console.log(`Setting custom OpenRouter model ID to: ${modelId}`);
     setCustomOpenRouterModelId(modelId);
+    
     console.log(`Selected free tier model: ${modelId}`);
     setIsFreeTierDialogOpen(false);
   };
@@ -153,8 +178,15 @@ export const ModelPresets = () => {
   // Save selected model to preset
   const saveModelToPreset = () => {
     if (dialogSelectedModelId) {
+      console.log(`Saving model ${dialogSelectedModelId} to preset ${currentPresetKey}`);
+      
+      // This will call the mutate function in useModelPresets which formats the data for the API
       assignModelToPreset(currentPresetKey, dialogSelectedModelId);
+      
+      console.log('Closing dialog after saving preset');
       setIsDialogOpen(false);
+    } else {
+      console.warn('No model selected for preset');
     }
   };
   
