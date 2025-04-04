@@ -2,7 +2,7 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// User schema updated for Google authentication
+// User schema updated for Google authentication and model presets
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   googleId: text("google_id").unique(),
@@ -10,6 +10,11 @@ export const users = pgTable("users", {
   name: text("name"),
   avatarUrl: text("avatar_url"),
   creditBalance: integer("credit_balance").default(0).notNull(),
+  // Model preset fields - storing model IDs for each preset slot
+  preset1ModelId: text("preset1_model_id"),
+  preset2ModelId: text("preset2_model_id"),
+  preset3ModelId: text("preset3_model_id"),
+  preset4ModelId: text("preset4_model_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

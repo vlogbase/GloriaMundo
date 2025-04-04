@@ -8,6 +8,7 @@ import Privacy from "@/pages/Privacy";
 import Contact from "@/pages/Contact";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ModelSelectionProvider } from "@/hooks/useModelSelection";
+import { ModelPresetsProvider } from "@/hooks/useModelPresets";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
 
@@ -29,14 +30,16 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark">
         <ModelSelectionProvider>
-          <div className="flex flex-col min-h-screen">
-            <div className="flex-grow">
-              <Router />
+          <ModelPresetsProvider>
+            <div className="flex flex-col min-h-screen">
+              <div className="flex-grow">
+                <Router />
+              </div>
+              <Footer />
             </div>
-            <Footer />
-          </div>
-          <CookieConsent />
-          <Toaster />
+            <CookieConsent />
+            <Toaster />
+          </ModelPresetsProvider>
         </ModelSelectionProvider>
       </ThemeProvider>
     </QueryClientProvider>

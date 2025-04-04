@@ -149,6 +149,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get user model presets
+  app.get('/api/user/presets', isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const userPresets = await db.query.users.findFirst({
+        where: eq(users.id, userId),
+        columns: {
+          preset1ModelId: true,
+          preset2ModelId: true,
+          preset3ModelId: true,
+          preset4ModelId: true
+        }
+      });
+      
+      if (!userPresets) {
+        return res.status(404).json({ message: "User presets not found" });
+      }
+      
+      res.json({
+        preset1: userPresets.preset1ModelId,
+        preset2: userPresets.preset2ModelId,
+        preset3: userPresets.preset3ModelId,
+        preset4: userPresets.preset4ModelId
+      });
+    } catch (error) {
+      console.error("Error getting user presets:", error);
+      res.status(500).json({ message: "Error getting user presets" });
+    }
+  });
+  
+  // Update user model presets
+  app.put('/api/user/presets', isAuthenticated, async (req, res) => {
+    try {
+      const presetsSchema = z.object({
+        preset1: z.string().nullable(),
+        preset2: z.string().nullable(),
+        preset3: z.string().nullable(),
+        preset4: z.string().nullable()
+      });
+      
+      const validationResult = presetsSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid preset data", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const userId = req.user!.id;
+      const { preset1, preset2, preset3, preset4 } = validationResult.data;
+      
+      await db.update(users).set({
+        preset1ModelId: preset1,
+        preset2ModelId: preset2,
+        preset3ModelId: preset3,
+        preset4ModelId: preset4,
+        updatedAt: new Date()
+      }).where(eq(users.id, userId));
+      
+      res.json({
+        preset1,
+        preset2,
+        preset3,
+        preset4
+      });
+    } catch (error) {
+      console.error("Error updating user presets:", error);
+      res.status(500).json({ message: "Error updating user presets" });
+    }
+  });
+  
   // Logout route
   app.get('/api/auth/logout', (req, res) => {
     req.logout((err) => {

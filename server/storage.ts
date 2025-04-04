@@ -4,11 +4,21 @@ import {
   messages, type Message, type InsertMessage
 } from "@shared/schema";
 
+// Define the user presets interface
+export interface UserPresets {
+  preset1ModelId: string | null;
+  preset2ModelId: string | null;
+  preset3ModelId: string | null;
+  preset4ModelId: string | null;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getUserPresets(userId: number): Promise<UserPresets>;
+  updateUserPresets(userId: number, presets: UserPresets): Promise<UserPresets>;
   
   // Conversation methods
   getConversations(): Promise<Conversation[]>;
@@ -51,15 +61,71 @@ export class MemStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+      (user) => user.email === username,
     );
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.userId++;
-    const user: User = { ...insertUser, id };
+    const now = new Date();
+    
+    const user: User = {
+      id,
+      googleId: insertUser.googleId || null,
+      email: insertUser.email || null,
+      name: insertUser.name || null,
+      avatarUrl: insertUser.avatarUrl || null,
+      creditBalance: 0,
+      preset1ModelId: null,
+      preset2ModelId: null,
+      preset3ModelId: null,
+      preset4ModelId: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    
     this.users.set(id, user);
     return user;
+  }
+  
+  // User preset methods
+  async getUserPresets(userId: number): Promise<UserPresets> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    return {
+      preset1ModelId: user.preset1ModelId || null,
+      preset2ModelId: user.preset2ModelId || null,
+      preset3ModelId: user.preset3ModelId || null,
+      preset4ModelId: user.preset4ModelId || null
+    };
+  }
+  
+  async updateUserPresets(userId: number, presets: UserPresets): Promise<UserPresets> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    const updatedUser = {
+      ...user,
+      preset1ModelId: presets.preset1ModelId,
+      preset2ModelId: presets.preset2ModelId,
+      preset3ModelId: presets.preset3ModelId,
+      preset4ModelId: presets.preset4ModelId,
+      updatedAt: new Date()
+    };
+    
+    this.users.set(userId, updatedUser);
+    
+    return {
+      preset1ModelId: updatedUser.preset1ModelId,
+      preset2ModelId: updatedUser.preset2ModelId,
+      preset3ModelId: updatedUser.preset3ModelId,
+      preset4ModelId: updatedUser.preset4ModelId
+    };
   }
   
   // Conversation methods

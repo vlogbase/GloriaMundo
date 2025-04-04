@@ -7,6 +7,7 @@ import { useModelSelection } from "@/hooks/useModelSelection";
 import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
 import { ModelType } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/models";
+import { ModelPresets } from "@/components/ModelPresets";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -318,29 +319,34 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
           
           {/* OpenRouter models dropdown */}
           {selectedModel === 'openrouter' && (
-            <div className="mb-3">
-              <Select
-                value={selectedModelId || undefined}
-                onValueChange={(value) => setSelectedModelId(value)}
-                disabled={isLoading || modelsLoading}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={modelsLoading ? "Loading models..." : "Select a model"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                  {models.length === 0 && !modelsLoading && (
-                    <SelectItem value="none" disabled>
-                      No models available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="mb-3">
+                <Select
+                  value={selectedModelId || undefined}
+                  onValueChange={(value) => setSelectedModelId(value)}
+                  disabled={isLoading || modelsLoading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={modelsLoading ? "Loading models..." : "Select a model"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                    {models.length === 0 && !modelsLoading && (
+                      <SelectItem value="none" disabled>
+                        No models available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Model presets */}
+              <ModelPresets />
+            </>
           )}
         </TooltipProvider>
         
