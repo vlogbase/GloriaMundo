@@ -33,41 +33,44 @@ async function main() {
     
     // Create users table
     await migrationClient.unsafe(`
+      DROP TABLE IF EXISTS "users" CASCADE;
       CREATE TABLE IF NOT EXISTS "users" (
         "id" serial PRIMARY KEY,
-        "googleId" varchar(255),
-        "email" varchar(255),
+        "google_id" varchar(255) UNIQUE,
+        "email" varchar(255) UNIQUE,
         "name" varchar(255),
-        "avatarUrl" text,
-        "creditBalance" integer DEFAULT 0,
-        "createdAt" timestamp DEFAULT now(),
-        "updatedAt" timestamp DEFAULT now()
+        "avatar_url" text,
+        "credit_balance" integer DEFAULT 0 NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
       );
     `);
     console.log("Users table created");
     
     // Create conversations table
     await migrationClient.unsafe(`
+      DROP TABLE IF EXISTS "conversations" CASCADE;
       CREATE TABLE IF NOT EXISTS "conversations" (
         "id" serial PRIMARY KEY,
-        "userId" integer REFERENCES "users"("id"),
+        "user_id" integer REFERENCES "users"("id"),
         "title" varchar(255) NOT NULL,
-        "createdAt" timestamp DEFAULT now(),
-        "updatedAt" timestamp DEFAULT now()
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
       );
     `);
     console.log("Conversations table created");
     
     // Create messages table
     await migrationClient.unsafe(`
+      DROP TABLE IF EXISTS "messages" CASCADE;
       CREATE TABLE IF NOT EXISTS "messages" (
         "id" serial PRIMARY KEY,
-        "conversationId" integer REFERENCES "conversations"("id") ON DELETE CASCADE,
+        "conversation_id" integer REFERENCES "conversations"("id") ON DELETE CASCADE NOT NULL,
         "role" varchar(50) NOT NULL,
         "content" text NOT NULL,
         "image" text,
         "citations" jsonb,
-        "createdAt" timestamp DEFAULT now()
+        "created_at" timestamp DEFAULT now() NOT NULL
       );
     `);
     console.log("Messages table created");
