@@ -34,6 +34,13 @@ export interface ModelOption {
 export interface OpenRouterModel {
   id: string;
   name: string;
+  context_length?: number;
+  pricing?: {
+    prompt?: number;
+    completion?: number;
+    request?: number;
+  };
+  isFree?: boolean;
 }
 
 export interface PerplexityResponse {

@@ -6,20 +6,31 @@ import { cookieUtils } from '@/lib/utils';
 interface ModelSelectionContextType {
   selectedModel: ModelType;
   setSelectedModel: (model: ModelType) => void;
+  customOpenRouterModelId: string | null;
+  setCustomOpenRouterModelId: (modelId: string | null) => void;
 }
 
 const ModelSelectionContext = createContext<ModelSelectionContextType | undefined>(undefined);
 
 const MODEL_SELECTION_COOKIE = 'gloriamodel';
+const OPENROUTER_MODEL_COOKIE = 'openroutermodel';
 
 export const ModelSelectionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [selectedModel, setSelectedModelState] = useState<ModelType>(DEFAULT_MODEL);
+  const [customOpenRouterModelId, setCustomOpenRouterModelIdState] = useState<string | null>(null);
 
-  // Load saved preference from cookie on mount
+  // Load saved preferences from cookies on mount
   useEffect(() => {
+    // Load selected model type
     const savedModel = cookieUtils.get<ModelType>(MODEL_SELECTION_COOKIE);
-    if (savedModel && ['reasoning', 'search', 'multimodal'].includes(savedModel)) {
+    if (savedModel && ['reasoning', 'search', 'multimodal', 'openrouter'].includes(savedModel)) {
       setSelectedModelState(savedModel);
+    }
+    
+    // Load custom OpenRouter model ID if there is one
+    const savedOpenRouterModelId = cookieUtils.get<string>(OPENROUTER_MODEL_COOKIE);
+    if (savedOpenRouterModelId) {
+      setCustomOpenRouterModelIdState(savedOpenRouterModelId);
     }
   }, []);
 
@@ -27,9 +38,23 @@ export const ModelSelectionProvider: React.FC<{ children: ReactNode }> = ({ chil
     setSelectedModelState(model);
     cookieUtils.set(MODEL_SELECTION_COOKIE, model, { expires: 365 }); // Save preference for 1 year
   };
+  
+  const setCustomOpenRouterModelId = (modelId: string | null) => {
+    setCustomOpenRouterModelIdState(modelId);
+    if (modelId) {
+      cookieUtils.set(OPENROUTER_MODEL_COOKIE, modelId, { expires: 365 }); // Save preference for 1 year
+    } else {
+      cookieUtils.remove(OPENROUTER_MODEL_COOKIE);
+    }
+  };
 
   return (
-    <ModelSelectionContext.Provider value={{ selectedModel, setSelectedModel }}>
+    <ModelSelectionContext.Provider value={{ 
+      selectedModel, 
+      setSelectedModel,
+      customOpenRouterModelId,
+      setCustomOpenRouterModelId 
+    }}>
       {children}
     </ModelSelectionContext.Provider>
   );

@@ -297,10 +297,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const data = await response.json();
       
-      // Extract just the id and name of each model for the frontend
+      // Extract more information including pricing from each model for the frontend
       const models = data.data.map((model: any) => ({
         id: model.id,
-        name: model.name
+        name: model.name,
+        pricing: model.pricing || null,
+        context_length: model.context_length || null,
+        isFree: model.pricing && 
+                (parseFloat(model.pricing.prompt) === 0 || !model.pricing.prompt) && 
+                (parseFloat(model.pricing.completion) === 0 || !model.pricing.completion) &&
+                (parseFloat(model.pricing.request) === 0 || !model.pricing.request)
       }));
 
       return res.json(models);
