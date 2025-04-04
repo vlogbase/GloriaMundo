@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useModelPresets } from '@/hooks/useModelPresets';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
+import { useModelSelection } from '@/hooks/useModelSelection';
 import {
   Dialog,
   DialogContent,
@@ -64,10 +65,15 @@ export const ModelPresets = () => {
   };
   
   // Handle click to activate a preset
+  const { setSelectedModel } = useModelSelection();
+  
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     const modelId = activatePreset(presetKey);
     if (modelId) {
       setSelectedModelId(modelId);
+      // Always set the model type to 'openrouter' when a preset is activated
+      // This will be used in the ChatInput component for message handling
+      setSelectedModel('openrouter');
     }
   };
   

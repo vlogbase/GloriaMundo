@@ -34,7 +34,6 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
-  const [showOpenRouterModels, setShowOpenRouterModels] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -279,76 +278,8 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
           </DialogContent>
         </Dialog>
         
-        <TooltipProvider>
-          <ToggleGroup 
-            type="single" 
-            value={selectedModel}
-            onValueChange={(value) => {
-              if (value) {
-                setSelectedModel(value as ModelType);
-                // If selecting OpenRouter, show model dropdown
-                if (value === 'openrouter') {
-                  setShowOpenRouterModels(true);
-                } else {
-                  setShowOpenRouterModels(false);
-                }
-              }
-            }}
-            className="flex justify-center mb-3 space-x-1 select-none"
-          >
-            {Object.values(MODEL_OPTIONS).map((model) => (
-              <Tooltip key={model.id}>
-                <TooltipTrigger asChild>
-                  <ToggleGroupItem 
-                    value={model.id} 
-                    aria-label={model.name}
-                    className={`flex items-center gap-1 px-3 py-1 text-sm 
-                    ${selectedModel === model.id ? 'bg-primary/20 border-primary/50 ring-1 ring-primary/30 font-medium' : 'hover:bg-primary/10'}
-                    transition-all duration-200`}
-                  >
-                    {getModelIcon(model.id as ModelType)}
-                    <span>{model.name}</span>
-                  </ToggleGroupItem>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>{model.description}</p>
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </ToggleGroup>
-          
-          {/* OpenRouter models dropdown */}
-          {selectedModel === 'openrouter' && (
-            <>
-              <div className="mb-3">
-                <Select
-                  value={selectedModelId || undefined}
-                  onValueChange={(value) => setSelectedModelId(value)}
-                  disabled={isLoading || modelsLoading}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={modelsLoading ? "Loading models..." : "Select a model"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                    {models.length === 0 && !modelsLoading && (
-                      <SelectItem value="none" disabled>
-                        No models available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {/* Model presets */}
-              <ModelPresets />
-            </>
-          )}
-        </TooltipProvider>
+        {/* Model presets - the new single control for model selection */}
+        <ModelPresets />
         
         {imagePreviewUrl && (
           <div className="mb-3 relative rounded-lg overflow-hidden border border-border">
