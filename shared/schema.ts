@@ -2,16 +2,23 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// User schema remains unchanged for authentication
+// User schema updated for Google authentication
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  googleId: text("google_id").unique(),
+  email: text("email").unique(),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+  creditBalance: integer("credit_balance").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+  googleId: true,
+  email: true,
+  name: true,
+  avatarUrl: true,
 });
 
 // Conversation schema for chat history

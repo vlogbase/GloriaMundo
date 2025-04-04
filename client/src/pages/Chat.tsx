@@ -8,6 +8,7 @@ import { Welcome } from "@/components/Welcome";
 import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
+import { AuthButtons } from "@/components/AuthButtons";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useTheme } from "@/hooks/use-theme";
@@ -186,11 +187,15 @@ export default function Chat() {
               GloriaMundo
             </h1>
           </Link>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <AuthButtons />
+            <ThemeToggle />
+          </div>
         </div>
         
-        {/* Desktop theme toggle - top right */}
-        <div className="hidden md:block absolute top-4 right-4 z-10">
+        {/* Desktop header controls - top right */}
+        <div className="hidden md:flex absolute top-4 right-4 z-10 items-center gap-3">
+          <AuthButtons />
           <ThemeToggle />
         </div>
         

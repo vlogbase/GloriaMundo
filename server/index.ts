@@ -3,6 +3,12 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import session from "express-session";
 import cookieParser from "cookie-parser";
+import pgSession from "connect-pg-simple";
+import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { db } from "./db";
+import { users } from "../shared/schema";
+import { eq } from "drizzle-orm";
 
 const app = express();
 // Increase the request size limit for JSON and URL encoded data to handle larger images
@@ -11,15 +17,83 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(cookieParser());
 
-// Set up session middleware
+// Create PostgreSQL session store
+const PgSessionStore = pgSession(session);
+
+// Set up session middleware with PostgreSQL store
 app.use(session({
+  store: new PgSessionStore({
+    conObject: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    },
+    tableName: 'session', // Default session table name
+    createTableIfMissing: true
+  }),
   secret: process.env.SESSION_SECRET || 'gloriamundo-secret-key',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
   cookie: { 
     secure: process.env.NODE_ENV === 'production', 
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     sameSite: 'lax'
+  }
+}));
+
+// Initialize passport and restore authentication state from session
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport serialization/deserialization
+passport.serializeUser((user: any, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id: number, done) => {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id)
+    });
+    done(null, user || false);
+  } catch (err) {
+    done(err, false);
+  }
+});
+
+// Set up Google OAuth strategy
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID || '',
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  callbackURL: '/auth/google/callback',
+  scope: ['profile', 'email']
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Check if user exists
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.googleId, profile.id)
+    });
+
+    if (existingUser) {
+      // User exists, return the user
+      return done(null, existingUser);
+    }
+
+    // Create new user
+    const email = profile.emails && profile.emails[0] ? profile.emails[0].value : '';
+    const avatarUrl = profile.photos && profile.photos[0] ? profile.photos[0].value : '';
+    
+    const [newUser] = await db.insert(users)
+      .values({
+        googleId: profile.id,
+        email,
+        name: profile.displayName,
+        avatarUrl
+      })
+      .returning();
+
+    return done(null, newUser);
+  } catch (error) {
+    return done(error as Error);
   }
 }));
 

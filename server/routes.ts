@@ -1,11 +1,39 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertMessageSchema } from "@shared/schema";
+import passport from "passport";
+import { db } from "./db";
+import { users } from "../shared/schema";
+import { eq } from "drizzle-orm";
 
 type ModelType = "reasoning" | "search" | "multimodal";
 import 'express-session';
+
+// Type for authenticated user in Request
+declare global {
+  namespace Express {
+    interface User {
+      id: number;
+      googleId: string;
+      email: string;
+      name: string;
+      avatarUrl: string;
+      creditBalance: number;
+      createdAt: Date;
+      updatedAt: Date;
+    }
+  }
+}
+
+// Middleware to check if user is authenticated
+const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ message: "Unauthorized" });
+};
 
 // Define special types for multimodal API integration
 type MultimodalContentItem = 
@@ -87,7 +115,46 @@ const MODEL_CONFIGS = {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
-
+  
+  // Google OAuth Routes
+  app.get('/auth/google', 
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+  );
+  
+  app.get('/auth/google/callback', 
+    passport.authenticate('google', { 
+      failureRedirect: '/login-error',
+      successRedirect: '/'
+    })
+  );
+  
+  // Get current user info
+  app.get('/api/auth/me', (req, res) => {
+    if (req.isAuthenticated()) {
+      // Return user data without sensitive info
+      const user = req.user;
+      res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        creditBalance: user.creditBalance
+      });
+    } else {
+      res.status(401).json({ message: "Not authenticated" });
+    }
+  });
+  
+  // Logout route
+  app.get('/api/auth/logout', (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ message: "Error during logout", error: err.message });
+      }
+      res.redirect('/');
+    });
+  });
+  
   // Debug API keys route
   app.get("/api/debug/keys", (req, res) => {
     // Safe way to check if keys exist without exposing them
@@ -282,9 +349,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.userConversations = [];
       }
       
+      // Set userId if user is authenticated
+      const userId = req.isAuthenticated() ? (req.user as Express.User).id : null;
+      
       const conversation = await storage.createConversation({ 
         title, 
-        userId: null // No authentication yet
+        userId
       });
       
       // Add conversation ID to user session
