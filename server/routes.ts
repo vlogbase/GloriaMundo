@@ -1245,13 +1245,17 @@ Format your responses using markdown for better readability and organization.`;
           })
         );
 
+        // For OpenRouter, we need to use the exact modelId as the model parameter
         const payload = {
-          model: modelConfig.modelName,
+          model: modelConfig.apiProvider === "openrouter" ? modelId : modelConfig.modelName,
           messages,
           temperature: 0.2,
           top_p: 0.9,
           stream: shouldStream
         };
+        
+        // Log the actual model being used for debugging
+        console.log('Using model for OpenRouter API call:', payload.model);
 
         // Log the API request details for debugging (without exposing the full key)
         const keyLength = modelConfig.apiKey.length;
