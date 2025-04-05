@@ -2,6 +2,8 @@ import { readFile } from 'fs/promises';
 import { parse as parseHtml } from 'node-html-parser';
 import { DocumentChunk, Document, InsertDocumentChunk } from '@shared/schema';
 import { pipeline } from '@xenova/transformers';
+import { MongoClient, ObjectId } from 'mongodb';
+import { OpenAIClient, KeyCredential } from '@azure/openai';
 import { storage } from './storage';
 
 // Simple extractors for different file types
@@ -119,6 +121,41 @@ const docxExtractor = {
 const MAX_CHUNK_SIZE = 1000;
 // Maximum overlap between chunks
 const CHUNK_OVERLAP = 200;
+
+// Azure OpenAI configuration
+const AZURE_OPENAI_KEY = process.env.AZURE_OPENAI_KEY || '';
+const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT || '';
+const AZURE_OPENAI_DEPLOYMENT_NAME = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || '';
+
+// MongoDB configuration
+const MONGODB_URI = process.env.MONGODB_URI || '';
+const MONGODB_DB_NAME = 'gloriamundo';
+const MONGODB_DOCUMENTS_COLLECTION = 'documents';
+const MONGODB_CHUNKS_COLLECTION = 'document_chunks';
+
+// Initialize Azure OpenAI client
+const openAIClient = new OpenAIClient(
+  AZURE_OPENAI_ENDPOINT, 
+  new KeyCredential(AZURE_OPENAI_KEY)
+);
+
+// Initialize MongoDB client
+let mongoClient: MongoClient | null = null;
+let isMongoConnected = false;
+
+async function getMongoClient(): Promise<MongoClient> {
+  if (!mongoClient) {
+    mongoClient = new MongoClient(MONGODB_URI);
+    await mongoClient.connect();
+    isMongoConnected = true;
+    console.log('Connected to MongoDB');
+  } else if (!isMongoConnected) {
+    await mongoClient.connect();
+    isMongoConnected = true;
+    console.log('Reconnected to MongoDB');
+  }
+  return mongoClient;
+}
 
 /**
  * Process document and store it
