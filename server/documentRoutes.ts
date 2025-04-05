@@ -7,6 +7,16 @@ import { isAuthenticated } from './routes';
 import { storage } from './storage';
 import { processDocument, findSimilarChunks, formatContextForPrompt } from './documentProcessor';
 
+// Helper function to check if a file exists
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath, fsSync.constants.F_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.diskStorage({
@@ -63,22 +73,10 @@ export function registerDocumentRoutes(app: Express) {
       }
       
       // Ensure user has access to this document
-      const userId = req.isAuthenticated() ? (req.user as Express.User).id : undefined;
-      if (document.userId !== userId) {
+      const userId = req.user ? (req.user as any).id : undefined;
+      if (!userId || document.userId !== userId) {
+        console.log(`Access denied: document userId ${document.userId}, request userId ${userId}`);
         return res.status(403).json({ message: 'Access denied' });
-      }
-      
-      // For text files, we can send the content directly
-      if (document.fileType.startsWith('text/')) {
-        // Read the document content from the file system
-        const filePath = path.join(process.cwd(), 'temp', `document-${documentId}`);
-        try {
-          const content = await fs.readFile(filePath, 'utf-8');
-          return res.send(content);
-        } catch (err) {
-          console.error(`Error reading document ${documentId}:`, err);
-          return res.status(500).json({ message: 'Could not read document content' });
-        }
       }
       
       // For non-text files, we'll inform the client that preview is not available
@@ -88,10 +86,37 @@ export function registerDocumentRoutes(app: Express) {
         return res.send('DOCX preview not available. Please download the file to view it.');
       }
       
+      // For text files, we can send the content directly
+      if (document.fileType.startsWith('text/')) {
+        // Try multiple approaches to ensure we find the file
+        try {
+          // First, check if content is stored in the document object directly
+          if (document.content && document.content.length > 0) {
+            console.log(`Serving document ${documentId} content from memory`);
+            return res.send(document.content);
+          }
+          
+          // Then try to read from the temp file
+          const tempFilePath = path.join(process.cwd(), 'temp', `document-${documentId}`);
+          if (await fileExists(tempFilePath)) {
+            console.log(`Serving document ${documentId} content from temp file`);
+            const content = await fs.readFile(tempFilePath, 'utf-8');
+            return res.send(content);
+          }
+          
+          // If we've reached here, we couldn't find the content
+          console.error(`Document ${documentId} content not found in storage or filesystem`);
+          return res.status(404).json({ message: 'Document content not found' });
+        } catch (readErr) {
+          console.error(`Error reading document ${documentId}:`, readErr);
+          return res.status(500).json({ message: `Error reading document: ${readErr.message}` });
+        }
+      }
+      
       return res.status(415).json({ message: 'Preview not available for this file type' });
     } catch (err) {
       console.error('Error getting document content:', err);
-      return res.status(500).json({ message: 'Failed to get document content' });
+      return res.status(500).json({ message: `Failed to get document content: ${err.message}` });
     }
   });
   
@@ -110,13 +135,21 @@ export function registerDocumentRoutes(app: Express) {
       }
       
       // Ensure user has access to this document
-      const userId = req.isAuthenticated() ? (req.user as Express.User).id : undefined;
-      if (document.userId !== userId) {
+      const userId = req.user ? (req.user as any).id : undefined;
+      if (!userId || document.userId !== userId) {
+        console.log(`Access denied: document userId ${document.userId}, request userId ${userId}`);
         return res.status(403).json({ message: 'Access denied' });
       }
       
       // Read the document content from the file system
       const filePath = path.join(process.cwd(), 'temp', `document-${documentId}`);
+      
+      // Check if file exists before attempting to read it
+      if (!(await fileExists(filePath))) {
+        console.error(`Document file not found: ${filePath}`);
+        return res.status(404).json({ message: 'Document file not found' });
+      }
+      
       try {
         // Set content disposition and type headers for download
         res.setHeader('Content-Disposition', `attachment; filename="${document.fileName}"`);
@@ -124,14 +157,22 @@ export function registerDocumentRoutes(app: Express) {
         
         // Stream the file to the client
         const fileStream = fsSync.createReadStream(filePath);
+        fileStream.on('error', (streamErr) => {
+          console.error(`Error streaming document ${documentId}:`, streamErr);
+          // Only send error if headers haven't been sent yet
+          if (!res.headersSent) {
+            res.status(500).json({ message: 'Error streaming document' });
+          }
+        });
+        
         fileStream.pipe(res);
       } catch (err) {
         console.error(`Error reading document ${documentId}:`, err);
-        return res.status(500).json({ message: 'Could not download document' });
+        return res.status(500).json({ message: `Could not download document: ${err instanceof Error ? err.message : 'Unknown error'}` });
       }
     } catch (err) {
       console.error('Error downloading document:', err);
-      return res.status(500).json({ message: 'Failed to download document' });
+      return res.status(500).json({ message: `Failed to download document: ${err instanceof Error ? err.message : 'Unknown error'}` });
     }
   });
   
