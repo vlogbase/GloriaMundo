@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -49,30 +51,36 @@ export function CreditsPage() {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [paypalButtonsLoaded, setPaypalButtonsLoaded] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [paypalClientId, setPaypalClientId] = useState<string>("");
+  const [paypalClientId, setPaypalClientId] = useState<string>(import.meta.env.VITE_PAYPAL_CLIENT_ID || "");
+  const [customAmount, setCustomAmount] = useState<string>("");
+  const [customAmountError, setCustomAmountError] = useState<string>("");
+  const [isCustomAmount, setIsCustomAmount] = useState<boolean>(false);
   
-  // Fetch PayPal client ID from server config
-  useEffect(() => {
-    async function fetchPaypalClientId() {
-      try {
-        const response = await fetch('/api/config');
-        if (response.ok) {
-          const config = await response.json();
-          if (config.paypalClientId) {
-            setPaypalClientId(config.paypalClientId);
-          } else {
-            console.error('PayPal Client ID not found in config');
-          }
+  // Fetch PayPal client ID from server as fallback
+  const fetchPaypalClientId = async () => {
+    try {
+      const response = await fetch('/api/config');
+      if (response.ok) {
+        const config = await response.json();
+        if (config.paypalClientId) {
+          setPaypalClientId(config.paypalClientId);
         } else {
-          console.error('Failed to fetch config');
+          console.error('PayPal Client ID not found in config');
         }
-      } catch (error) {
-        console.error('Error fetching PayPal client ID:', error);
+      } else {
+        console.error('Failed to fetch config');
       }
+    } catch (error) {
+      console.error('Error fetching PayPal client ID:', error);
     }
-    
-    fetchPaypalClientId();
-  }, []);
+  };
+  
+  // If environment variable is not available, fetch from server as fallback
+  useEffect(() => {
+    if (!paypalClientId) {
+      fetchPaypalClientId();
+    }
+  }, [paypalClientId]);
   
   // Query for credit packages
   const { data: packages, isLoading: isLoadingPackages } = useQuery<CreditPackage[]>({
@@ -127,6 +135,41 @@ export function CreditsPage() {
       toast({
         title: 'Error',
         description: `Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    }
+  });
+  
+  // Mutation for creating a custom amount PayPal order
+  const createCustomOrderMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      const response = await fetch('/api/paypal/create-custom-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      
+      const data = await response.json();
+      return {
+        orderId: data.orderId,
+        credits: data.credits
+      };
+    },
+    onSuccess: (data) => {
+      setOrderId(data.orderId);
+      setSelectedPackage('custom');
+      renderPayPalButtons(data.orderId);
+    },
+    onError: (error) => {
+      setIsCustomAmount(false);
+      toast({
+        title: 'Error',
+        description: `Failed to create custom order: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
     }
@@ -354,6 +397,90 @@ const handleCaptureOrder = (data: any = null) => {
               ))}
             </div>
             
+            {/* Custom Amount Input Section */}
+            {!orderId && (
+              <Card className="mt-8">
+                <CardHeader>
+                  <CardTitle>Custom Amount</CardTitle>
+                  <CardDescription>
+                    Enter a custom USD amount to purchase credits
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="custom-amount">Amount (USD)</Label>
+                      <div className="flex items-center">
+                        <span className="mr-2 text-muted-foreground">$</span>
+                        <Input
+                          id="custom-amount"
+                          type="number"
+                          min="5.00"
+                          step="0.01"
+                          placeholder="Enter amount (min $5.00)"
+                          value={customAmount}
+                          onChange={(e) => {
+                            setCustomAmount(e.target.value);
+                            // Clear error when user starts typing
+                            if (customAmountError) setCustomAmountError("");
+                          }}
+                          className={customAmountError ? "border-red-500" : ""}
+                        />
+                      </div>
+                      {customAmountError && (
+                        <p className="text-red-500 text-sm">{customAmountError}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground mt-2">
+                        (+ $0.40 transaction fee applies)
+                      </p>
+                    </div>
+                    
+                    <div className="bg-muted/40 p-3 rounded-md">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Amount:</span>
+                        <span>${customAmount ? parseFloat(customAmount).toFixed(2) : "0.00"}</span>
+                      </div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>Fee:</span>
+                        <span>$0.40</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between font-medium">
+                        <span>Total:</span>
+                        <span>${customAmount ? (parseFloat(customAmount) + 0.40).toFixed(2) : "0.40"}</span>
+                      </div>
+                      <div className="text-sm mt-3">
+                        <span className="text-muted-foreground">You'll receive: </span>
+                        {customAmount ? (parseFloat(customAmount) * 10000).toLocaleString() : "0"} credits
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    className="w-full"
+                    onClick={() => {
+                      // Validate amount
+                      const amount = parseFloat(customAmount);
+                      if (isNaN(amount) || amount < 5) {
+                        setCustomAmountError("Please enter a valid amount of at least $5.00");
+                        return;
+                      }
+                      
+                      // Process custom amount
+                      setIsCustomAmount(true);
+                      
+                      // Create a custom amount order
+                      createCustomOrderMutation.mutate(amount);
+                    }}
+                    disabled={!customAmount || createOrderMutation.isPending || createCustomOrderMutation.isPending}
+                  >
+                    {createCustomOrderMutation.isPending ? <Spinner /> : 'Top Up Custom Amount'}
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+            
             {orderId && selectedPackage && (
               <Card className="mt-8">
                 <CardHeader>
@@ -367,14 +494,24 @@ const handleCaptureOrder = (data: any = null) => {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <div className="font-medium">
-                          {packages?.find(p => p.id === selectedPackage)?.name}
+                          {selectedPackage === 'custom' 
+                            ? 'Custom Amount' 
+                            : packages?.find(p => p.id === selectedPackage)?.name}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {packages?.find(p => p.id === selectedPackage)?.credits.toLocaleString()} credits
+                          {selectedPackage === 'custom'
+                            ? isCustomAmount && customAmount 
+                              ? `${(parseFloat(customAmount) * 10000).toLocaleString()} credits` 
+                              : ''
+                            : packages?.find(p => p.id === selectedPackage)?.credits.toLocaleString() + ' credits'}
                         </div>
                       </div>
                       <div className="font-bold text-xl">
-                        ${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}
+                        {selectedPackage === 'custom'
+                          ? isCustomAmount && customAmount 
+                            ? `$${parseFloat(customAmount).toFixed(2)}` 
+                            : '$0.00'
+                          : `$${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}`}
                       </div>
                     </div>
                     
@@ -382,15 +519,27 @@ const handleCaptureOrder = (data: any = null) => {
                     
                     <div className="flex justify-between text-sm">
                       <span>Subtotal</span>
-                      <span>${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}</span>
+                      <span>
+                        {selectedPackage === 'custom'
+                          ? isCustomAmount && customAmount 
+                            ? `$${parseFloat(customAmount).toFixed(2)}` 
+                            : '$0.00'
+                          : `$${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}`}
+                      </span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span>Fees</span>
-                      <span>$0.00</span>
+                      <span>{selectedPackage === 'custom' ? '$0.40' : '$0.00'}</span>
                     </div>
                     <div className="flex justify-between font-medium mt-3">
                       <span>Total</span>
-                      <span>${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}</span>
+                      <span>
+                        {selectedPackage === 'custom'
+                          ? isCustomAmount && customAmount 
+                            ? `$${(parseFloat(customAmount) + 0.40).toFixed(2)}` 
+                            : '$0.40'
+                          : `$${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}`}
+                      </span>
                     </div>
                   </div>
                   

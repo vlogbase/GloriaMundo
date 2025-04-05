@@ -14,6 +14,7 @@ import {
   CREDIT_PACKAGES,
   calculateCreditsToCharge,
   createPayPalOrder,
+  createCustomAmountPayPalOrder,
   capturePayPalOrder,
   verifyPayPalWebhook,
   CREDIT_VALUE_USD
@@ -573,6 +574,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating PayPal order:", error);
       res.status(500).json({ 
         message: "Failed to create PayPal order", 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+  
+  // Create a PayPal order for a custom amount
+  app.post("/api/paypal/create-custom-order", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPayPalConfigValid) {
+        return res.status(500).json({ message: "PayPal is not properly configured" });
+      }
+      
+      const customAmountSchema = z.object({
+        amount: z.number().min(5) // Minimum $5.00
+      });
+      
+      const validationResult = customAmountSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid amount. Minimum is $5.00", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const { amount } = validationResult.data;
+      const result = await createCustomAmountPayPalOrder(amount);
+      
+      res.json({ 
+        orderId: result.orderId,
+        credits: result.credits
+      });
+    } catch (error) {
+      console.error("Error creating custom PayPal order:", error);
+      res.status(500).json({ 
+        message: "Failed to create custom PayPal order", 
         error: error instanceof Error ? error.message : String(error) 
       });
     }

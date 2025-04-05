@@ -4,6 +4,9 @@ const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
 const PAYPAL_MODE = process.env.PAYPAL_MODE || 'sandbox'; // Default to sandbox for safety
 const PAYPAL_WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID;
+const PAYPAL_API_URL = PAYPAL_MODE === 'live' 
+  ? 'https://api.paypal.com'
+  : 'https://api.sandbox.paypal.com';
 
 export const isPayPalConfigValid = !!(PAYPAL_CLIENT_ID && PAYPAL_SECRET);
 
@@ -81,6 +84,30 @@ export function calculateCreditsToCharge(
 }
 
 /**
+ * Get PayPal access token
+ */
+async function getPayPalAccessToken(): Promise<string> {
+  const response = await fetch(`${PAYPAL_API_URL}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Accept-Language': 'en_US',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64')}`
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get PayPal access token: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+/**
  * Create a PayPal order for a credit package
  */
 export async function createPayPalOrder(packageId: string): Promise<string> {
@@ -91,11 +118,13 @@ export async function createPayPalOrder(packageId: string): Promise<string> {
   }
   
   try {
-    const response = await fetch('https://api.sandbox.paypal.com/v2/checkout/orders', {
+    const accessToken = await getPayPalAccessToken();
+    
+    const response = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64')}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: JSON.stringify({
         intent: 'CAPTURE',
@@ -106,7 +135,14 @@ export async function createPayPalOrder(packageId: string): Promise<string> {
           },
           description: `${creditPackage.name} - ${creditPackage.description}`,
           custom_id: creditPackage.id
-        }]
+        }],
+        application_context: {
+          brand_name: "GloriaMundo",
+          shipping_preference: "NO_SHIPPING",
+          user_action: "PAY_NOW",
+          return_url: "https://gloriamundo.com/credits/success",
+          cancel_url: "https://gloriamundo.com/credits/cancel",
+        }
       })
     });
 
@@ -125,6 +161,100 @@ export async function createPayPalOrder(packageId: string): Promise<string> {
 }
 
 /**
+ * Create a PayPal order for a custom amount
+ */
+export async function createCustomAmountPayPalOrder(amount: number): Promise<{
+  orderId: string;
+  credits: number;
+}> {
+  if (!isPayPalConfigValid) {
+    throw new Error("PayPal configuration is invalid");
+  }
+
+  if (amount < 5) {
+    throw new Error("Minimum amount is $5.00");
+  }
+
+  // Calculate credits (10,000 credits per $1)
+  const credits = Math.floor(amount * 10000);
+  
+  // Add payment processing fee
+  const fee = 0.40;
+  const totalAmount = amount + fee;
+
+  try {
+    const accessToken = await getPayPalAccessToken();
+    
+    const response = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            amount: {
+              currency_code: "USD",
+              value: totalAmount.toFixed(2),
+              breakdown: {
+                item_total: {
+                  currency_code: "USD",
+                  value: amount.toFixed(2)
+                },
+                handling: {
+                  currency_code: "USD",
+                  value: fee.toFixed(2)
+                }
+              }
+            },
+            description: `Custom Credit Purchase - ${credits.toLocaleString()} credits`,
+            custom_id: `custom_${amount}_${credits}`,
+            items: [
+              {
+                name: "Credits",
+                description: `${credits.toLocaleString()} GloriaMundo credits`,
+                quantity: "1",
+                unit_amount: {
+                  currency_code: "USD",
+                  value: amount.toFixed(2)
+                },
+                category: "DIGITAL_GOODS"
+              }
+            ]
+          },
+        ],
+        application_context: {
+          brand_name: "GloriaMundo",
+          shipping_preference: "NO_SHIPPING",
+          user_action: "PAY_NOW",
+          return_url: "https://gloriamundo.com/credits/success",
+          cancel_url: "https://gloriamundo.com/credits/cancel",
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorResponse = await response.json();
+      console.error("PayPal create custom order error:", errorResponse);
+      throw new Error(
+        errorResponse.message || "Failed to create PayPal order"
+      );
+    }
+
+    const order = await response.json();
+    return {
+      orderId: order.id,
+      credits: credits
+    };
+  } catch (error) {
+    console.error("PayPal create custom order error:", error);
+    throw error;
+  }
+}
+
+/**
  * Capture a PayPal order
  */
 export async function capturePayPalOrder(orderId: string): Promise<{
@@ -134,11 +264,13 @@ export async function capturePayPalOrder(orderId: string): Promise<{
   captureId?: string;
 }> {
   try {
-    const response = await fetch(`https://api.sandbox.paypal.com/v2/checkout/orders/${orderId}/capture`, {
+    const accessToken = await getPayPalAccessToken();
+    
+    const response = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders/${orderId}/capture`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64')}`
+        'Authorization': `Bearer ${accessToken}`
       }
     });
 
@@ -156,17 +288,59 @@ export async function capturePayPalOrder(orderId: string): Promise<{
     }
     
     // Extract custom_id from the response
-    const packageId = data.purchase_units[0]?.custom_id;
-    const creditPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+    const customId = data.purchase_units[0]?.custom_id;
+    
+    // Check if this is a custom amount purchase
+    if (customId && customId.startsWith('custom_')) {
+      try {
+        // Format is 'custom_amount_credits'
+        const parts = customId.split('_');
+        if (parts.length === 3) {
+          const credits = parseInt(parts[2]);
+          if (!isNaN(credits)) {
+            return {
+              success: true,
+              packageId: customId,
+              credits: credits,
+              captureId: data.id
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing custom amount:', err);
+      }
+    }
+    
+    // Handle regular package purchases
+    const creditPackage = CREDIT_PACKAGES.find(pkg => pkg.id === customId);
     
     if (!creditPackage) {
-      console.error(`Unknown package ID in PayPal response: ${packageId}`);
+      console.error(`Unknown package ID in PayPal response: ${customId}`);
+      // Try to extract credits from the description as fallback
+      try {
+        const description = data.purchase_units[0]?.description || '';
+        const creditsMatch = description.match(/(\d+,*\d*) credits/i);
+        if (creditsMatch && creditsMatch[1]) {
+          const credits = parseInt(creditsMatch[1].replace(/,/g, ''));
+          if (!isNaN(credits)) {
+            return {
+              success: true,
+              packageId: customId,
+              credits: credits,
+              captureId: data.id
+            };
+          }
+        }
+      } catch (e) {
+        console.error('Error extracting credits from description:', e);
+      }
+      
       return { success: true, captureId: data.id };
     }
     
     return {
       success: true,
-      packageId,
+      packageId: customId,
       credits: creditPackage.credits,
       captureId: data.id
     };

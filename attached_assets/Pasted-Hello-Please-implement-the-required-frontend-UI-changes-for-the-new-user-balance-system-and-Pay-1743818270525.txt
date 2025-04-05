@@ -1,0 +1,29 @@
+Hello! Please implement the required **frontend UI** changes for the new user balance system and PayPal integration. We will refine the backend logic later. Assume balances are stored internally as integers representing hundredths of a cent ($0.0001 USD).
+
+**1. Expose PayPal Client ID via Vite Env Variable (Required for Buttons):**
+    a. Ensure `client/src/pages/CreditsPage.tsx` reads the PayPal Sandbox Client ID using `import.meta.env.VITE_PAYPAL_CLIENT_ID` and passes it correctly to the `PayPalScriptProvider` options. (Remind me, the user, about the `VITE_PAYPAL_CLIENT_ID` secret/`.env` variable).
+
+**2. Update Credits Page UI & Logic (`client/src/pages/CreditsPage.tsx`):**
+    * **Display USD, Not Credits:** Remove abstract "credits". Display balances and package values directly in USD (e.g., "$5.00"). Format the main balance display precisely (e.g., `$${(balance / 10000).toFixed(4)} Available Balance`). Update package descriptions (e.g., "$5 Package").
+    * **Add Transaction Fee Display:** Below package selection/custom input, clearly display the fee: `<span>(+ $0.40 transaction fee applies)</span>`.
+    * **Add Custom Amount Input:** Add an `<Input type="number" ... />` field for custom USD amount (min $5.00, add validation). Include a separate "Top Up Custom Amount" button.
+    * **Update PayPal Button Logic:** Modify the `createOrder` prop logic for `PayPalButtons`: Determine `baseAmount` (package or custom), calculate `finalAmount = baseAmount + 0.40`. Call backend `POST /api/paypal/create-order` sending `finalAmount` and currency ('USD'). The `onApprove` logic calling `POST /api/paypal/capture-order` remains the same for now.
+
+**3. Implement Header Balance Display & Link (Likely `AuthButtons.tsx` or Header Component):**
+    * **Conditional Display:** Only show if user is logged in.
+    * **Formatting:** Retrieve integer `creditBalance`. Calculate `dollarAmount = creditBalance / 10000;`. Display as `$${dollarAmount.toFixed(4)}`.
+    * **Low Balance Styling:** If `dollarAmount < 0.50`, apply red text color and append " Top Up".
+    * **Link:** Make this element clickable, navigating to `/credits`.
+    * **Positioning:** Place near dark mode switch / user menu.
+
+**4. Implement Sidebar Login Prompt (Relevant Sidebar Component):**
+    * **Conditional Rendering:** If user is **not** logged in, hide the chat history list and instead display "Login for chat history" and the "Sign in with Google" button.
+
+**5. Implement Footer Link (Footer Component):**
+    * Add a link to `/credits` (text: "Account / Credits"). Render only if user is logged in.
+
+**6. Implement Preset Button Gating (`client/src/components/ModelPresets.tsx`):**
+    * **Access Balance:** Ensure component accesses the user's integer `creditBalance` state.
+    * **Conditional Rendering/Behavior:** For the 5 main preset buttons: If user is logged in AND `creditBalance <= 0`: Render button as disabled/visually distinct (e.g., padlock icon overlay). Change `onClick` to navigate to `/credits`. Otherwise, enable normal preset activation behavior.
+
+Please implement all these frontend UI changes across the relevant components (`CreditsPage.tsx`, `AuthButtons.tsx`/Header, Sidebar, Footer, `ModelPresets.tsx`), ensuring conditional rendering based on login status and balance works correctly. Focus only on the frontend implementation for now.
