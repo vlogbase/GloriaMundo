@@ -82,7 +82,12 @@ export const Sidebar = ({
               }}
               className="my-1 cursor-pointer"
             />
-            <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
+            <Button 
+              variant="outline" 
+              className="p-2 w-full flex justify-center"
+              onClick={onNewConversation} 
+              title="New Chat"
+            >
               <Plus className="h-5 w-5" />
             </Button>
             {/* Toggle expand button moved closer to top controls */}
@@ -162,8 +167,14 @@ export const Sidebar = ({
           />
           {/* Collapse button on desktop */}
           <div className="flex space-x-1">
-            <Button variant="ghost" size="icon" onClick={onNewConversation} title="New Chat">
-              <Plus className="h-5 w-5" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onNewConversation} 
+              className="flex items-center gap-1 rounded-md font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Chat</span>
             </Button>
             <Button 
               variant="ghost" 

@@ -138,11 +138,17 @@ export default function Chat() {
   }, [messages, showPwaBanner]);
   
   const handleSendMessage = async (content: string, image?: string) => {
-    if (!activeConversationId) {
-      const newConversation = await createConversation("New Conversation");
-      await sendMessage(newConversation.id, content, image);
-    } else {
-      await sendMessage(activeConversationId, content, image);
+    try {
+      if (!activeConversationId) {
+        // Create a new conversation and send the first message
+        const newConversation = await createConversation("New Conversation");
+        await sendMessage(newConversation.id, content, image);
+      } else {
+        // Send to existing conversation
+        await sendMessage(activeConversationId, content, image);
+      }
+    } catch (error) {
+      console.error('Error in handleSendMessage:', error);
     }
   };
   
@@ -224,10 +230,14 @@ export default function Chat() {
             </div>
           ) : (
             <>
+
+              
               {messages.map((message: Message, index: number) => {
                 // Add refs to both user and AI messages
                 const isLatestAssistantMessage = index === messages.length - 1 && message.role === 'assistant';
                 const isLatestUserMessage = index === messages.length - 2 && message.role === 'user' && isLoadingResponse;
+                
+
                 
                 // Determine which ref to use
                 let refToUse = undefined;

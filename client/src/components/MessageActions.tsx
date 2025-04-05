@@ -167,28 +167,37 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
         </Button>
       </div>
       
-      {/* Model and token information for assistant messages */}
+      {/* Model and token information for assistant messages - Improved formatting */}
       {message.role === "assistant" && message.modelId && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-1">
-                <span>{getShortModelName(message.modelId)}</span>
-                {(message.promptTokens || message.completionTokens) && (
-                  <span className="opacity-70">
-                    {message.promptTokens && `in: ${message.promptTokens}`}
-                    {message.promptTokens && message.completionTokens && " · "}
-                    {message.completionTokens && `out: ${message.completionTokens}`}
-                  </span>
-                )}
+              <div className="text-xs text-muted-foreground mt-2 px-2 py-1 bg-muted/40 rounded-md">
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold">{getShortModelName(message.modelId)}</span>
+                  {(message.promptTokens || message.completionTokens) && (
+                    <span className="opacity-80 flex gap-2">
+                      {message.promptTokens && (
+                        <span className="border-r pr-2">
+                          {message.promptTokens} in
+                        </span>
+                      )}
+                      {message.completionTokens && (
+                        <span>
+                          {message.completionTokens} out
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
               </div>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>Model: {message.modelId}</p>
+              <p className="font-medium">Model: {message.modelId}</p>
               {message.promptTokens && <p>Input tokens: {message.promptTokens}</p>}
               {message.completionTokens && <p>Output tokens: {message.completionTokens}</p>}
               {message.promptTokens && message.completionTokens && 
-                <p>Total tokens: {message.promptTokens + message.completionTokens}</p>}
+                <p className="font-medium">Total tokens: {message.promptTokens + message.completionTokens}</p>}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

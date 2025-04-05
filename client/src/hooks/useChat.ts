@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
 
 export const useChat = () => {
+  // Initialize with an empty array but only on the first render
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
@@ -90,6 +91,7 @@ export const useChat = () => {
       citations: null,
     };
     
+    // Ensure user message is always added to the messages array
     setMessages((prev) => [...prev, tempUserMessage]);
     setIsLoadingResponse(true);
 
