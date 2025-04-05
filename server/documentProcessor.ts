@@ -49,7 +49,7 @@ async function checkVectorSearchCapability(collection: any): Promise<boolean> {
         $vectorSearch: {
           index: "vector_index", 
           path: "embedding",
-          queryVector: Array(1536).fill(0), // Sample vector
+          queryVector: Array(3072).fill(0), // Sample vector with 3072 dimensions for text-embedding-3-large
           numCandidates: 1,
           limit: 1
         }
@@ -190,6 +190,7 @@ export async function processDocument(params: {
               await mongoChunksCollection.insertOne({
                 id: chunk.id.toString(),
                 documentId: document.id.toString(),
+                userId: userId ? userId.toString() : null, // Add userId for vector search filtering
                 content: chunks[i],
                 chunkIndex: i,
                 embedding: "", // Empty for now
@@ -373,6 +374,7 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
         await mongoChunksCollection.insertOne({
           id: chunk.id.toString(),
           documentId: document.id.toString(),
+          userId: document.userId ? document.userId.toString() : null, // Add userId for vector search filtering
           content: chunks[i],
           chunkIndex: i,
           // Empty embedding for now, will be updated later
@@ -851,7 +853,7 @@ export async function generateEmbedding(text: string): Promise<string> {
 /**
  * Find similar chunks for a query
  */
-export async function findSimilarChunks(query: string, conversationId: number, limit = 5): Promise<{
+export async function findSimilarChunks(query: string, conversationId: number, limit = 5, userId?: number): Promise<{
   chunks: DocumentChunk[];
   documents: Record<number, Document>;
 }> {
@@ -906,11 +908,21 @@ export async function findSimilarChunks(query: string, conversationId: number, l
           // Use MongoDB Atlas vectorSearch for optimal performance
           console.log('Using MongoDB Atlas vectorSearch for similarity search');
           try {
+            // Build match conditions
+            const matchConditions: any = { 
+              documentId: { $in: documentIds.map(id => id.toString()) },
+              embedding: { $type: "string", $ne: "" }
+            };
+            
+            // Add userId filter if provided for better security and performance
+            if (userId) {
+              matchConditions.userId = userId.toString();
+              console.log(`Adding userId filter: ${userId}`);
+            }
+            
             mongoResults = await chunksCollection.aggregate([
-              // Match only chunks from our documents
-              { $match: { documentId: { $in: documentIds.map(id => id.toString()) } } },
-              // Only consider chunks with non-empty embeddings
-              { $match: { embedding: { $type: "string", $ne: "" } } },
+              // Match only chunks from our documents with appropriate filtering
+              { $match: matchConditions },
               // Perform vector search
               {
                 $vectorSearch: {
@@ -960,16 +972,31 @@ export async function findSimilarChunks(query: string, conversationId: number, l
           
           // For large collections, use a more efficient sampling strategy
           let chunks: any[] = [];
+          
+          // Build query conditions
+          const queryConditions: any = {
+            embedding: { $type: "string", $ne: "" }
+          };
+          
+          // Add userId filter if provided for security and better performance
+          if (userId) {
+            queryConditions.userId = userId.toString();
+            console.log(`Adding userId filter to fallback query: ${userId}`);
+          }
+          
           if (chunkCount > 1000) {
             console.log("Large chunk collection detected, using efficient sampling strategy");
             
             // Stratified sampling - get some chunks from each document to ensure coverage
             const samplesPerDoc = Math.min(20, Math.ceil(100 / documentIds.length));
             const samplePromises = documentIds.map(async (docId) => {
-              return chunksCollection.find({
-                documentId: docId.toString(),
-                embedding: { $type: "string", $ne: "" }
-              }).limit(samplesPerDoc).toArray();
+              // Merge document-specific conditions with the query conditions
+              const docQueryConditions = {
+                ...queryConditions,
+                documentId: docId.toString()
+              };
+              
+              return chunksCollection.find(docQueryConditions).limit(samplesPerDoc).toArray();
             });
             
             const docSamples = await Promise.all(samplePromises);
@@ -977,10 +1004,14 @@ export async function findSimilarChunks(query: string, conversationId: number, l
             console.log(`Sampled ${chunks.length} chunks across ${documentIds.length} documents`);
           } else {
             // For smaller collections, we can process all chunks with embeddings
-            chunks = await chunksCollection.find({
-              documentId: { $in: documentIds.map(id => id.toString()) },
-              embedding: { $type: "string", $ne: "" }
-            }).limit(200).toArray(); // Increased limit for better results while still being efficient
+            // Merge document IDs with the query conditions
+            const fullQueryConditions = {
+              ...queryConditions,
+              documentId: { $in: documentIds.map(id => id.toString()) }
+            };
+            
+            chunks = await chunksCollection.find(fullQueryConditions)
+              .limit(200).toArray(); // Increased limit for better results while still being efficient
           }
           
           console.log(`Found ${chunks.length} chunks in MongoDB for the specified documents`);
