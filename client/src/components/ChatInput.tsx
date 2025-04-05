@@ -231,13 +231,13 @@ export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatIn
       return;
     }
     
-    // Maximum file size (10MB)
-    const maxSize = 10 * 1024 * 1024;
+    // Maximum file size (50MB)
+    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
       toast({
         variant: "destructive",
         title: "File too large",
-        description: "Maximum file size is 10MB."
+        description: "Maximum file size is 50MB."
       });
       
       // Reset the file input
@@ -492,7 +492,7 @@ export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatIn
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Upload document (PDF, DOCX, TXT)</p>
+                  <p>Upload document (PDF, DOCX, TXT) - Max 50MB</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

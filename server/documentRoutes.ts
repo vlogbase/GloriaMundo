@@ -26,7 +26,7 @@ const upload = multer({
     }
   }),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB file size limit
+    fileSize: 50 * 1024 * 1024, // 50MB file size limit
   },
   fileFilter: function (req, file, cb) {
     // Allow only certain file types
@@ -87,8 +87,7 @@ export function registerDocumentRoutes(app: Express) {
         // We'll respond immediately to prevent timeouts, then process in the background
         if (file.size > 5 * 1024 * 1024) { // 5MB threshold for very large files
           // Start processing in the background without waiting
-          const fs = require('fs');
-          const buffer = fs.readFileSync(file.path);
+          const buffer = await fs.readFile(file.path);
           
           const documentPromise = processDocument({
             buffer,
@@ -136,8 +135,7 @@ export function registerDocumentRoutes(app: Express) {
       }
       
       // For regular files, process normally
-      const fs = require('fs');
-      const buffer = fs.readFileSync(file.path);
+      const buffer = await fs.readFile(file.path);
       
       const document = await processDocument({
         buffer,
