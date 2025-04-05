@@ -387,6 +387,9 @@ export class MemStorage implements IStorage {
       content: data.content || "", // Default to empty string if only image is provided
       image: data.image || null,
       citations: data.citations ?? null,
+      modelId: data.modelId || null,
+      promptTokens: data.promptTokens || null,
+      completionTokens: data.completionTokens || null,
       createdAt: now
     };
     
@@ -416,6 +419,9 @@ export class MemStorage implements IStorage {
       content: updates.content !== undefined ? updates.content : message.content,
       image: updates.image !== undefined ? updates.image : message.image,
       citations: updates.citations !== undefined ? updates.citations : message.citations,
+      modelId: updates.modelId !== undefined ? updates.modelId : message.modelId,
+      promptTokens: updates.promptTokens !== undefined ? updates.promptTokens : message.promptTokens,
+      completionTokens: updates.completionTokens !== undefined ? updates.completionTokens : message.completionTokens,
     };
     
     this.messages.set(id, updatedMessage);

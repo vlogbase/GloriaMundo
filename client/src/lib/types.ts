@@ -18,6 +18,9 @@ export interface Message {
   content: string;
   image?: string; // Base64 encoded image data
   citations: string[] | null;
+  modelId?: string; // The model used for this message
+  promptTokens?: number; // Number of tokens in the prompt
+  completionTokens?: number; // Number of tokens in the completion
   createdAt: string;
 }
 

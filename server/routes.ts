@@ -1044,6 +1044,7 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: "...", // Placeholder content that will be replaced
           citations: null,
+          modelId: modelId || modelType, // Store the model ID
         });
         
         // Send the initial user message to setup the UI
@@ -1692,6 +1693,7 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: " ", // Use space instead of empty string to pass validation
           citations: null,
+          modelId: modelId || modelType, // Store the model ID
         });
         
         if (shouldStream) {
@@ -1752,8 +1754,14 @@ Format your responses using markdown for better readability and organization.`;
           }
           
           // Update the stored message with the full content
+          // Estimate token usage for streaming response
+          const promptTokens = Math.ceil(JSON.stringify(messages).length / 4);
+          const completionTokens = Math.ceil(assistantContent.length / 4);
+          
           await storage.updateMessage(assistantMessage.id, {
-            content: assistantContent
+            content: assistantContent,
+            promptTokens: promptTokens,
+            completionTokens: completionTokens
           });
           
           // Get the updated message
@@ -1853,7 +1861,10 @@ Format your responses using markdown for better readability and organization.`;
             // Update the assistant message with the content
             await storage.updateMessage(assistantMessage.id, {
               content: messageContent,
-              citations: messageCitations
+              citations: messageCitations,
+              modelId: modelId,
+              promptTokens: data.usage?.prompt_tokens,
+              completionTokens: data.usage?.completion_tokens
             });
             
             // Get the updated message
@@ -2034,6 +2045,7 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: errorMessage,
           citations: null,
+          modelId: modelId || modelType,
         });
         
         // Log the error response we're sending
