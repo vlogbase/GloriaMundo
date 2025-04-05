@@ -308,11 +308,28 @@ export const useChat = () => {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to upload document");
+        // Handle different error cases more gracefully
+        if (response.status === 404) {
+          throw new Error("Conversation not found. Please create a new chat and try again.");
+        }
+        
+        // Try to parse error JSON, but handle cases where it might fail
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to upload document");
+        } catch (jsonError) {
+          // If JSON parsing fails, use status text
+          throw new Error(`Upload failed: ${response.statusText || response.status}`);
+        }
       }
       
-      return await response.json();
+      try {
+        return await response.json();
+      } catch (jsonError) {
+        console.error("Error parsing success response:", jsonError);
+        // Return a default success object if JSON parsing fails
+        return { success: true, message: "Document uploaded successfully" };
+      }
     } catch (error) {
       console.error("Error uploading document:", error);
       throw error;

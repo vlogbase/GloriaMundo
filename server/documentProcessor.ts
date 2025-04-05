@@ -10,28 +10,108 @@ import { storage } from './storage';
 
 const pdfExtractor = {
   async extract(buffer: Buffer): Promise<string> {
-    console.log("PDF extraction is temporarily simplified");
-    // Basic text extraction - not ideal, but works for plain text embedded in PDFs
-    const text = buffer.toString('utf-8');
-    // Extract any readable text content
-    const textContent = text.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return textContent || "This PDF couldn't be fully processed. Consider converting to text format for better results.";
+    try {
+      // First attempt to use a more robust approach
+      // Since we can't rely on external PDF libraries that may be incompatible,
+      // we'll improve our basic extraction
+      
+      // Convert buffer to string and look for text markers
+      const text = buffer.toString('utf-8');
+      
+      // Extract text between common PDF text markers
+      // This is a simplified approach but better than just raw buffer conversion
+      let extractedText = '';
+      
+      // Look for text objects in the PDF
+      const textObjects = text.match(/BT[\s\S]+?ET/g);
+      if (textObjects && textObjects.length > 0) {
+        // Extract text from text objects
+        extractedText = textObjects.join(' ');
+        
+        // Clean up the text
+        extractedText = extractedText
+          .replace(/\\\(/g, '(')
+          .replace(/\\\)/g, ')')
+          .replace(/\\(\d{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8)))
+          .replace(/BT|ET|Tj|TJ|\[|\]|\(|\)|<|>|\/F\d+\s\d+(\.\d+)?\sTf/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      // If we couldn't extract anything meaningful, fall back to basic extraction
+      if (!extractedText || extractedText.length < 100) {
+        console.log("PDF basic extraction fallback");
+        // Extract any readable text content
+        extractedText = text.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      return extractedText || "This PDF couldn't be fully processed. Consider converting to text format for better results.";
+    } catch (error) {
+      console.error("Error in PDF extraction:", error);
+      return "Error extracting text from PDF. Please try a different format.";
+    }
   }
 };
 
 const docxExtractor = {
   async extract(buffer: Buffer): Promise<string> {
-    console.log("DOCX extraction is temporarily simplified");
-    // Extract any readable text content from the raw buffer
-    // This is not ideal but can extract some text from simple DOCX files
-    const text = buffer.toString('utf-8');
-    // Clean up the output
-    const textContent = text.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return textContent || "This DOCX couldn't be fully processed. Consider converting to text format for better results.";
+    try {
+      console.log("DOCX extraction - improved version");
+      
+      // DOCX files are ZIP archives with XML content
+      // Extract document.xml content which contains the main text
+      
+      // First, try to locate the document content
+      const text = buffer.toString('utf-8');
+      
+      // Look for word/document.xml content
+      let documentXml = '';
+      
+      // Try to find document.xml content between markers
+      const docXmlMatch = text.match(/<w:document[\s\S]+?<\/w:document>/);
+      if (docXmlMatch) {
+        documentXml = docXmlMatch[0];
+      }
+      
+      let extractedText = '';
+      
+      if (documentXml) {
+        // Extract text from w:t tags (which contain the actual text in DOCX)
+        const textMatches = documentXml.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g);
+        
+        if (textMatches && textMatches.length > 0) {
+          // Extract content between tags and join with spaces
+          extractedText = textMatches
+            .map(match => {
+              // Extract content between <w:t> and </w:t>
+              const content = match.replace(/<w:t[^>]*>([\s\S]*?)<\/w:t>/, '$1');
+              return content
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&apos;/g, "'");
+            })
+            .join(' ');
+        }
+      }
+      
+      // If we couldn't extract good content, fall back to basic extraction
+      if (!extractedText || extractedText.length < 100) {
+        console.log("DOCX basic extraction fallback");
+        // Extract any readable text content from the raw buffer
+        extractedText = text.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      return extractedText || "This DOCX couldn't be fully processed. Consider converting to text format for better results.";
+    } catch (error) {
+      console.error("Error in DOCX extraction:", error);
+      return "Error extracting text from DOCX. Please try a different format.";
+    }
   }
 };
 

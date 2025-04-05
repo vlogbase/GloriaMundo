@@ -49,13 +49,23 @@ const upload = multer({
 export function registerDocumentRoutes(app: Express) {
   // Route to upload a document
   app.post('/api/conversations/:id/documents', upload.single('document'), async (req: Request, res: Response) => {
+    let filePath: string | undefined;
+    
     try {
       const conversationId = parseInt(req.params.id);
+      
+      // Handle NaN conversationId
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ message: 'Invalid conversation ID' });
+      }
+      
       const file = req.file;
       
       if (!file) {
         return res.status(400).json({ message: 'No file uploaded' });
       }
+      
+      filePath = file.path;
       
       // Get user ID if authenticated
       const userId = req.isAuthenticated() ? (req.user as Express.User).id : undefined;
@@ -63,10 +73,10 @@ export function registerDocumentRoutes(app: Express) {
       // Check if conversation exists
       const conversation = await storage.getConversation(conversationId);
       if (!conversation) {
-        // Clean up the uploaded file
-        await fs.unlink(file.path);
         return res.status(404).json({ message: 'Conversation not found' });
       }
+      
+      console.log(`Processing document: ${file.originalname} (${file.mimetype}, ${file.size} bytes) for conversation ${conversationId}`);
       
       // Process the document
       const document = await processDocument(
@@ -78,8 +88,7 @@ export function registerDocumentRoutes(app: Express) {
         userId
       );
       
-      // Clean up the uploaded file after processing
-      await fs.unlink(file.path);
+      console.log(`Document processed successfully. Document ID: ${document.id}`);
       
       // Return the document
       res.status(201).json({
@@ -99,6 +108,16 @@ export function registerDocumentRoutes(app: Express) {
         message: 'Failed to upload document',
         error: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      // Clean up the uploaded file in the finally block to ensure it happens
+      if (filePath) {
+        try {
+          await fs.unlink(filePath);
+          console.log(`Temporary file deleted: ${filePath}`);
+        } catch (unlinkError) {
+          console.error('Error deleting temporary file:', unlinkError);
+        }
+      }
     }
   });
   
