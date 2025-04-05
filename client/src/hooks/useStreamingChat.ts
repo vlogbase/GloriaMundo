@@ -73,12 +73,28 @@ export const useStreamingChat = () => {
 
     setIsLoadingResponse(true);
     
-    // Create a temporary user message to show immediately
+    // Check if content accidentally contains stringified JSON data (from previous bug)
+    // This could happen from previously stored messages in this format
+    let messageContent = content;
+    try {
+      // Try to parse the content as JSON
+      const parsed = JSON.parse(content);
+      // If it parses and has a content field, use that instead
+      if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+        console.log('Found legacy JSON-stringified message content, extracting inner content');
+        messageContent = parsed.content;
+      }
+    } catch (e) {
+      // Not JSON, use the original content
+      messageContent = content;
+    }
+    
+    // Create a temporary user message to show immediately with cleaned content
     const tempUserMessage: Message = {
       id: Date.now(), // Temporary ID
       conversationId,
       role: "user",
-      content,
+      content: messageContent, // Use cleaned content
       image,
       citations: null,
       createdAt: new Date().toISOString(),
@@ -189,7 +205,7 @@ export const useStreamingChat = () => {
                   streamingMessageRef.current = null;
                   
                   // Fall back to non-streaming request
-                  fallbackToNonStreaming(conversationId, content, image);
+                  fallbackToNonStreaming(conversationId, messageContent, image, content);
                 }
                 break;
                 
@@ -213,7 +229,7 @@ export const useStreamingChat = () => {
             if (streamingMessageRef.current) {
               setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
               streamingMessageRef.current = null;
-              fallbackToNonStreaming(conversationId, content, image);
+              fallbackToNonStreaming(conversationId, messageContent, image, content);
             }
           }
         };
@@ -251,7 +267,7 @@ export const useStreamingChat = () => {
             streamingMessageRef.current = null;
             
             // Fall back to non-streaming request
-            fallbackToNonStreaming(conversationId, content, image);
+            fallbackToNonStreaming(conversationId, messageContent, image, content);
           }
         };
         
@@ -260,7 +276,7 @@ export const useStreamingChat = () => {
       }
       
       // For non-streaming approach (production or non-reasoning models), use regular fetch
-      await fallbackToNonStreaming(conversationId, content, image);
+      await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
       console.error("Error sending message:", error);
@@ -282,7 +298,9 @@ export const useStreamingChat = () => {
   }, [activeConversationId, selectedModel, setLocation, toast]);
   
   // Helper function to handle non-streaming requests
-  const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string) => {
+  const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
+    // originalContent is the raw content before potential JSON parsing
+    const messageContent = content; // Clean content is passed in directly now
     try {
       const response = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
@@ -325,9 +343,13 @@ export const useStreamingChat = () => {
       
       // Update messages with the response data
       setMessages((prev) => {
-        // Find our temporary message and replace it
+        // Find our temporary message and replace it, using either original or parsed content
         const userMsgIndex = prev.findIndex(msg => 
-          msg.role === "user" && msg.content === content && msg.conversationId === conversationId
+          msg.role === "user" && 
+          (msg.content === content || 
+           msg.content === messageContent || 
+           (originalContent && msg.content === originalContent)) && 
+          msg.conversationId === conversationId
         );
         
         if (userMsgIndex === -1) {
