@@ -301,43 +301,100 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     }
   }
   
-  // Generate embeddings for each chunk - but limit processing for large documents
-  const maxEmbeddingChunks = isLargeDocument ? 30 : documentChunks.length;
-  const chunksToEmbed = documentChunks.slice(0, maxEmbeddingChunks);
-  
-  console.log(`Generating embeddings for ${chunksToEmbed.length} chunks (out of ${documentChunks.length} total)`);
-  
-  // Use Promise.all with batching to speed up processing
-  const batchSize = 5;
-  for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
-    const batch = chunksToEmbed.slice(i, i + batchSize);
+  // OPTIMIZATION: Move embedding generation to background process for large docs
+  // This allows the upload to complete quickly while embeddings are processed asynchronously
+  if (documentChunks.length > 20 || isLargeDocument) {
+    console.log(`Document has ${documentChunks.length} chunks - processing embeddings in background`);
     
-    // Process embeddings in parallel for this batch
-    await Promise.all(batch.map(async (chunk) => {
-      try {
-        const embedding = await generateEmbedding(chunk.content);
-        
-        // Update embedding in primary storage
-        await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
-        
-        // Update embedding in MongoDB if available
-        if (mongoChunksCollection) {
-          try {
-            await mongoChunksCollection.updateOne(
-              { id: chunk.id.toString() },
-              { $set: { embedding } }
-            );
-          } catch (mongoUpdateError) {
-            console.error(`Error updating embedding for chunk ${chunk.id} in MongoDB:`, mongoUpdateError);
+    // Start background processing with a small delay to allow request to return
+    setTimeout(() => {
+      (async () => {
+        try {
+          // Only process a subset of chunks for large documents to reduce processing time
+          const maxEmbeddingChunks = isLargeDocument ? 30 : Math.min(100, documentChunks.length);
+          const chunksToEmbed = documentChunks.slice(0, maxEmbeddingChunks);
+          
+          console.log(`Background process: generating embeddings for ${chunksToEmbed.length} chunks (out of ${documentChunks.length} total)`);
+          
+          // Use larger batch size for background processing
+          const batchSize = 10;
+          for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
+            const batch = chunksToEmbed.slice(i, i + batchSize);
+            
+            // Process embeddings in parallel for this batch
+            await Promise.all(batch.map(async (chunk) => {
+              try {
+                const embedding = await generateEmbedding(chunk.content);
+                
+                // Update embedding in primary storage
+                await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+                
+                // Update embedding in MongoDB if available
+                if (mongoChunksCollection) {
+                  try {
+                    await mongoChunksCollection.updateOne(
+                      { id: chunk.id.toString() },
+                      { $set: { embedding } }
+                    );
+                  } catch (mongoUpdateError) {
+                    console.error(`Error updating MongoDB embedding for chunk ${chunk.id}:`, mongoUpdateError);
+                  }
+                }
+              } catch (error) {
+                console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
+              }
+            }));
+            
+            // Log progress less frequently
+            if (i % (batchSize * 2) === 0 || i + batchSize >= chunksToEmbed.length) {
+              console.log(`Background process: embeddings for ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length} chunks`);
+            }
           }
+          
+          console.log(`Background embedding generation complete for document ${document.id}`);
+        } catch (bgError) {
+          console.error(`Background embedding generation failed:`, bgError);
         }
-      } catch (error) {
-        console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
-      }
-    }));
+      })();
+    }, 100);
     
-    // Log progress
-    console.log(`Processed embeddings for ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length} chunks`);
+    console.log(`Returning document early while embeddings process in the background`);
+  } else {
+    // For small documents, process embeddings immediately
+    console.log(`Small document (${documentChunks.length} chunks) - processing embeddings immediately`);
+    
+    // Use Promise.all with batching to speed up processing
+    const batchSize = 5;
+    for (let i = 0; i < documentChunks.length; i += batchSize) {
+      const batch = documentChunks.slice(i, i + batchSize);
+      
+      // Process embeddings in parallel for this batch
+      await Promise.all(batch.map(async (chunk) => {
+        try {
+          const embedding = await generateEmbedding(chunk.content);
+          
+          // Update embedding in primary storage
+          await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+          
+          // Update embedding in MongoDB if available
+          if (mongoChunksCollection) {
+            try {
+              await mongoChunksCollection.updateOne(
+                { id: chunk.id.toString() },
+                { $set: { embedding } }
+              );
+            } catch (mongoUpdateError) {
+              console.error(`Error updating embedding for chunk ${chunk.id} in MongoDB:`, mongoUpdateError);
+            }
+          }
+        } catch (error) {
+          console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
+        }
+      }));
+      
+      // Log progress
+      console.log(`Processed embeddings for ${Math.min(i + batchSize, documentChunks.length)}/${documentChunks.length} chunks`);
+    }
   }
   
   return documentChunks;
