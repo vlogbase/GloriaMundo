@@ -546,6 +546,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(CREDIT_PACKAGES);
   });
   
+  // Admin route to credit a specific user with a one-time balance
+  // This is for development/testing purposes
+  app.post("/api/credits/admin-credit", async (req, res) => {
+    try {
+      const { email, amount } = req.body;
+      
+      // Validate the request
+      if (!email || !amount) {
+        return res.status(400).json({ message: "Email and amount are required" });
+      }
+      
+      // Find the user by email
+      const usersWithEmail = await pg.query(
+        "SELECT * FROM users WHERE email = $1",
+        [email]
+      );
+      
+      if (usersWithEmail.rows.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const user = usersWithEmail.rows[0];
+      
+      // Convert dollar amount to credits (10,000 credits = $1)
+      const credits = Math.floor(parseFloat(amount) * 10000);
+      
+      // Update the user's balance
+      const updatedUser = await storage.addUserCredits(user.id, credits);
+      
+      return res.json({ 
+        message: `Successfully credited ${amount} dollars to ${email}`,
+        newBalance: updatedUser.creditBalance / 10000
+      });
+    } catch (error) {
+      console.error("Error adding admin credits:", error);
+      return res.status(500).json({ 
+        message: "Failed to add credits", 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+  
   // Create a PayPal order for purchasing credits
   app.post("/api/paypal/create-order", isAuthenticated, async (req, res) => {
     try {
