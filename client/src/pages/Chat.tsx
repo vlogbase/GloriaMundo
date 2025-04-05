@@ -17,6 +17,9 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { Message } from "@/lib/types";
+import { useDocuments } from "@/hooks/useDocuments";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { Document } from "@/hooks/useDocuments";
 
 // Theme toggle component
 const ThemeToggle = () => {
@@ -49,7 +52,9 @@ export default function Chat() {
   // State to track whether to show the PWA install banner
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   
-  // This state is no longer needed as it's handled by useConversations
+  // State for document preview modal
+  const [previewDocument, setPreviewDocument] = useState<Document | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
@@ -78,6 +83,15 @@ export default function Chat() {
     activeConversationId,
     uploadDocument
   } = useChat();
+  
+  // Use the documents hook for document management
+  const {
+    documents,
+    isLoading: isLoadingDocuments,
+    fetchDocuments,
+    deleteDocument,
+    addDocument
+  } = useDocuments(activeConversationId);
   
   // Load conversation when ID changes in URL
   useEffect(() => {
@@ -175,6 +189,30 @@ export default function Chat() {
   
   const handleSuggestionClick = (suggestion: string) => {
     handleSendMessage(suggestion);
+  };
+  
+  // Handler for document uploads
+  const handleDocumentUpload = async (file: File) => {
+    try {
+      // This will create a conversation if needed
+      const result = await uploadDocument(file);
+      
+      // If we have document data in the result, add it to our documents list
+      if (result && result.document) {
+        addDocument(result.document);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Error handling document upload:", error);
+      throw error;
+    }
+  };
+  
+  // Handler for document preview
+  const handlePreviewDocument = (document: Document) => {
+    setPreviewDocument(document);
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -300,7 +338,10 @@ export default function Chat() {
                     ref={refToUse}
                     className={isFirstEverMessage ? 'first-message' : ''}
                   >
-                    <ChatMessage message={message} />
+                    <ChatMessage 
+                      message={message} 
+                      relatedDocuments={message.role === 'user' ? documents : []} 
+                    />
                   </div>
                 );
               })}
@@ -335,12 +376,28 @@ export default function Chat() {
         <ChatInput 
           onSendMessage={handleSendMessage} 
           isLoading={isLoadingResponse}
-          onUploadDocument={uploadDocument}
+          onUploadDocument={handleDocumentUpload}
+          documents={documents}
+          onPreviewDocument={handlePreviewDocument}
         />
       </div>
       
       {/* PWA Install Banner - Show after first AI response */}
       <PwaInstallBanner show={showPwaBanner} />
+      
+      {/* Document Preview Modal */}
+      {previewDocument && (
+        <DocumentPreviewModal 
+          isOpen={isPreviewOpen}
+          documentId={previewDocument.id}
+          fileName={previewDocument.fileName}
+          fileType={previewDocument.fileType}
+          onClose={() => {
+            setIsPreviewOpen(false);
+            setPreviewDocument(null);
+          }}
+        />
+      )}
     </div>
   );
 }

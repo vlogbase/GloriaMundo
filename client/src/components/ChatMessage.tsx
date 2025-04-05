@@ -1,17 +1,23 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Message } from "@/lib/types";
 import { MarkdownRenderer } from "@/lib/markdown";
 import { MessageActions } from "@/components/MessageActions";
 import { formatTime, refreshSkimlinks } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { AdSense } from "@/components/AdSense";
+import { Document } from "@/hooks/useDocuments";
+import { DocumentItem } from "./DocumentItem";
+import { DocumentPreviewModal } from "./DocumentPreviewModal";
 
 interface ChatMessageProps {
   message: Message;
+  relatedDocuments?: Document[];
 }
 
-export const ChatMessage = ({ message }: ChatMessageProps) => {
+export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps) => {
   const isUser = message.role === "user";
+  const [previewDocument, setPreviewDocument] = useState<Document | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   // Use effect to refresh Skimlinks when an AI message is rendered
   useEffect(() => {
@@ -26,6 +32,12 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
     }
   }, [isUser, message.id]);
   
+  // Handler for document preview
+  const handlePreviewDocument = (document: Document) => {
+    setPreviewDocument(document);
+    setIsPreviewOpen(true);
+  };
+  
   return (
     <>
       <motion.div 
@@ -39,6 +51,23 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
             <div className="max-w-[75%]">
               <div className="bg-userBg/30 p-4 rounded-2xl shadow-none">
                 <p>{message.content}</p>
+                
+                {/* Show attached documents with the message if available */}
+                {relatedDocuments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border/30">
+                    {relatedDocuments.map((doc) => (
+                      <DocumentItem
+                        key={doc.id}
+                        id={doc.id}
+                        fileName={doc.fileName}
+                        fileType={doc.fileType}
+                        fileSize={doc.fileSize}
+                        onPreview={() => handlePreviewDocument(doc)}
+                        showRemove={false}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="text-xs text-muted-foreground text-right mt-1 mr-1">
                 {formatTime(message.createdAt)}
@@ -95,6 +124,17 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
             className="rounded-md overflow-hidden"
           />
         </div>
+      )}
+      
+      {/* Document preview modal */}
+      {previewDocument && (
+        <DocumentPreviewModal
+          isOpen={isPreviewOpen}
+          documentId={previewDocument.id}
+          fileName={previewDocument.fileName}
+          fileType={previewDocument.fileType}
+          onClose={() => setIsPreviewOpen(false)}
+        />
       )}
     </>
   );

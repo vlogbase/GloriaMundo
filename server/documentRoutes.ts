@@ -1,6 +1,7 @@
 import { Express, Request, Response } from 'express';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import * as fsSync from 'fs'; // Import sync fs for createReadStream
 import multer from 'multer';
 import { isAuthenticated } from './routes';
 import { storage } from './storage';
@@ -47,6 +48,93 @@ const upload = multer({
 });
 
 export function registerDocumentRoutes(app: Express) {
+  // Route to get document content for preview
+  app.get('/api/documents/:id/content', isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const documentId = parseInt(req.params.id);
+      if (isNaN(documentId)) {
+        return res.status(400).json({ message: 'Invalid document ID' });
+      }
+      
+      // Get document metadata
+      const document = await storage.getDocumentById(documentId);
+      if (!document) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+      
+      // Ensure user has access to this document
+      const userId = req.isAuthenticated() ? (req.user as Express.User).id : undefined;
+      if (document.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      // For text files, we can send the content directly
+      if (document.fileType.startsWith('text/')) {
+        // Read the document content from the file system
+        const filePath = path.join(process.cwd(), 'temp', `document-${documentId}`);
+        try {
+          const content = await fs.readFile(filePath, 'utf-8');
+          return res.send(content);
+        } catch (err) {
+          console.error(`Error reading document ${documentId}:`, err);
+          return res.status(500).json({ message: 'Could not read document content' });
+        }
+      }
+      
+      // For non-text files, we'll inform the client that preview is not available
+      if (document.fileType === 'application/pdf') {
+        return res.send('PDF preview not available. Please download the file to view it.');
+      } else if (document.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        return res.send('DOCX preview not available. Please download the file to view it.');
+      }
+      
+      return res.status(415).json({ message: 'Preview not available for this file type' });
+    } catch (err) {
+      console.error('Error getting document content:', err);
+      return res.status(500).json({ message: 'Failed to get document content' });
+    }
+  });
+  
+  // Route to download a document
+  app.get('/api/documents/:id/download', isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const documentId = parseInt(req.params.id);
+      if (isNaN(documentId)) {
+        return res.status(400).json({ message: 'Invalid document ID' });
+      }
+      
+      // Get document metadata
+      const document = await storage.getDocumentById(documentId);
+      if (!document) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+      
+      // Ensure user has access to this document
+      const userId = req.isAuthenticated() ? (req.user as Express.User).id : undefined;
+      if (document.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      // Read the document content from the file system
+      const filePath = path.join(process.cwd(), 'temp', `document-${documentId}`);
+      try {
+        // Set content disposition and type headers for download
+        res.setHeader('Content-Disposition', `attachment; filename="${document.fileName}"`);
+        res.setHeader('Content-Type', document.fileType);
+        
+        // Stream the file to the client
+        const fileStream = fsSync.createReadStream(filePath);
+        fileStream.pipe(res);
+      } catch (err) {
+        console.error(`Error reading document ${documentId}:`, err);
+        return res.status(500).json({ message: 'Could not download document' });
+      }
+    } catch (err) {
+      console.error('Error downloading document:', err);
+      return res.status(500).json({ message: 'Failed to download document' });
+    }
+  });
+  
   // Route to upload a document
   app.post('/api/conversations/:id/documents', upload.single('document'), async (req: Request, res: Response) => {
     let filePath: string | undefined;

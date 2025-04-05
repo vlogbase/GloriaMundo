@@ -43,9 +43,11 @@ export interface IStorage {
   
   // Document methods
   getDocument(id: number): Promise<Document | undefined>;
+  getDocumentById(id: number): Promise<Document | undefined>; // Alias for getDocument
   getDocumentsByConversation(conversationId: number): Promise<Document[]>;
   createDocument(document: Partial<InsertDocument>): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
+  updateDocumentMetadata(id: number, metadata: any): Promise<Document | undefined>;
   
   // Document chunk methods
   getDocumentChunk(id: number): Promise<DocumentChunk | undefined>;
@@ -465,6 +467,28 @@ export class MemStorage implements IStorage {
     
     // Fallback to in-memory storage if DB fails
     return this.documents.get(id);
+  }
+  
+  // Alias for getDocument to maintain backward compatibility
+  async getDocumentById(id: number): Promise<Document | undefined> {
+    return this.getDocument(id);
+  }
+  
+  // Update document metadata
+  async updateDocumentMetadata(id: number, metadata: any): Promise<Document | undefined> {
+    const document = await this.getDocument(id);
+    
+    if (!document) {
+      return undefined;
+    }
+    
+    const updatedDocument: Document = {
+      ...document,
+      metadata: metadata
+    };
+    
+    this.documents.set(id, updatedDocument);
+    return updatedDocument;
   }
   
   async getDocumentsByConversation(conversationId: number): Promise<Document[]> {

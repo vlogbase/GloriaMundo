@@ -25,13 +25,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { Document } from "@/hooks/useDocuments";
+import { DocumentItem } from "./DocumentItem";
+
 interface ChatInputProps {
   onSendMessage: (message: string, image?: string) => void;
   isLoading: boolean;
-  onUploadDocument?: (file: File) => Promise<void>;
+  onUploadDocument?: (file: File) => Promise<any>;
+  documents?: Document[];
+  onPreviewDocument?: (document: Document) => void;
 }
 
-export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatInputProps) => {
+export const ChatInput = ({ 
+  onSendMessage, 
+  isLoading, 
+  onUploadDocument,
+  documents = [],
+  onPreviewDocument
+}: ChatInputProps) => {
   const [message, setMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -392,6 +403,23 @@ export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatIn
         
         {/* Model presets - the new single control for model selection */}
         <ModelPresets />
+        
+        {/* Display uploaded documents */}
+        {documents.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {documents.map((doc) => (
+              <DocumentItem
+                key={doc.id}
+                id={doc.id}
+                fileName={doc.fileName}
+                fileType={doc.fileType}
+                fileSize={doc.fileSize}
+                onPreview={() => onPreviewDocument?.(doc)}
+                showRemove={false}
+              />
+            ))}
+          </div>
+        )}
         
         {imagePreviewUrl && (
           <div className="mb-3 relative rounded-lg overflow-hidden border border-border">

@@ -187,13 +187,16 @@ export async function processDocument(params: {
           // Store in MongoDB if available for vector search
           if (mongoChunksCollection) {
             try {
+              // Ensure userId is always present and in correct format for vector search filtering
+              const userIdValue = userId ? userId.toString() : "0";
+              
               await mongoChunksCollection.insertOne({
                 id: chunk.id.toString(),
                 documentId: document.id.toString(),
-                userId: userId ? userId.toString() : null, // Add userId for vector search filtering
+                userId: userIdValue, // Always store userId (critical for vector search filtering)
                 content: chunks[i],
                 chunkIndex: i,
-                embedding: "", // Empty for now
+                embedding: "", // Will be updated with vector later
                 createdAt: new Date()
               });
             } catch (mongoInsertError) {
@@ -913,31 +916,29 @@ export async function findSimilarChunks(query: string, conversationId: number, l
           // Use MongoDB Atlas vectorSearch for optimal performance
           console.log('Using MongoDB Atlas vectorSearch for similarity search');
           try {
-            // Build match conditions
-            const matchConditions: any = { 
-              documentId: { $in: documentIds.map(id => id.toString()) },
-              embedding: { $type: "string", $ne: "" }
+            // Build the vectorSearch pipeline
+            const vectorSearchStage = {
+              $vectorSearch: {
+                index: "vector_index",
+                path: "embedding",
+                queryVector: embeddingVector,
+                numCandidates: limit * 20, // Increased for better coverage
+                limit: limit * 3, // Get more than we need for post-filtering
+                filter: {
+                  documentId: { $in: documentIds.map(id => id.toString()) }
+                }
+              }
             };
             
-            // Add userId filter if provided for better security and performance
+            // Add userId filter to the vectorSearch filter if provided
             if (userId) {
-              matchConditions.userId = userId.toString();
-              console.log(`Adding userId filter: ${userId}`);
+              console.log(`Adding userId filter to vectorSearch: ${userId}`);
+              vectorSearchStage.$vectorSearch.filter.userId = userId.toString();
             }
             
             mongoResults = await chunksCollection.aggregate([
-              // Match only chunks from our documents with appropriate filtering
-              { $match: matchConditions },
-              // Perform vector search
-              {
-                $vectorSearch: {
-                  index: "vector_index",
-                  path: "embedding",
-                  queryVector: embeddingVector,
-                  numCandidates: limit * 10, // Search more candidates for better results
-                  limit: limit * 2 // Get more than we need to filter later
-                }
-              },
+              // Use the vectorSearch stage with filtering directly in the vectorSearch
+              vectorSearchStage,
               // Add a projection to include similarity score
               { $addFields: { similarity: { $meta: "vectorSearchScore" } } },
               // Sort by similarity (highest first)
