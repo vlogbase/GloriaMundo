@@ -46,19 +46,9 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
     
     if ((!message.trim() && !selectedImage) || isLoading) return;
     
-    // If OpenRouter model is selected, pass the selected model ID in the message metadata
-    if (selectedModel === 'openrouter' && selectedModelId) {
-      // We'll extend this method later to handle OpenRouter models
-      const modelMetadata = { modelId: selectedModelId, modelType: 'openrouter' };
-      // Append the model metadata to the message - this will be handled in the API call
-      const messageWithMetadata = JSON.stringify({ 
-        content: message, 
-        ...modelMetadata 
-      });
-      onSendMessage(messageWithMetadata, selectedImage || undefined);
-    } else {
-      onSendMessage(message, selectedImage || undefined);
-    }
+    // Always send the raw message text as the first parameter
+    // The model metadata will be handled separately in the useChat hook
+    onSendMessage(message, selectedImage || undefined);
     
     setMessage("");
     setSelectedImage(null);

@@ -63,12 +63,28 @@ export const useChat = () => {
       setLocation(`/chat/${conversationId}`);
     }
 
-    // Optimistically add user message
+    // Check if content accidentally contains stringified JSON data (from previous bug)
+    // This could happen from previously stored messages in this format
+    let messageContent = content;
+    try {
+      // Try to parse the content as JSON
+      const parsed = JSON.parse(content);
+      // If it parses and has a content field, use that instead
+      if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+        console.log('Found legacy JSON-stringified message content, extracting inner content');
+        messageContent = parsed.content;
+      }
+    } catch (e) {
+      // Not JSON, use the original content
+      messageContent = content;
+    }
+    
+    // Optimistically add user message with the cleaned content
     const tempUserMessage: Message = {
       id: Date.now(),
       conversationId,
       role: "user",
-      content,
+      content: messageContent, // Use cleaned content
       image,
       createdAt: new Date().toISOString(),
       citations: null,
@@ -106,9 +122,8 @@ export const useChat = () => {
         modelId?: string;
       }
       
-      // Create a properly typed payload
       const payload: MessagePayload = { 
-        content: content, // Use content directly - no parsing needed
+        content: messageContent, // Always use clean text content
         image,
         modelType: selectedModel,
         ...modelMetadata // Include any model-specific metadata
@@ -141,8 +156,11 @@ export const useChat = () => {
         // Update the temporary user message and add the assistant message
         setMessages((prev) => {
           // Find and replace the temporary user message
+          // Use messageContent which may have been cleaned from JSON string
           const userMsgIndex = prev.findIndex(msg => 
-            msg.role === "user" && msg.content === content && msg.id === tempUserMessage.id
+            msg.role === "user" && 
+            (msg.content === content || msg.content === messageContent) && 
+            msg.id === tempUserMessage.id
           );
           
           const newMessages = [...prev];
