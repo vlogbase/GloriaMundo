@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { useModelPresets } from '@/hooks/useModelPresets.fixed';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
 import { useModelSelection } from '@/hooks/useModelSelection';
+import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Network, Edit, Check } from 'lucide-react';
+import { Network, Edit, Check, Lock } from 'lucide-react';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -63,6 +65,34 @@ export const ModelPresets = () => {
   
   const { models } = useOpenRouterModels();
   const { setSelectedModel, setCustomOpenRouterModelId } = useModelSelection();
+  const [, navigate] = useLocation();
+  
+  // Query for user's credit balance
+  const { data: user } = useQuery({
+    queryKey: ['/api/auth/me'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            return null;
+          }
+          throw new Error(`Failed to fetch user data: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    }
+  });
+  
+  // Check if user has credits (positive balance)
+  const hasCredits = user?.creditBalance > 0;
   
   // Separate state management for dialogs
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -187,20 +217,33 @@ export const ModelPresets = () => {
     }
   };
   
+  // Handle redirection to account balance page for locked models
+  const handleLockedModelClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate('/account-balance');
+  };
+  
   // Render presets
   const renderPresets = () => {
     return Object.entries(presets).map(([key, modelId]) => {
       const isActive = activePreset === key;
       const presetKey = key as 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5';
       
+      // Check if this preset model is a free model
+      const isFreeTier = modelId ? freeModels.some(model => model.id === modelId) : false;
+      
+      // Determine if this model should be locked (non-free model and no credits)
+      const isLocked = !isFreeTier && !hasCredits && modelId;
+      
       return (
         <div key={key} className="relative group">
           <Button
-            onClick={() => handleClick(presetKey)}
+            onClick={isLocked ? handleLockedModelClick : () => handleClick(presetKey)}
             variant={isActive ? "default" : "outline"}
             className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
               isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
-            }`}
+            } ${isLocked ? 'cursor-pointer' : ''}`}
             disabled={isLoading || isPending}
           >
             <Network size={16} className="mr-1" />
@@ -211,11 +254,22 @@ export const ModelPresets = () => {
             )}
           </Button>
           
+          {/* Padlock overlay for locked models */}
+          {isLocked && (
+            <div 
+              className="absolute inset-0 bg-black/50 backdrop-blur-[1px] rounded flex items-center justify-center cursor-pointer"
+              onClick={handleLockedModelClick}
+              title="You need funds to use this model. Click to add funds."
+            >
+              <Lock className="w-4 h-4 text-white/90" />
+            </div>
+          )}
+          
           {/* Edit button */}
           <Button
             size="icon"
             variant="ghost"
-            className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
             onClick={(e) => handleEditClick(e, presetKey)}
           >
             <Edit size={12} />
