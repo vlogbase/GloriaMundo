@@ -2,9 +2,10 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Send, Lightbulb, Search, Image, X, Upload, Camera, Network } from "lucide-react";
+import { Send, Lightbulb, Search, Image, X, Upload, Camera, Network, Paperclip, File } from "lucide-react";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
+import { useToast } from "@/hooks/use-toast";
 import { ModelType } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/models";
 import { ModelPresets } from "@/components/ModelPresets";
@@ -27,19 +28,23 @@ import {
 interface ChatInputProps {
   onSendMessage: (message: string, image?: string) => void;
   isLoading: boolean;
+  onUploadDocument?: (file: File) => Promise<void>;
 }
 
-export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
+export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatInputProps) => {
   const [message, setMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { selectedModel, setSelectedModel } = useModelSelection();
   const { models, selectedModelId, setSelectedModelId, isLoading: modelsLoading } = useOpenRouterModels();
+  const { toast } = useToast();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -198,6 +203,74 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
       }
     }
   };
+  
+  // Handle document upload
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || !onUploadDocument) return;
+    
+    const file = e.target.files[0];
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/html',
+      'text/markdown'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid file type",
+        description: "Please upload a PDF, DOCX, TXT, HTML, or MD file."
+      });
+      
+      // Reset the file input
+      if (documentInputRef.current) {
+        documentInputRef.current.value = '';
+      }
+      return;
+    }
+    
+    // Maximum file size (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        variant: "destructive",
+        title: "File too large",
+        description: "Maximum file size is 10MB."
+      });
+      
+      // Reset the file input
+      if (documentInputRef.current) {
+        documentInputRef.current.value = '';
+      }
+      return;
+    }
+    
+    try {
+      setUploadingDocument(true);
+      await onUploadDocument(file);
+      
+      toast({
+        title: "Document uploaded",
+        description: `${file.name} has been uploaded and will be used for context.`
+      });
+      
+      // Reset the file input
+      if (documentInputRef.current) {
+        documentInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload document."
+      });
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
 
   // Auto-resize textarea
   useEffect(() => {
@@ -297,10 +370,23 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message GloriaMundo..."
-            className={`w-full p-3 ${selectedModel === 'multimodal' && !selectedImage ? 'pr-20' : 'pr-12'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
-            disabled={isLoading}
+            className={`w-full p-3 ${selectedModel === 'multimodal' && !selectedImage ? 'pr-20' : onUploadDocument ? 'pr-[100px]' : 'pr-12'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
+            disabled={isLoading || uploadingDocument}
           />
           
+          {/* Document upload input (hidden) */}
+          {onUploadDocument && (
+            <input
+              type="file"
+              ref={documentInputRef}
+              onChange={handleDocumentUpload}
+              accept=".pdf,.docx,.txt,.html,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/html,text/markdown"
+              className="hidden"
+              id="document-upload"
+            />
+          )}
+          
+          {/* Image upload controls for multimodal model */}
           {selectedModel === 'multimodal' && !selectedImage && (
             <>
               <input
@@ -316,7 +402,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
                 size="icon"
                 variant="ghost"
                 className="absolute right-20 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                disabled={isLoading}
+                disabled={isLoading || uploadingDocument}
                 onClick={() => fileInputRef.current?.click()}
                 title="Upload image"
               >
@@ -327,7 +413,7 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
                 size="icon"
                 variant="ghost"
                 className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                disabled={isLoading}
+                disabled={isLoading || uploadingDocument}
                 onClick={startCamera}
                 title="Take photo"
               >
@@ -336,12 +422,40 @@ export const ChatInput = ({ onSendMessage, isLoading }: ChatInputProps) => {
             </>
           )}
           
+          {/* Document upload button (paperclip) - always visible */}
+          {onUploadDocument && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="absolute right-[84px] bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                    disabled={isLoading || uploadingDocument}
+                    onClick={() => documentInputRef.current?.click()}
+                  >
+                    {uploadingDocument ? (
+                      <div className="h-4 w-4 border-2 border-t-transparent border-primary animate-spin rounded-full" />
+                    ) : (
+                      <Paperclip size={18} />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Upload document (PDF, DOCX, TXT)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          
+          {/* Send button */}
           <Button
             type="submit"
             size="icon"
             variant="ghost"
             className="absolute right-3 bottom-3 text-primary hover:text-primary/80 transition-colors"
-            disabled={(isLoading || (!message.trim() && !selectedImage))}
+            disabled={(isLoading || (!message.trim() && !selectedImage) || uploadingDocument)}
           >
             <Send size={18} />
           </Button>

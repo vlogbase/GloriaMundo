@@ -292,6 +292,63 @@ export const useChat = () => {
     setLocation("/");
   }, [setLocation]);
 
+  // Upload document for RAG
+  const uploadDocument = useCallback(async (conversationId: number, file: File) => {
+    if (!conversationId) {
+      throw new Error("Conversation ID is required to upload a document");
+    }
+    
+    const formData = new FormData();
+    formData.append('document', file);
+    
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to upload document");
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      throw error;
+    }
+  }, []);
+  
+  // Upload document wrapper that creates a conversation if needed
+  const handleDocumentUpload = useCallback(async (file: File) => {
+    try {
+      // If no active conversation, create one first
+      if (!activeConversationId) {
+        // Create a new conversation with document name as title
+        const newConversation = await apiRequest(
+          "POST", 
+          "/api/conversations", 
+          { title: `Document: ${file.name}` }
+        );
+        
+        const data = await newConversation.json();
+        
+        // Set the new conversation as active
+        setActiveConversationId(data.id);
+        setLocation(`/chat/${data.id}`);
+        
+        // Upload document to the new conversation
+        return await uploadDocument(data.id, file);
+      }
+      
+      // Upload document to existing conversation
+      return await uploadDocument(activeConversationId, file);
+    } catch (error) {
+      console.error("Error in handleDocumentUpload:", error);
+      throw error;
+    }
+  }, [activeConversationId, uploadDocument, setLocation]);
+
   return {
     messages,
     isLoadingMessages,
@@ -300,5 +357,6 @@ export const useChat = () => {
     loadConversation,
     sendMessage,
     startNewConversation,
+    uploadDocument: handleDocumentUpload,
   };
 };

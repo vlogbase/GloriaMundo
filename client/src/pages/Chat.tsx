@@ -75,7 +75,8 @@ export default function Chat() {
     sendMessage,
     loadConversation,
     startNewConversation,
-    activeConversationId
+    activeConversationId,
+    uploadDocument
   } = useChat();
   
   // Load conversation when ID changes in URL
@@ -333,7 +334,8 @@ export default function Chat() {
         {/* Chat input */}
         <ChatInput 
           onSendMessage={handleSendMessage} 
-          isLoading={isLoadingResponse} 
+          isLoading={isLoadingResponse}
+          onUploadDocument={uploadDocument}
         />
       </div>
       
