@@ -1,0 +1,26 @@
+Files and prompt exceed Gemini’s context window. For better results upload smaller files. Learn more
+
+Show thinking
+Okay, I've reviewed the structure of your gloriamundo codebase 5 4 evening.txt file. Based on the filenames and typical RAG architectures, here are the most likely areas where bottlenecks causing timeouts might occur, particularly concerning MongoDB and Azure OpenAI embeddings:   
+
+Document Processing & Embedding (server/documentProcessor.ts):
+
+Embedding Generation: How are you calling the Azure OpenAI API to get embeddings? Generating embeddings for many chunks sequentially can be very slow. Check if you can batch requests to the Azure OpenAI API. Also, ensure you aren't accidentally re-generating embeddings for documents already processed.
+Chunking Strategy: How are the text files being split into chunks before embedding? Very large or very small chunks can sometimes impact performance or retrieval quality, indirectly leading to longer processing times.
+Error Handling/Retries: How are timeouts or errors from the Azure OpenAI API handled? Aggressive retry logic without backoff could exacerbate delays.
+MongoDB Vector Search (server/db.ts, potentially used by server/routes.ts or server/documentProcessor.ts):
+
+Index Configuration: The most critical factor for MongoDB performance in RAG is the vector index. Are you using MongoDB Atlas Search? Ensure your vector index is correctly configured and built on the field containing the Azure OpenAI embeddings. An unindexed vector search will be extremely slow.
+Query Complexity: How is the vector search query constructed? Are you adding complex filtering stages alongside the vector search? Check the efficiency of your MongoDB queries, especially the $vectorSearch or $search stage.
+Data Retrieval: After the vector search identifies relevant chunks, how is the actual text content retrieved? Ensure this retrieval is efficient and doesn't fetch unnecessary data.
+Overall RAG Workflow Orchestration (likely in server/routes.ts or a dedicated RAG handler called from there):
+
+Query Embedding: Does the user's query get embedded quickly via Azure OpenAI? This is usually fast but worth checking.
+Sequential Operations: Look at the end-to-end process for a user query: Query Embedding -> Vector Search -> Context Retrieval -> LLM Call. Are these steps happening sequentially when some could potentially be parallelized or optimized?
+Resource Constraints: Although you mention small files, check the resource limits where your application is hosted (CPU, Memory, Network I/O). Intense processing during embedding or search might hit these limits.
+Recommendations:
+
+Focus on server/documentProcessor.ts: Examine the interaction with the Azure OpenAI embedding API. Look for opportunities to batch requests or cache embeddings.
+Inspect server/db.ts and MongoDB Atlas: Verify your vector index configuration and the efficiency of your vector search queries. Use MongoDB's query profiler if needed.
+Review Test Scripts: Files like test-embeddings.ts, test-mongodb.js, and test-rag-workflow.ts  might contain isolated examples of how these components are used, making it easier to spot inefficiencies.   
+Start by investigating the embedding generation and MongoDB vector search steps, as these are common sources of latency in RAG systems.

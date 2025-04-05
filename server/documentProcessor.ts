@@ -1,122 +1,14 @@
-import { readFile } from 'fs/promises';
-import { parse as parseHtml } from 'node-html-parser';
-import { DocumentChunk, Document, InsertDocumentChunk } from '@shared/schema';
-import { pipeline } from '@xenova/transformers';
-import { MongoClient, ObjectId } from 'mongodb';
-import { AzureOpenAI } from 'openai';
-import '@azure/openai/types';
+import { Document, DocumentChunk } from '@shared/schema';
 import { storage } from './storage';
-
-// Simple extractors for different file types
-// These are simplified versions to handle the files without external dependencies
-// that may cause compatibility issues with ES modules
-
-const pdfExtractor = {
-  async extract(buffer: Buffer): Promise<string> {
-    try {
-      // First attempt to use a more robust approach
-      // Since we can't rely on external PDF libraries that may be incompatible,
-      // we'll improve our basic extraction
-      
-      // Convert buffer to string and look for text markers
-      const text = buffer.toString('utf-8');
-      
-      // Extract text between common PDF text markers
-      // This is a simplified approach but better than just raw buffer conversion
-      let extractedText = '';
-      
-      // Look for text objects in the PDF
-      const textObjects = text.match(/BT[\s\S]+?ET/g);
-      if (textObjects && textObjects.length > 0) {
-        // Extract text from text objects
-        extractedText = textObjects.join(' ');
-        
-        // Clean up the text
-        extractedText = extractedText
-          .replace(/\\\(/g, '(')
-          .replace(/\\\)/g, ')')
-          .replace(/\\(\d{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8)))
-          .replace(/BT|ET|Tj|TJ|\[|\]|\(|\)|<|>|\/F\d+\s\d+(\.\d+)?\sTf/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-      
-      // If we couldn't extract anything meaningful, fall back to basic extraction
-      if (!extractedText || extractedText.length < 100) {
-        console.log("PDF basic extraction fallback");
-        // Extract any readable text content
-        extractedText = text.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-      
-      return extractedText || "This PDF couldn't be fully processed. Consider converting to text format for better results.";
-    } catch (error) {
-      console.error("Error in PDF extraction:", error);
-      return "Error extracting text from PDF. Please try a different format.";
-    }
-  }
-};
-
-const docxExtractor = {
-  async extract(buffer: Buffer): Promise<string> {
-    try {
-      console.log("DOCX extraction - improved version");
-      
-      // DOCX files are ZIP archives with XML content
-      // Extract document.xml content which contains the main text
-      
-      // First, try to locate the document content
-      const text = buffer.toString('utf-8');
-      
-      // Look for word/document.xml content
-      let documentXml = '';
-      
-      // Try to find document.xml content between markers
-      const docXmlMatch = text.match(/<w:document[\s\S]+?<\/w:document>/);
-      if (docXmlMatch) {
-        documentXml = docXmlMatch[0];
-      }
-      
-      let extractedText = '';
-      
-      if (documentXml) {
-        // Extract text from w:t tags (which contain the actual text in DOCX)
-        const textMatches = documentXml.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g);
-        
-        if (textMatches && textMatches.length > 0) {
-          // Extract content between tags and join with spaces
-          extractedText = textMatches
-            .map(match => {
-              // Extract content between <w:t> and </w:t>
-              const content = match.replace(/<w:t[^>]*>([\s\S]*?)<\/w:t>/, '$1');
-              return content
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .replace(/&amp;/g, '&')
-                .replace(/&quot;/g, '"')
-                .replace(/&apos;/g, "'");
-            })
-            .join(' ');
-        }
-      }
-      
-      // If we couldn't extract good content, fall back to basic extraction
-      if (!extractedText || extractedText.length < 100) {
-        console.log("DOCX basic extraction fallback");
-        // Extract any readable text content from the raw buffer
-        extractedText = text.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-      
-      return extractedText || "This DOCX couldn't be fully processed. Consider converting to text format for better results.";
-    } catch (error) {
-      console.error("Error in DOCX extraction:", error);
-      return "Error extracting text from DOCX. Please try a different format.";
-    }
-  }
-};
+import * as fs from 'fs';
+import pdfParse from 'pdf-parse';
+import parse from 'node-html-parser';
+import { readFile } from 'fs/promises';
+import { Document as DocxDocument, Paragraph, TextRun } from 'docx';
+import { AzureOpenAI } from 'openai';
+import { MongoClient } from 'mongodb';
+import Pipeline from '@xenova/transformers/dist/pipeline';
+import type { FeatureExtractionPipeline } from '@xenova/transformers/dist/types';
 
 // Maximum chunk size in characters
 const MAX_CHUNK_SIZE = 1000;
@@ -133,6 +25,59 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const MONGODB_DB_NAME = 'gloriamundo';
 const MONGODB_DOCUMENTS_COLLECTION = 'documents';
 const MONGODB_CHUNKS_COLLECTION = 'document_chunks';
+
+// Map to track collections that support vector search
+const vectorSearchCapableCollections = new Map<string, boolean>();
+
+/**
+ * Check if a MongoDB collection supports vector search
+ * This helps optimize query strategy based on available features
+ */
+async function checkVectorSearchCapability(collection: any): Promise<boolean> {
+  // Check if we already know the answer
+  const collectionName = collection.collectionName;
+  if (vectorSearchCapableCollections.has(collectionName)) {
+    return vectorSearchCapableCollections.get(collectionName) || false;
+  }
+  
+  try {
+    // Try a small vector search query as a test
+    // This will fail with a specific error if vector search is not available
+    await collection.aggregate([
+      { $limit: 1 },
+      { 
+        $vectorSearch: {
+          index: "vector_index", 
+          path: "embedding",
+          queryVector: Array(1536).fill(0), // Sample vector
+          numCandidates: 1,
+          limit: 1
+        }
+      }
+    ]).toArray();
+    
+    // If we get here, vector search is available
+    console.log(`MongoDB collection ${collectionName} supports vector search`);
+    vectorSearchCapableCollections.set(collectionName, true);
+    return true;
+  } catch (error: any) {
+    // Check the error to determine if vector search is unavailable vs other errors
+    const errorMessage = error.message || '';
+    const isVectorSearchUnavailable = 
+      errorMessage.includes("vectorSearch") && 
+      (errorMessage.includes("unrecognized") || errorMessage.includes("not found"));
+    
+    if (isVectorSearchUnavailable) {
+      console.log(`MongoDB collection ${collectionName} does not support vector search`);
+      vectorSearchCapableCollections.set(collectionName, false);
+      return false;
+    } else {
+      // For other errors, assume it might be available but there was another issue
+      console.warn(`Uncertain if MongoDB collection ${collectionName} supports vector search:`, errorMessage);
+      return false;
+    }
+  }
+}
 
 // Initialize Azure OpenAI client
 const azureOpenAI = new AzureOpenAI({
@@ -355,7 +300,7 @@ async function extractTextFromFile(buffer: Buffer, fileType: string): Promise<st
     } else if (fileType.includes('text') || fileType.includes('txt')) {
       return buffer.toString('utf-8');
     } else if (fileType.includes('html')) {
-      const root = parseHtml(buffer.toString('utf-8'));
+      const root = parse(buffer.toString('utf-8'));
       // Remove scripts and styles
       root.querySelectorAll('script, style').forEach(el => el.remove());
       return root.text;
@@ -501,44 +446,35 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
         }
       })();
     }, 100);
-    
-    console.log(`Returning document early while embeddings process in the background`);
   } else {
-    // For small documents, process embeddings immediately
-    console.log(`Small document (${documentChunks.length} chunks) - processing embeddings immediately`);
+    // For smaller documents, process embeddings immediately
+    console.log(`Document has ${documentChunks.length} chunks - processing embeddings immediately`);
     
-    // Use Promise.all with batching to speed up processing
-    const batchSize = 5;
-    for (let i = 0; i < documentChunks.length; i += batchSize) {
-      const batch = documentChunks.slice(i, i + batchSize);
-      
-      // Process embeddings in parallel for this batch
-      await Promise.all(batch.map(async (chunk) => {
-        try {
-          const embedding = await generateEmbedding(chunk.content);
-          
-          // Update embedding in primary storage
-          await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
-          
-          // Update embedding in MongoDB if available
-          if (mongoChunksCollection) {
-            try {
-              await mongoChunksCollection.updateOne(
-                { id: chunk.id.toString() },
-                { $set: { embedding } }
-              );
-            } catch (mongoUpdateError) {
-              console.error(`Error updating embedding for chunk ${chunk.id} in MongoDB:`, mongoUpdateError);
-            }
+    // Process embeddings in parallel
+    await Promise.all(documentChunks.map(async (chunk) => {
+      try {
+        const embedding = await generateEmbedding(chunk.content);
+        
+        // Update embedding in primary storage
+        await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+        
+        // Update embedding in MongoDB if available
+        if (mongoChunksCollection) {
+          try {
+            await mongoChunksCollection.updateOne(
+              { id: chunk.id.toString() },
+              { $set: { embedding } }
+            );
+          } catch (mongoUpdateError) {
+            console.error(`Error updating MongoDB embedding for chunk ${chunk.id}:`, mongoUpdateError);
           }
-        } catch (error) {
-          console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
         }
-      }));
-      
-      // Log progress
-      console.log(`Processed embeddings for ${Math.min(i + batchSize, documentChunks.length)}/${documentChunks.length} chunks`);
-    }
+      } catch (error) {
+        console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
+      }
+    }));
+    
+    console.log(`Embedding generation complete for document ${document.id}`);
   }
   
   return documentChunks;
@@ -552,65 +488,67 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
  * @returns An array of text chunks
  */
 function splitTextIntoChunks(text: string, chunkSize = MAX_CHUNK_SIZE, overlapSize = CHUNK_OVERLAP): string[] {
+  // Split text into paragraphs
+  const paragraphs = text.split(/\n\s*\n/);
+  
   const chunks: string[] = [];
-  let start = 0;
+  let currentChunk = '';
   
-  // Skip empty text
-  if (!text || text.length === 0) {
-    return chunks;
-  }
-  
-  // For very large texts, use aggressive chunking without trying to find natural breaks
-  const isVeryLargeText = text.length > 500000; // 500KB
-  const lookForBreaks = !isVeryLargeText;
-  
-  while (start < text.length) {
-    // Calculate end position, ensuring we don't exceed text length
-    let end = Math.min(start + chunkSize, text.length);
-    
-    // If we're not at the end of the text and we should look for breaks, try to find a natural break point
-    if (end < text.length && lookForBreaks) {
-      const windowSize = Math.min(50, Math.floor(chunkSize * 0.1)); // 10% of chunk size or 50, whichever is smaller
+  for (const paragraph of paragraphs) {
+    // If adding this paragraph would exceed chunk size, finalize current chunk
+    if (currentChunk.length + paragraph.length > chunkSize && currentChunk.length > 0) {
+      chunks.push(currentChunk.trim());
       
-      // Don't look beyond the text length
-      const upperLimit = Math.min(end + windowSize, text.length);
+      // Start new chunk with overlap from previous chunk
+      // Take the last few sentences from the previous chunk
+      const sentenceBoundary = /[.!?]+\s+/g;
+      const lastSentences = [];
+      let overlapText = '';
+      let match;
       
-      // Look for a natural break like a paragraph or sentence ending within a window
-      const window = text.substring(end - windowSize, upperLimit);
+      // Create a copy of the regex to avoid state issues with global regex
+      const sentenceRegex = new RegExp(sentenceBoundary);
+      let startPos = Math.max(0, currentChunk.length - overlapSize * 2);
+      let searchText = currentChunk.substring(startPos);
       
-      // Check for paragraph break
-      const paragraphBreak = window.indexOf('\n\n');
-      if (paragraphBreak !== -1 && paragraphBreak < windowSize) {
-        end = end - windowSize + paragraphBreak + 2; // +2 to include the \n\n
-      } else {
-        // Check for sentence break (period followed by space or newline)
-        const sentenceBreak = window.search(/\.\s/);
-        if (sentenceBreak !== -1 && sentenceBreak < windowSize) {
-          end = end - windowSize + sentenceBreak + 2; // +2 to include the period and space
-        } else {
-          // If no natural breaks found, look for any whitespace
-          const spaceBreak = window.search(/\s/);
-          if (spaceBreak !== -1 && spaceBreak < windowSize) {
-            end = end - windowSize + spaceBreak + 1;
+      while ((match = sentenceRegex.exec(searchText)) !== null) {
+        // Add the positions to account for the substring
+        lastSentences.push(match.index + startPos);
+      }
+      
+      // Use last 1-2 sentences for overlap
+      if (lastSentences.length > 0) {
+        // Pick the position that gives us closest to our target overlap size
+        let bestPosition = lastSentences[0];
+        for (const position of lastSentences) {
+          if (currentChunk.length - position <= overlapSize) {
+            bestPosition = position;
+            break;
           }
         }
+        
+        overlapText = currentChunk.substring(bestPosition);
+      } else if (currentChunk.length > overlapSize) {
+        // If no sentence boundaries found, just take the last part
+        overlapText = currentChunk.substring(currentChunk.length - overlapSize);
+      } else {
+        // If chunk is smaller than overlap size, use the whole chunk
+        overlapText = currentChunk;
       }
+      
+      currentChunk = overlapText;
     }
     
-    // Add the chunk, but first check if it's meaningful
-    const chunk = text.substring(start, end).trim();
-    if (chunk.length > 0) {
-      chunks.push(chunk);
+    // Add paragraph to current chunk
+    if (currentChunk.length > 0) {
+      currentChunk += '\n\n';
     }
-    
-    // Set the next start position with overlap
-    start = end - overlapSize;
-    if (start < 0) start = 0;
-    
-    // Avoid infinite loops
-    if (start >= end) {
-      start = end;
-    }
+    currentChunk += paragraph;
+  }
+  
+  // Add the last chunk if not empty
+  if (currentChunk.trim().length > 0) {
+    chunks.push(currentChunk.trim());
   }
   
   return chunks;
@@ -621,198 +559,293 @@ function splitTextIntoChunks(text: string, chunkSize = MAX_CHUNK_SIZE, overlapSi
  * This is a more efficient chunking strategy that produces better chunks for RAG
  */
 function createOptimizedChunks(text: string, fileName: string): string[] {
-  // For performance and quality reasons, use different strategies for different document sizes
+  // For large documents, use a different chunking strategy
+  const isLargeDocument = text.length > 100000; // 100KB threshold
   
-  // For small documents: Use standard chunking with smaller chunks and less overlap
-  if (text.length < 50000) { // Less than 50KB
-    return splitTextIntoChunks(text, 800, 100);
-  }
-  
-  // For medium documents: Use standard chunking with larger chunks
-  if (text.length < 500000) { // Less than 500KB
-    return splitTextIntoChunks(text, 1000, 150);
-  }
-  
-  // For large documents: Use a representative sampling approach
-  // This dramatically improves performance while maintaining quality
-  console.log(`Using optimized sampling for large document: ${fileName} (${Math.round(text.length/1024)}KB)`);
-  
-  const chunks: string[] = [];
-  
-  // Extract a "representative sample" of the document
-  // 1. Beginning: People often put important info at the start of documents
-  const beginningSize = Math.min(20000, text.length * 0.1); // 20KB or 10% of document
-  if (beginningSize > 0) {
-    const beginning = text.substring(0, beginningSize);
-    // Split the beginning into smaller chunks
-    const beginningChunks = splitTextIntoChunks(beginning, 800, 100);
-    chunks.push(...beginningChunks);
-  }
-  
-  // 2. Important sections: Look for headings, titles, or key markers
-  // This is a simplified approach - in a production environment you'd use ML to identify key sections
-  const importantMarkers = [
-    "Introduction", "Summary", "Conclusion", "Abstract", "Overview",
-    "Key Points", "Results", "Findings", "Discussion", "Recommendations"
-  ];
-  
-  // Find sections with these markers
-  let marker: string;
-  for (marker of importantMarkers) {
-    const markerPos = text.indexOf(marker);
-    if (markerPos >= 0) {
-      // Extract some context around this marker
-      const sectionStart = Math.max(0, markerPos - 400);
-      const sectionEnd = Math.min(text.length, markerPos + 4000);
-      const section = text.substring(sectionStart, sectionEnd);
-      
-      // Add this important section
-      chunks.push(section);
-    }
-  }
-  
-  // 3. Ending: People often summarize in the conclusion
-  const endingSize = Math.min(10000, text.length * 0.05); // 10KB or 5% of document
-  if (endingSize > 0) {
-    const ending = text.substring(text.length - endingSize);
-    // Split the ending into smaller chunks
-    const endingChunks = splitTextIntoChunks(ending, 800, 100);
-    chunks.push(...endingChunks);
-  }
-  
-  // 4. Systematic sampling of the middle parts to ensure coverage
-  // We'll take segments at regular intervals throughout the document
-  const docLength = text.length;
-  const numSamples = Math.min(20, Math.ceil(docLength / 50000)); // 1 sample per 50KB, max 20 samples
-  
-  if (numSamples > 0) {
-    const interval = docLength / (numSamples + 1);
+  if (isLargeDocument) {
+    console.log(`Using optimized chunking for large document: ${fileName} (${text.length} chars)`);
     
-    for (let i = 1; i <= numSamples; i++) {
-      const samplePos = Math.floor(i * interval);
-      const sampleStart = Math.max(0, samplePos - 1000);
-      const sampleEnd = Math.min(docLength, samplePos + 1000);
-      
-      if (sampleEnd > sampleStart) {
-        const sample = text.substring(sampleStart, sampleEnd);
-        chunks.push(sample);
+    // RADICAL OPTIMIZATION: Use a more intelligent chunking strategy for large documents
+    // Rather than just sampling random parts, try to create semantically meaningful chunks
+    
+    // First, try to identify document structure by common section headers
+    const sectionHeaderPatterns = [
+      /#+\s+.+/gm,                 // Markdown headers
+      /\n[A-Z][A-Za-z\s]{2,50}\n/g, // Capitalized lines that might be headers
+      /\n\d+(\.\d+)*\s+[A-Z].+\n/g, // Numbered sections (1.2.3 Title)
+      /\b(Chapter|Section|Part)\s+\d+\b/gi, // Chapter/Section/Part markers
+      /\n[A-Z][A-Za-z\s]{3,50}:/g,  // Title followed by colon
+      /\b(Abstract|Introduction|Background|Methodology|Methods|Results|Discussion|Conclusion|References|Appendix)\b/gi, // Common academic section names
+      /\b(Executive Summary|Overview|Objectives|Scope|Approach|Findings|Recommendations|Next Steps)\b/gi // Common business doc sections
+    ];
+    
+    // Find potential section boundaries
+    let allMatches: {index: number, length: number}[] = [];
+    
+    for (const pattern of sectionHeaderPatterns) {
+      const matches = [...text.matchAll(pattern)];
+      for (const match of matches) {
+        if (match.index !== undefined) {
+          allMatches.push({
+            index: match.index,
+            length: match[0].length
+          });
+        }
       }
     }
+    
+    // Sort by position in text
+    allMatches.sort((a, b) => a.index - b.index);
+    
+    // Deduplicate overlapping matches
+    const boundaries: number[] = [];
+    let lastEnd = -1;
+    
+    for (const match of allMatches) {
+      if (match.index > lastEnd) {
+        boundaries.push(match.index);
+        lastEnd = match.index + match.length;
+      }
+    }
+    
+    // Always include document start
+    boundaries.unshift(0);
+    // Always include document end
+    boundaries.push(text.length);
+    
+    // Create intelligent chunks based on these boundaries
+    const chunks: string[] = [];
+    const maxChunkSize = 2500; // Larger than standard chunks for semantic completeness
+    
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const start = boundaries[i];
+      const end = boundaries[i + 1];
+      const sectionText = text.substring(start, end);
+      
+      // If section is small enough, add as a chunk
+      if (sectionText.length <= maxChunkSize) {
+        if (sectionText.trim().length > 0) {
+          chunks.push(sectionText);
+        }
+      } else {
+        // Otherwise, split it into smaller chunks
+        const subChunks = splitTextIntoChunks(sectionText, 1000, 150);
+        chunks.push(...subChunks);
+      }
+    }
+    
+    // If we couldn't find good section boundaries, fall back to strategic sampling
+    if (chunks.length < 3) {
+      console.log("No clear section structure found, using strategic sampling");
+      chunks.length = 0; // Clear the array
+      
+      // Always include the first part (executive summary, introduction, etc.)
+      const beginningSize = 5000; // First 5000 chars
+      const beginning = text.substring(0, Math.min(beginningSize, text.length));
+      
+      // Sample a few sections from the middle
+      const middleStartPercent = 0.3; // Start at 30% into the document
+      const middleEndPercent = 0.7;   // End at 70% into the document
+      const middleSectionSize = 1000; // Take 1000 chars for each section
+      const numMiddleSections = 5;    // Take 5 sections from the middle
+      
+      const middleStart = Math.floor(text.length * middleStartPercent);
+      const middleEnd = Math.floor(text.length * middleEndPercent);
+      const middleRange = middleEnd - middleStart;
+      
+      // Add the beginning
+      chunks.push(beginning);
+      
+      // Add middle sections
+      for (let i = 0; i < numMiddleSections; i++) {
+        const sectionStart = middleStart + Math.floor((middleRange / numMiddleSections) * i);
+        const section = text.substring(sectionStart, sectionStart + middleSectionSize);
+        chunks.push(section);
+      }
+      
+      // Add the end (conclusions, summaries, etc.)
+      const endSize = 5000; // Last 5000 chars
+      const end = text.substring(Math.max(0, text.length - endSize));
+      chunks.push(end);
+    }
+    
+    console.log(`Created ${chunks.length} intelligent chunks for large document`);
+    return chunks;
+  } else {
+    // For smaller documents, use the normal chunking strategy
+    return splitTextIntoChunks(text);
   }
-  
-  // If we didn't get enough chunks, fall back to standard chunking
-  if (chunks.length < 5) {
-    console.log(`Not enough chunks from sampling (${chunks.length}), using standard chunking`);
-    return splitTextIntoChunks(text, 1500, 100);
-  }
-  
-  console.log(`Created ${chunks.length} optimized chunks for large document`);
-  return chunks;
 }
+
+// For PDF extraction
+const pdfExtractor = {
+  async extract(buffer: Buffer): Promise<string> {
+    try {
+      const result = await pdfParse(buffer);
+      return result.text;
+    } catch (error) {
+      console.error('Error parsing PDF:', error);
+      return 'Error extracting text from PDF document.';
+    }
+  }
+};
+
+// For DOCX extraction
+const docxExtractor = {
+  async extract(buffer: Buffer): Promise<string> {
+    try {
+      // Load and parse the DOCX
+      // Note: This is a simplified implementation - a more robust one would handle
+      // tables, lists, and other complex structures
+      const zip = require('docx/build/file/zip-stream');
+      const docx = new DocxDocument();
+      await docx.load(buffer);
+      
+      let text = '';
+      
+      // Extract text from paragraphs
+      docx.getParagraphs().forEach((paragraph: Paragraph) => {
+        paragraph.getTextRuns().forEach((textRun: TextRun) => {
+          text += textRun.text + ' ';
+        });
+        text += '\n';
+      });
+      
+      return text;
+    } catch (error) {
+      console.error('Error parsing DOCX:', error);
+      return 'Error extracting text from DOCX document.';
+    }
+  }
+};
 
 /**
  * Process a batch of chunks to generate embeddings
  */
 async function processBatch(batch: string[]): Promise<string[]> {
-  console.log(`Processing batch of ${batch.length} chunks with Azure OpenAI`);
-  const startTime = Date.now();
+  console.log(`Processing batch of ${batch.length} chunks`);
   
-  try {
-    // Azure OpenAI batch request
-    const response = await azureOpenAI.embeddings.create({
-      input: batch,
-      model: AZURE_OPENAI_DEPLOYMENT_NAME
-    });
+  const results: string[] = [];
+  
+  // Try using Azure OpenAI for batch embedding
+  if (AZURE_OPENAI_KEY && AZURE_OPENAI_ENDPOINT) {
+    try {
+      console.log(`Using Azure OpenAI for batch embedding generation`);
+      
+      // Call Azure OpenAI to generate embeddings for all texts at once
+      const response = await azureOpenAI.embeddings.create({
+        input: batch,
+        model: AZURE_OPENAI_DEPLOYMENT_NAME, // Use deployment name as model
+      });
+      
+      // Each embedding object contains a vector
+      for (const embedding of response.data) {
+        results.push(JSON.stringify(embedding.embedding));
+      }
+      
+      console.log(`Successfully generated ${results.length} embeddings with Azure OpenAI`);
+      return results;
+    } catch (error) {
+      console.error('Error generating batch embeddings with Azure OpenAI:', error);
+      throw error; // Let the caller handle this
+    }
+  } else {
+    console.log('Azure OpenAI not configured, falling back to individual processing');
     
-    const duration = Date.now() - startTime;
-    console.log(`Batch processed in ${duration}ms (${Math.round(duration/batch.length)}ms per chunk)`);
+    // Fall back to individual processing
+    const individualResults = await Promise.all(
+      batch.map(async (chunk) => {
+        try {
+          return await generateEmbedding(chunk);
+        } catch (e) {
+          console.error('Error generating individual embedding:', e);
+          return ""; // Empty embedding on error
+        }
+      })
+    );
     
-    // Extract and convert embeddings to strings
-    return response.data.map(item => JSON.stringify(item.embedding));
-  } catch (error) {
-    console.error('Azure OpenAI batch embedding failed:', error);
-    throw error; // Rethrow to let caller handle fallback
+    return individualResults;
   }
 }
 
-// Flag to track if we're using Azure OpenAI for embeddings
-// We'll fall back to local model if Azure OpenAI is not available or fails
-let usingAzureOpenAI = true;
-let embeddingPipeline: any = null;
+// Cache for embeddings to avoid duplicate processing
+const embeddingCache = new Map<string, string>();
+// For fallback to local model
+let embeddingPipeline: FeatureExtractionPipeline | null = null;
+// Flag to track whether we're using Azure OpenAI
+let usingAzureOpenAI = AZURE_OPENAI_KEY && AZURE_OPENAI_ENDPOINT;
 
 /**
  * Generate embedding for text
  * OPTIMIZATION: Cached to prevent redundant processing of identical text
  */
-const embeddingCache = new Map<string, string>();
-
 export async function generateEmbedding(text: string): Promise<string> {
-  try {
-    // Check cache first (using first 100 chars as key to avoid memory issues with huge strings)
-    const cacheKey = text.substring(0, 100) + '_' + text.length;
-    if (embeddingCache.has(cacheKey)) {
-      return embeddingCache.get(cacheKey)!;
-    }
-    
-    // Limit text size to prevent excessive memory usage
-    const maxEmbeddingLength = 8191; // Azure OpenAI embedding model limit
-    const truncatedText = text.length > maxEmbeddingLength ? 
-      text.substring(0, maxEmbeddingLength) : 
-      text;
-    
-    let result: string;
-    
-    if (usingAzureOpenAI) {
-      try {
-        const startTime = Date.now();
-        
-        // Use Azure OpenAI to generate embeddings
-        const response = await azureOpenAI.embeddings.create({
-          input: truncatedText,
-          model: AZURE_OPENAI_DEPLOYMENT_NAME
-        });
-        
-        const embedding = response.data[0].embedding;
-        const duration = Date.now() - startTime;
-        
-        // Convert to string for storage
-        result = JSON.stringify(embedding);
-        
-        // Cache the result
-        embeddingCache.set(cacheKey, result);
-        return result;
-      } catch (azureError) {
-        console.error('Azure OpenAI embedding failed, falling back to local model:', azureError);
-        usingAzureOpenAI = false;
-        // Fall through to use local model
-      }
-    }
-    
-    // If Azure OpenAI failed or is disabled, use local model
-    // Initialize the pipeline if not already done
-    if (!embeddingPipeline) {
-      console.log("Initializing local embedding pipeline as fallback...");
-      embeddingPipeline = await pipeline('feature-extraction', 'Xenova/paraphrase-MiniLM-L3-v2');
-    }
-    
-    // Generate embeddings using local model
-    console.log(`Using local model for text of length: ${truncatedText.length} chars`);
-    const startTime = Date.now();
-    const output = await embeddingPipeline(truncatedText, {
-      pooling: 'mean',
-      normalize: true,
-    });
-    
-    // Convert to string for storage
-    result = JSON.stringify(Array.from(output.data));
-    
-    // Cache the result
-    embeddingCache.set(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('Error generating embedding:', error);
-    throw new Error('Failed to generate embedding');
+  // Truncate and normalize text
+  const truncatedText = text.substring(0, 8000).trim(); // Azure OpenAI has 8K token limit
+  
+  // Create cache key (use first 100 chars as a prefix for logging)
+  const cachePrefix = truncatedText.substring(0, 100).replace(/\s+/g, ' ');
+  const cacheKey = truncatedText;
+  
+  // Check cache first
+  if (embeddingCache.has(cacheKey)) {
+    console.log(`Using cached embedding for text starting with: "${cachePrefix}..."`);
+    return embeddingCache.get(cacheKey) || '';
   }
+  
+  console.log(`Generating embedding for text: "${cachePrefix}..." (${truncatedText.length} chars)`);
+  
+  let result = '';
+  
+  // Try using Azure OpenAI first if configured
+  if (usingAzureOpenAI) {
+    try {
+      // Call Azure OpenAI to generate embedding
+      const response = await azureOpenAI.embeddings.create({
+        input: truncatedText,
+        model: AZURE_OPENAI_DEPLOYMENT_NAME, // Use deployment name as model
+      });
+      
+      // Get the embedding vector
+      const embedding = response.data[0].embedding;
+      
+      console.log(`Successfully generated embedding with Azure OpenAI (${embedding.length} dimensions)`);
+      
+      // Convert to string for storage
+      result = JSON.stringify(embedding);
+      
+      // Cache the result
+      embeddingCache.set(cacheKey, result);
+      return result;
+    } catch (azureError) {
+      console.error('Azure OpenAI embedding failed, falling back to local model:', azureError);
+      usingAzureOpenAI = false;
+      // Fall through to use local model
+    }
+  }
+  
+  // If Azure OpenAI failed or is disabled, use local model
+  // Initialize the pipeline if not already done
+  if (!embeddingPipeline) {
+    console.log("Initializing local embedding pipeline as fallback...");
+    embeddingPipeline = await pipeline('feature-extraction', 'Xenova/paraphrase-MiniLM-L3-v2');
+  }
+  
+  // Generate embeddings using local model
+  console.log(`Using local model for text of length: ${truncatedText.length} chars`);
+  const startTime = Date.now();
+  const output = await embeddingPipeline(truncatedText, {
+    pooling: 'mean',
+    normalize: true,
+  });
+  
+  // Convert to string for storage
+  result = JSON.stringify(Array.from(output.data));
+  console.log(`Local embedding generated in ${Date.now() - startTime}ms`);
+  
+  // Cache the result
+  embeddingCache.set(cacheKey, result);
+  return result;
 }
 
 /**
@@ -823,17 +856,31 @@ export async function findSimilarChunks(query: string, conversationId: number, l
   documents: Record<number, Document>;
 }> {
   try {
-    // Generate embedding for the query
-    const queryEmbedding = await generateEmbedding(query);
+    console.time('similar-chunks-search');
+    console.log(`Finding similar chunks for query in conversation ${conversationId}`);
     
-    // Get documents for this conversation
+    // Get documents for this conversation first - this is a critical optimization
+    // because it lets us filter by document ID before doing any expensive embedding operations
+    console.time('get-conversation-documents');
     const documents = await storage.getDocumentsByConversation(conversationId);
+    console.timeEnd('get-conversation-documents');
+    
     if (documents.length === 0) {
+      console.log('No documents found for this conversation');
+      console.timeEnd('similar-chunks-search');
       return { chunks: [], documents: {} };
     }
     
+    console.log(`Found ${documents.length} documents for conversation ${conversationId}`);
+    
     // Extract document IDs
     const documentIds = documents.map(doc => doc.id);
+    
+    // OPTIMIZATION: Generate embedding for the query only after confirming we have documents
+    // This saves an expensive embedding call when there are no documents
+    console.time('query-embedding-generation');
+    const queryEmbedding = await generateEmbedding(query);
+    console.timeEnd('query-embedding-generation');
     
     // If MongoDB is available, use it for vector similarity search
     if (MONGODB_URI) {
@@ -847,28 +894,105 @@ export async function findSimilarChunks(query: string, conversationId: number, l
         // Parse the embedding from JSON string to array
         const embeddingVector = JSON.parse(queryEmbedding);
         
-        // Prepare the MongoDB aggregation pipeline for vector search
-        // This is a simplistic approach - in a production environment, you would use $vectorSearch
-        // Here we'll use a combination of filtering and manual similarity computation
-        const chunks = await chunksCollection.find({
-          documentId: { $in: documentIds.map(id => id.toString()) }
-        }).toArray();
+        // PERFORMANCE IMPROVEMENT: Use MongoDB's aggregation for vector search
+        // This is significantly more efficient than loading all chunks and computing similarity in memory
+        // Check if vectorSearch is available (MongoDB Atlas)
+        let hasVectorSearch = await checkVectorSearchCapability(chunksCollection);
         
-        console.log(`Found ${chunks.length} chunks in MongoDB for the specified documents`);
+        // Initialize results variable
+        let mongoResults: any[] = [];
         
-        // If we have chunks with embeddings, compute similarity
-        if (chunks.length > 0) {
-          // Filter chunks that have embeddings
-          const chunksWithEmbeddings = chunks.filter(chunk => chunk.embedding);
+        if (hasVectorSearch) {
+          // Use MongoDB Atlas vectorSearch for optimal performance
+          console.log('Using MongoDB Atlas vectorSearch for similarity search');
+          try {
+            mongoResults = await chunksCollection.aggregate([
+              // Match only chunks from our documents
+              { $match: { documentId: { $in: documentIds.map(id => id.toString()) } } },
+              // Only consider chunks with non-empty embeddings
+              { $match: { embedding: { $type: "string", $ne: "" } } },
+              // Perform vector search
+              {
+                $vectorSearch: {
+                  index: "vector_index",
+                  path: "embedding",
+                  queryVector: embeddingVector,
+                  numCandidates: limit * 10, // Search more candidates for better results
+                  limit: limit * 2 // Get more than we need to filter later
+                }
+              },
+              // Add a projection to include similarity score
+              { $addFields: { similarity: { $meta: "vectorSearchScore" } } },
+              // Sort by similarity (highest first)
+              { $sort: { similarity: -1 } },
+              // Limit results
+              { $limit: limit }
+            ]).toArray();
+          } catch (vectorSearchError) {
+            console.error("Error using vectorSearch:", vectorSearchError);
+            console.log("Falling back to manual similarity calculation");
+            // Set hasVectorSearch to false to use fallback
+            hasVectorSearch = false;
+          }
+        }
+        
+        if (!hasVectorSearch) {
+          // Fallback to manual similarity calculation with optimizations
+          console.log('Using manual similarity calculation with limiting');
           
-          if (chunksWithEmbeddings.length > 0) {
-            console.log(`Computing similarity for ${chunksWithEmbeddings.length} chunks with embeddings`);
+          // OPTIMIZATION: First create an index on documentId if it doesn't exist to speed up queries
+          try {
+            const hasDocIdIndex = await chunksCollection.indexExists("document_id_index");
+            if (!hasDocIdIndex) {
+              console.log("Creating index on documentId for faster retrieval");
+              await chunksCollection.createIndex({ documentId: 1 }, { name: "document_id_index" });
+            }
+          } catch (indexError) {
+            console.warn("Error checking or creating document_id_index:", indexError);
+          }
+          
+          // Use a more efficient query approach - first get a sample of chunks to find better candidates
+          const chunkCount = await chunksCollection.countDocuments({
+            documentId: { $in: documentIds.map(id => id.toString()) }
+          });
+          
+          console.log(`Total chunks available for these documents: ${chunkCount}`);
+          
+          // For large collections, use a more efficient sampling strategy
+          let chunks: any[] = [];
+          if (chunkCount > 1000) {
+            console.log("Large chunk collection detected, using efficient sampling strategy");
             
-            // Compute cosine similarity for each chunk
-            // Use any type to avoid TypeScript errors with MongoDB documents
+            // Stratified sampling - get some chunks from each document to ensure coverage
+            const samplesPerDoc = Math.min(20, Math.ceil(100 / documentIds.length));
+            const samplePromises = documentIds.map(async (docId) => {
+              return chunksCollection.find({
+                documentId: docId.toString(),
+                embedding: { $type: "string", $ne: "" }
+              }).limit(samplesPerDoc).toArray();
+            });
+            
+            const docSamples = await Promise.all(samplePromises);
+            chunks = docSamples.flat();
+            console.log(`Sampled ${chunks.length} chunks across ${documentIds.length} documents`);
+          } else {
+            // For smaller collections, we can process all chunks with embeddings
+            chunks = await chunksCollection.find({
+              documentId: { $in: documentIds.map(id => id.toString()) },
+              embedding: { $type: "string", $ne: "" }
+            }).limit(200).toArray(); // Increased limit for better results while still being efficient
+          }
+          
+          console.log(`Found ${chunks.length} chunks in MongoDB for the specified documents`);
+          
+          // Only compute similarity if we have chunks
+          if (chunks.length > 0) {
+            console.log(`Computing similarity for ${chunks.length} chunks with embeddings`);
+            
+            // Compute cosine similarity for each chunk efficiently
             const chunksWithSimilarity: any[] = [];
             
-            for (const chunk of chunksWithEmbeddings) {
+            for (const chunk of chunks) {
               try {
                 if (chunk && chunk.embedding && typeof chunk.embedding === 'string') {
                   const chunkEmbedding = JSON.parse(chunk.embedding);
@@ -892,46 +1016,51 @@ export async function findSimilarChunks(query: string, conversationId: number, l
             }
             
             // Sort by similarity (descending) and take the top results
-            const topChunks = chunksWithSimilarity
-              .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+            mongoResults = chunksWithSimilarity
+              .sort((a: any, b: any) => (b.similarity || 0) - (a.similarity || 0))
               .slice(0, limit);
               
-            console.log(`Selected top ${topChunks.length} chunks by similarity`);
-            
-            // Convert MongoDB documents to DocumentChunk objects
-            const documentChunks: DocumentChunk[] = [];
-            
-            for (const chunk of topChunks) {
-              try {
-                if (chunk && typeof chunk === 'object') {
-                  const docChunk: DocumentChunk = {
-                    id: parseInt(String(chunk.id || "0")),
-                    documentId: parseInt(String(chunk.documentId || "0")),
-                    content: String(chunk.content || ""),
-                    chunkIndex: Number(chunk.chunkIndex || 0),
-                    embedding: String(chunk.embedding || ""),
-                    // Add required properties from DocumentChunk type
-                    createdAt: new Date()
-                  };
-                  
-                  documentChunks.push(docChunk);
-                }
-              } catch (parseError) {
-                console.error("Error converting MongoDB chunk to DocumentChunk:", parseError);
-              }
-            }
-            
-            // Create a map of document IDs to documents for easy access
-            const documentMap: Record<number, Document> = {};
-            documents.forEach(doc => {
-              documentMap[doc.id] = doc;
-            });
-            
-            return {
-              chunks: documentChunks,
-              documents: documentMap
-            };
+            console.log(`Selected top ${mongoResults.length} chunks by similarity`);
           }
+        }
+        
+        // If we have MongoDB results, convert them to DocumentChunk objects
+        if (mongoResults && mongoResults.length > 0) {
+          console.log(`Converting ${mongoResults.length} MongoDB results to DocumentChunk objects`);
+          
+          // Convert MongoDB documents to DocumentChunk objects
+          const documentChunks: DocumentChunk[] = [];
+          
+          for (const chunk of mongoResults) {
+            try {
+              if (chunk && typeof chunk === 'object') {
+                const docChunk: DocumentChunk = {
+                  id: parseInt(String(chunk.id || "0")),
+                  documentId: parseInt(String(chunk.documentId || "0")),
+                  content: String(chunk.content || ""),
+                  chunkIndex: Number(chunk.chunkIndex || 0),
+                  embedding: String(chunk.embedding || ""),
+                  // Add required properties from DocumentChunk type
+                  createdAt: new Date()
+                };
+                
+                documentChunks.push(docChunk);
+              }
+            } catch (parseError) {
+              console.error("Error converting MongoDB chunk to DocumentChunk:", parseError);
+            }
+          }
+          
+          // Create a map of document IDs to documents for easy access
+          const documentMap: Record<number, Document> = {};
+          documents.forEach(doc => {
+            documentMap[doc.id] = doc;
+          });
+          
+          return {
+            chunks: documentChunks,
+            documents: documentMap
+          };
         }
         
         console.log("No suitable chunks found in MongoDB, falling back to in-memory search");
@@ -959,6 +1088,9 @@ export async function findSimilarChunks(query: string, conversationId: number, l
     documents.forEach(doc => {
       documentMap[doc.id] = doc;
     });
+    
+    console.timeEnd('similar-chunks-search');
+    console.log(`Found ${similarChunks.length} similar chunks for query in conversation ${conversationId}`);
     
     return {
       chunks: similarChunks,

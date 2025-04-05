@@ -89,33 +89,67 @@ export function registerDocumentRoutes(app: Express) {
           // Start processing in the background without waiting
           const buffer = await fs.readFile(file.path);
           
-          const documentPromise = processDocument({
-            buffer,
-            fileName: file.originalname,
-            fileType: file.mimetype,
-            fileSize: file.size,
-            conversationId,
-            userId
-          }).then(doc => {
-            console.log(`Large document processed successfully in background. Document ID: ${doc.id}`);
-          }).catch(error => {
-            console.error('Error processing large document in background:', error);
-          });
-          
-          // Create a placeholder document immediately
+          // Create a placeholder document immediately with processing status
           const placeholderDocument = await storage.createDocument({
             fileName: file.originalname,
             fileType: file.mimetype,
             fileSize: file.size,
-            content: `This large document (${(file.size / (1024 * 1024)).toFixed(2)}MB) is being processed in the background. Please wait a moment before querying it.`,
+            content: `This large document (${(file.size / (1024 * 1024)).toFixed(2)}MB) is being processed in the background.`,
             conversationId,
             userId,
             metadata: {
               extractedAt: new Date().toISOString(),
               fileType: file.mimetype,
-              processingStatus: 'in_progress'
+              processingStatus: 'queued',
+              processingProgress: 0
             }
           });
+          
+          // Update the placeholder with progress information at different stages
+          const updateProcessingStatus = async (status: string, progress: number) => {
+            try {
+              await storage.updateDocumentMetadata(placeholderDocument.id, {
+                ...placeholderDocument.metadata,
+                processingStatus: status,
+                processingProgress: progress,
+                lastUpdated: new Date().toISOString()
+              });
+            } catch (err) {
+              console.error(`Error updating document status to ${status}:`, err);
+            }
+          };
+          
+          // Start background processing with progress updates
+          const documentPromise = (async () => {
+            try {
+              // Update status to "extracting"
+              await updateProcessingStatus('extracting', 10);
+              
+              const doc = await processDocument({
+                buffer,
+                fileName: file.originalname,
+                fileType: file.mimetype,
+                fileSize: file.size,
+                conversationId,
+                userId,
+                progressCallback: async (stage: string, progress: number) => {
+                  await updateProcessingStatus(stage, progress);
+                }
+              });
+              
+              // Final update to complete
+              await updateProcessingStatus('complete', 100);
+              
+              console.log(`Large document processed successfully in background. Document ID: ${doc.id}`);
+              return doc;
+            } catch (error) {
+              console.error('Error processing large document in background:', error);
+              await updateProcessingStatus('error', 0);
+              throw error;
+            }
+          })();
+          
+          // Return the placeholder document immediately
           
           console.log(`Created placeholder for large document. Document ID: ${placeholderDocument.id}`);
           
