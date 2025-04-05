@@ -1,0 +1,60 @@
+Prompt for Troubleshooting Replit Web App Failure on Login
+
+Context:
+A web application hosted on Replit is exhibiting specific failure behavior. It functions correctly when accessed anonymously (e.g., in an incognito browser window or when logged out). However, when a user logs in using Google authentication, or accesses the site using a Chrome profile already logged into Google, the application fails and displays a "Service Unavailable" message. Replit logs show a database error related to a missing column immediately preceding an application crash.
+
+Provided Logs:
+
+2025-04-05 18:11:28.53 56fd2dc5 User error: column "preset1_model_id" does not exist
+2025-04-05 18:11:28.53 56fd2dc5 User at /home/runner/workspace/node_modules/pg-pool/index.js:45:11
+2025-04-05 18:11:28.53 56fd2dc5 User at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-04-05 18:11:28.53 56fd2dc5 User at async file:///home/runner/workspace/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2025-04-05 18:11:28.53 56fd2dc5 User at async Strategy._verify (file:///home/runner/workspace/dist/index.js:2363:26)
+2025-04-05 18:11:28.53 56fd2dc5 System system: received signal terminated
+2025-04-05 18:11:28.54 56fd2dc5 System command finished with error [npm run start]: signal: terminated
+2025-04-05 18:11:28.58 56fd2dc5 System main done, exiting
+Problem Diagnosis:
+The root cause is a mismatch between the application's code and the structure (schema) of its PostgreSQL database.
+
+Authentication Trigger: The Google login process executes specific backend code to verify the user's identity and interact with the user database (likely finding or creating a user record). The log points to a function named Strategy._verify, common in authentication libraries, being executed.
+Database Error: Within this authentication code path, a database query is made using Drizzle ORM (drizzle-orm/node-postgres) which attempts to reference a column named preset1_model_id.
+Missing Column: The database schema for the table being queried does not contain a column named preset1_model_id. This causes PostgreSQL to return the column "preset1_model_id" does not exist error.
+Application Crash: This database error is unhandled within the Node.js application, causing the entire server process (npm run start) to crash (signal: terminated).
+Service Unavailable: With the backend process crashed, Replit's frontend can no longer connect, resulting in the "Service Unavailable" message displayed to the user.
+Why Incognito Works: Anonymous sessions do not trigger the Google authentication flow, therefore the specific database query referencing the non-existent column is never executed, and the application does not crash.
+Required Action: Detailed Fix Procedure
+
+Please follow these steps to resolve the issue:
+
+Identify the Problematic Code:
+
+Examine the code corresponding to the stack trace line: file:///home/runner/workspace/dist/index.js:2363:26. If using TypeScript/source maps, find the original source file and line number.
+Locate the Drizzle ORM database query within or called by this Strategy._verify function. Pinpoint exactly where preset1_model_id is being used (e.g., in a select, where, insert, or update statement). Understand the purpose of this column reference in the context of user authentication/data retrieval.
+Inspect the Live Database Schema:
+
+Connect to the PostgreSQL database that your deployed Replit application is configured to use (check Replit Secrets/environment variables for connection details if unsure).
+Use a database tool (like psql command line, pgAdmin, DBeaver, or Replit's built-in DB tool if applicable) to inspect the schema of the table involved in the failing query.
+Verify conclusively that the column preset1_model_id does not exist in that table.
+Choose and Implement the Correct Solution:
+
+Option A: The column preset1_model_id IS required by the application logic:
+Action: Add the missing column to the database table.
+Method (using Drizzle Migrations - Recommended):
+Define the preset1_model_id column in your Drizzle schema definition file (e.g., src/schema.ts). Make sure to use the correct data type.
+Generate a new migration file: npx drizzle-kit generate:pg (or your specific command). Inspect the generated SQL to ensure it correctly adds the column (ALTER TABLE ... ADD COLUMN preset1_model_id ...).
+Apply the migration to your database: npx drizzle-kit push:pg (for simple sync) or run your migration script (e.g., npm run migrate). Crucially, ensure this is run against the database connected to your Replit environment.
+Method (Manual SQL): Execute the appropriate ALTER TABLE your_table_name ADD COLUMN preset1_model_id <your_data_type>; command directly against the database.
+Option B: The column preset1_model_id is NOT required (e.g., typo, leftover code, logical error):
+Action: Modify the application code.
+Method: Edit the code file identified in Step 1. Remove the reference to preset1_model_id from the Drizzle query, or correct it to the intended column name if it was a typo. Ensure the surrounding logic still functions correctly after the change.
+Verify Database State & Migrations (Especially for Option A):
+
+If you used migrations, double-check that the migration ran successfully against the production/Replit database. Sometimes migrations run locally but fail or are skipped in the deployment environment.
+Reconnect to the database (Step 2) and confirm the schema change (column added) or that no unintended schema changes occurred if you chose Option B.
+Restart and Test:
+
+Stop and restart your Replit application (e.g., trigger a redeploy or use the shell kill 1 command followed by running the start command again).
+Clear your browser cache/cookies for the application's domain or use a fresh incognito window.
+Attempt the Google Login process again.
+Monitor the Replit logs closely during the login attempt to ensure the column ... does not exist error is gone and no new errors appear. Verify that you are successfully logged in and the application is responsive.
+By systematically following these steps, you should be able to align your application code and database schema, resolving the crash and the "Service Unavailable" error during Google login.
