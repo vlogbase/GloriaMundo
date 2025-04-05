@@ -1,19 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { OpenRouterModel } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 
+// Fallback default models to use if API fails
+const FALLBACK_MODELS: OpenRouterModel[] = [
+  {
+    id: "openai/o3-mini",
+    name: "o3 Mini",
+    context_length: 16000,
+    pricing: { prompt: 0, completion: 0 },
+    isFree: true
+  },
+  {
+    id: "anthropic/claude-3-haiku",
+    name: "Claude 3 Haiku",
+    context_length: 200000,
+    pricing: { prompt: 0, completion: 0 },
+    isFree: true
+  }
+];
+
 export const useOpenRouterModels = () => {
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [useFallbackModels, setUseFallbackModels] = useState(false);
+  const hasShownTimeoutToast = useRef(false);
   const { toast } = useToast();
 
-  // Fetch models from OpenRouter API
-  const { data, isError, isLoading } = useQuery<OpenRouterModel[]>({
+  // Fetch models from OpenRouter API with shorter timeout
+  const { data, isError, isLoading, error } = useQuery<OpenRouterModel[]>({
     queryKey: ['/api/openrouter/models'],
-    enabled: true,
+    enabled: !useFallbackModels,
     refetchOnWindowFocus: false,
     retry: 1,
+    staleTime: 60 * 1000, // Consider data fresh for 1 minute
+    gcTime: 5 * 60 * 1000, // Keep unused data for 5 minutes
   });
 
   // Process the model data
@@ -67,13 +89,37 @@ export const useOpenRouterModels = () => {
 
   useEffect(() => {
     if (isError) {
-      toast({
-        variant: 'destructive',
-        title: 'Error fetching models',
-        description: 'Could not load OpenRouter models. Check API key configuration.',
-      });
+      // Check if error is a timeout
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('exceeded');
+      
+      // Only show a toast the first time for timeouts
+      if (isTimeout && !hasShownTimeoutToast.current) {
+        toast({
+          variant: 'destructive',
+          title: 'Slow network detected',
+          description: 'Using fallback models to improve application performance.',
+        });
+        hasShownTimeoutToast.current = true;
+      } else if (!isTimeout) {
+        // Show error toast for non-timeout errors
+        toast({
+          variant: 'destructive',
+          title: 'Error fetching models',
+          description: 'Could not load model list. Using default models.',
+        });
+      }
+      
+      // Use fallback models
+      setUseFallbackModels(true);
+      setModels(FALLBACK_MODELS);
+      
+      // Set the first fallback model as default if no selection
+      if (!selectedModelId && FALLBACK_MODELS.length > 0) {
+        setSelectedModelId(FALLBACK_MODELS[0].id);
+      }
     }
-  }, [isError, toast]);
+  }, [isError, error, toast, selectedModelId]);
 
   // Get a specifically formatted name for a model
   const getFormattedModelName = (modelId: string): string => {

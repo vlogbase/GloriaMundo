@@ -7,17 +7,38 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// Utility function to implement fetch with timeout
+async function fetchWithTimeout(url: string, options: RequestInit, timeout = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout exceeded. The server is taking too long to respond.');
+    }
+    throw error;
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
-  });
+  }, 30000); // 30 second timeout
 
   await throwIfResNotOk(res);
   return res;
@@ -29,9 +50,9 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    const res = await fetchWithTimeout(queryKey[0] as string, {
       credentials: "include",
-    });
+    }, 15000); // 15 second timeout for queries
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
