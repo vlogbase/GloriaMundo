@@ -3,6 +3,8 @@ import {
   conversations, type Conversation, type InsertConversation,
   messages, type Message, type InsertMessage
 } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 // Define the user presets interface
 export interface UserPresets {
@@ -59,10 +61,36 @@ export class MemStorage implements IStorage {
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
+    // First try to get user from DB
+    try {
+      const userFromDb = await db.select().from(users).where(eq(users.id, id)).limit(1);
+      
+      if (userFromDb.length > 0) {
+        // User exists in the database
+        return userFromDb[0];
+      }
+    } catch (error) {
+      console.error('Database error when getting user:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     return this.users.get(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    // First try to get user from DB
+    try {
+      const userFromDb = await db.select().from(users).where(eq(users.email, username)).limit(1);
+      
+      if (userFromDb.length > 0) {
+        // User exists in the database
+        return userFromDb[0];
+      }
+    } catch (error) {
+      console.error('Database error when getting user by username:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     return Array.from(this.users.values()).find(
       (user) => user.email === username,
     );
@@ -139,6 +167,37 @@ export class MemStorage implements IStorage {
    * Add credits to a user's balance
    */
   async addUserCredits(userId: number, credits: number): Promise<User> {
+    // First try to get user from DB
+    try {
+      const userFromDb = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      
+      if (userFromDb.length > 0) {
+        // User exists in the database
+        if (credits < 0) {
+          throw new Error("Cannot add negative credits");
+        }
+        
+        // Update user in the database
+        const newBalance = userFromDb[0].creditBalance + credits;
+        await db.update(users)
+          .set({ 
+            creditBalance: newBalance,
+            updatedAt: new Date()
+          })
+          .where(eq(users.id, userId));
+        
+        // Get updated user
+        const updatedUserFromDb = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (updatedUserFromDb.length > 0) {
+          console.log(`Added ${credits} credits to user ${userId} in database. New balance: ${updatedUserFromDb[0].creditBalance}`);
+          return updatedUserFromDb[0];
+        }
+      }
+    } catch (error) {
+      console.error('Database error when adding credits:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     const user = await this.getUser(userId);
     
     if (!user) {
@@ -156,7 +215,7 @@ export class MemStorage implements IStorage {
     };
     
     this.users.set(userId, updatedUser);
-    console.log(`Added ${credits} credits to user ${userId}. New balance: ${updatedUser.creditBalance}`);
+    console.log(`Added ${credits} credits to user ${userId} in memory. New balance: ${updatedUser.creditBalance}`);
     
     return updatedUser;
   }
@@ -165,6 +224,45 @@ export class MemStorage implements IStorage {
    * Deduct credits from a user's balance
    */
   async deductUserCredits(userId: number, credits: number): Promise<User> {
+    // First try to get user from DB
+    try {
+      const userFromDb = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      
+      if (userFromDb.length > 0) {
+        // User exists in the database
+        if (credits < 0) {
+          throw new Error("Cannot deduct negative credits");
+        }
+        
+        if (userFromDb[0].creditBalance < credits) {
+          throw new Error("Insufficient credits");
+        }
+        
+        // Update user in the database
+        const newBalance = userFromDb[0].creditBalance - credits;
+        await db.update(users)
+          .set({ 
+            creditBalance: newBalance,
+            updatedAt: new Date()
+          })
+          .where(eq(users.id, userId));
+        
+        // Get updated user
+        const updatedUserFromDb = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (updatedUserFromDb.length > 0) {
+          console.log(`Deducted ${credits} credits from user ${userId} in database. New balance: ${updatedUserFromDb[0].creditBalance}`);
+          return updatedUserFromDb[0];
+        }
+      }
+    } catch (error) {
+      console.error('Database error when deducting credits:', error);
+      // If the error is about insufficient credits, rethrow it to maintain the intended behavior
+      if (error instanceof Error && error.message === "Insufficient credits") {
+        throw error;
+      }
+    }
+    
+    // Fallback to in-memory storage if DB fails
     const user = await this.getUser(userId);
     
     if (!user) {
@@ -186,7 +284,7 @@ export class MemStorage implements IStorage {
     };
     
     this.users.set(userId, updatedUser);
-    console.log(`Deducted ${credits} credits from user ${userId}. New balance: ${updatedUser.creditBalance}`);
+    console.log(`Deducted ${credits} credits from user ${userId} in memory. New balance: ${updatedUser.creditBalance}`);
     
     return updatedUser;
   }

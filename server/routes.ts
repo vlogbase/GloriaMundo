@@ -558,19 +558,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Find the user by email
-      const usersWithEmail = await pg.query(
-        "SELECT * FROM users WHERE email = $1",
-        [email]
-      );
+      const usersWithEmail = await db.select().from(users).where(eq(users.email, email));
       
-      if (usersWithEmail.rows.length === 0) {
-        return res.status(404).json({ message: "User not found" });
+      if (usersWithEmail.length === 0) {
+        return res.status(404).json({ message: "User not found with email: " + email });
       }
       
-      const user = usersWithEmail.rows[0];
+      const user = usersWithEmail[0];
+      console.log(`Found user with ID ${user.id} and email ${email}`);
       
       // Convert dollar amount to credits (10,000 credits = $1)
-      const credits = Math.floor(parseFloat(amount) * 10000);
+      const credits = Math.floor(parseFloat(amount.toString()) * 10000);
       
       // Update the user's balance
       const updatedUser = await storage.addUserCredits(user.id, credits);

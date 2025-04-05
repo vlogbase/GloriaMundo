@@ -51,7 +51,7 @@ export const Sidebar = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
   // Query for current user to check authentication status
-  const { data: user } = useQuery<User | null>({ 
+  const { data: user, isLoading: isUserLoading } = useQuery<User | null>({ 
     queryKey: ['/api/auth/me'],
     staleTime: 5 * 60 * 1000, // 5 minutes - share cache with other components
   });
@@ -181,7 +181,11 @@ export const Sidebar = ({
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-2">
             {/* Show login prompt for non-authenticated users */}
-            {!user ? (
+            {isUserLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : !user ? (
               <div className="flex flex-col items-center justify-center p-6 text-center">
                 <div className="bg-muted p-4 rounded-lg w-full space-y-4">
                   <h3 className="font-medium">Sign in for chat history</h3>
