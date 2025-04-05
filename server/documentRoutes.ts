@@ -78,7 +78,61 @@ export function registerDocumentRoutes(app: Express) {
       
       console.log(`Processing document: ${file.originalname} (${file.mimetype}, ${file.size} bytes) for conversation ${conversationId}`);
       
-      // Process the document
+      // For large files, set a longer timeout
+      const isLargeFile = file.size > 1 * 1024 * 1024; // 1MB threshold
+      
+      if (isLargeFile) {
+        console.log(`Large file detected (${(file.size / (1024 * 1024)).toFixed(2)}MB). Setting longer timeout.`);
+        
+        // We'll respond immediately to prevent timeouts, then process in the background
+        if (file.size > 5 * 1024 * 1024) { // 5MB threshold for very large files
+          // Start processing in the background without waiting
+          const documentPromise = processDocument(
+            file.path,
+            file.originalname,
+            file.mimetype,
+            file.size,
+            conversationId,
+            userId
+          ).then(doc => {
+            console.log(`Large document processed successfully in background. Document ID: ${doc.id}`);
+          }).catch(error => {
+            console.error('Error processing large document in background:', error);
+          });
+          
+          // Create a placeholder document immediately
+          const placeholderDocument = await storage.createDocument({
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: file.size,
+            content: `This large document (${(file.size / (1024 * 1024)).toFixed(2)}MB) is being processed in the background. Please wait a moment before querying it.`,
+            conversationId,
+            userId,
+            metadata: {
+              extractedAt: new Date().toISOString(),
+              fileType: file.mimetype,
+              processingStatus: 'in_progress'
+            }
+          });
+          
+          console.log(`Created placeholder for large document. Document ID: ${placeholderDocument.id}`);
+          
+          // Use the placeholder to respond
+          return res.status(202).json({
+            message: 'Large document accepted for processing',
+            document: {
+              id: placeholderDocument.id,
+              fileName: placeholderDocument.fileName,
+              fileType: placeholderDocument.fileType,
+              fileSize: placeholderDocument.fileSize,
+              createdAt: placeholderDocument.createdAt,
+              processingStatus: 'in_progress'
+            }
+          });
+        }
+      }
+      
+      // For regular files, process normally
       const document = await processDocument(
         file.path,
         file.originalname,

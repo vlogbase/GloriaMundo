@@ -249,12 +249,40 @@ export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatIn
     
     try {
       setUploadingDocument(true);
-      await onUploadDocument(file);
       
-      toast({
-        title: "Document uploaded",
-        description: `${file.name} has been uploaded and will be used for context.`
-      });
+      // Show warning for large files
+      if (file.size > 1024 * 1024) { // If file is larger than 1MB
+        toast({
+          title: "Processing large document",
+          description: "Large documents may take longer to process. Please be patient.",
+          duration: 5000
+        });
+      }
+      
+      // Set a timeout to detect stalled requests
+      const uploadTimeoutId = setTimeout(() => {
+        toast({
+          title: "Upload taking longer than expected",
+          description: "Processing continues in the background. You can continue using the chat.",
+          duration: 10000
+        });
+      }, 15000); // 15 seconds
+      
+      try {
+        await onUploadDocument(file);
+        
+        // Clear the timeout if upload completes successfully
+        clearTimeout(uploadTimeoutId);
+        
+        toast({
+          title: "Document uploaded",
+          description: `${file.name} has been uploaded and will be used for context.`
+        });
+      } catch (error) {
+        // Clear the timeout if upload fails
+        clearTimeout(uploadTimeoutId);
+        throw error;
+      }
       
       // Reset the file input
       if (documentInputRef.current) {
@@ -262,11 +290,32 @@ export const ChatInput = ({ onSendMessage, isLoading, onUploadDocument }: ChatIn
       }
     } catch (error) {
       console.error("Error uploading document:", error);
-      toast({
-        variant: "destructive",
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "Failed to upload document."
-      });
+      
+      // Handle different error types
+      if (error instanceof Error) {
+        if (error.message.includes("502") || error.message.includes("timeout") || error.message.includes("network")) {
+          toast({
+            variant: "destructive",
+            title: "Server timeout",
+            description: "The document may be too large for processing. Try splitting it into smaller files or using plain text format.",
+            duration: 8000
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Upload failed",
+            description: error.message,
+            duration: 5000
+          });
+        }
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Upload failed",
+          description: "Failed to upload document. Try a smaller or different format file.",
+          duration: 5000
+        });
+      }
     } finally {
       setUploadingDocument(false);
     }

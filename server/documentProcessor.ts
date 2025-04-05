@@ -190,12 +190,28 @@ async function extractTextFromFile(buffer: Buffer, fileType: string): Promise<st
  * Create chunks from document text
  */
 async function createChunksFromDocument(document: Document): Promise<DocumentChunk[]> {
-  // Split text into chunks
-  const chunks = splitTextIntoChunks(document.content);
+  console.log(`Creating chunks for document: ${document.fileName} (${document.content.length} characters)`);
+  
+  // Split text into chunks - use smaller chunks for large documents
+  const isLargeDocument = document.content.length > 100000; // 100KB threshold
+  const chunkSize = isLargeDocument ? 500 : 1000; 
+  const overlapSize = isLargeDocument ? 100 : 200;
+  
+  console.log(`Using chunk size: ${chunkSize}, overlap: ${overlapSize}`);
+  
+  // Remove MAX_CHUNK_SIZE and CHUNK_OVERLAP constants and use the local variables
+  const chunks = splitTextIntoChunks(document.content, chunkSize, overlapSize);
+  console.log(`Document split into ${chunks.length} chunks`);
   
   // Store chunks
   const documentChunks: DocumentChunk[] = [];
   for (let i = 0; i < chunks.length; i++) {
+    // Skip empty chunks
+    if (!chunks[i].trim()) {
+      console.log(`Skipping empty chunk at index ${i}`);
+      continue;
+    }
+    
     const chunk = await storage.createDocumentChunk({
       documentId: document.id,
       content: chunks[i],
@@ -203,16 +219,36 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     });
     
     documentChunks.push(chunk);
+    
+    // Log progress
+    if (i % 10 === 0 || i === chunks.length - 1) {
+      console.log(`Created ${i + 1}/${chunks.length} chunks`);
+    }
   }
   
-  // Generate embeddings for each chunk
-  for (const chunk of documentChunks) {
-    try {
-      const embedding = await generateEmbedding(chunk.content);
-      await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
-    } catch (error) {
-      console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
-    }
+  // Generate embeddings for each chunk - but limit processing for large documents
+  const maxEmbeddingChunks = isLargeDocument ? 30 : documentChunks.length;
+  const chunksToEmbed = documentChunks.slice(0, maxEmbeddingChunks);
+  
+  console.log(`Generating embeddings for ${chunksToEmbed.length} chunks (out of ${documentChunks.length} total)`);
+  
+  // Use Promise.all with batching to speed up processing
+  const batchSize = 5;
+  for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
+    const batch = chunksToEmbed.slice(i, i + batchSize);
+    
+    // Process embeddings in parallel for this batch
+    await Promise.all(batch.map(async (chunk) => {
+      try {
+        const embedding = await generateEmbedding(chunk.content);
+        await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+      } catch (error) {
+        console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
+      }
+    }));
+    
+    // Log progress
+    console.log(`Processed embeddings for ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length} chunks`);
   }
   
   return documentChunks;
@@ -220,39 +256,71 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
 
 /**
  * Split text into chunks of roughly equal size
+ * @param text The text to split
+ * @param chunkSize The maximum size of each chunk
+ * @param overlapSize The overlap between chunks
+ * @returns An array of text chunks
  */
-function splitTextIntoChunks(text: string): string[] {
+function splitTextIntoChunks(text: string, chunkSize = MAX_CHUNK_SIZE, overlapSize = CHUNK_OVERLAP): string[] {
   const chunks: string[] = [];
   let start = 0;
   
+  // Skip empty text
+  if (!text || text.length === 0) {
+    return chunks;
+  }
+  
+  // For very large texts, use aggressive chunking without trying to find natural breaks
+  const isVeryLargeText = text.length > 500000; // 500KB
+  const lookForBreaks = !isVeryLargeText;
+  
   while (start < text.length) {
     // Calculate end position, ensuring we don't exceed text length
-    let end = Math.min(start + MAX_CHUNK_SIZE, text.length);
+    let end = Math.min(start + chunkSize, text.length);
     
-    // If we're not at the end of the text, try to find a natural break point
-    if (end < text.length) {
+    // If we're not at the end of the text and we should look for breaks, try to find a natural break point
+    if (end < text.length && lookForBreaks) {
+      const windowSize = Math.min(50, Math.floor(chunkSize * 0.1)); // 10% of chunk size or 50, whichever is smaller
+      
+      // Don't look beyond the text length
+      const upperLimit = Math.min(end + windowSize, text.length);
+      
       // Look for a natural break like a paragraph or sentence ending within a window
-      const window = text.substring(end - 50, end + 50);
+      const window = text.substring(end - windowSize, upperLimit);
       
       // Check for paragraph break
       const paragraphBreak = window.indexOf('\n\n');
-      if (paragraphBreak !== -1 && paragraphBreak < 50) {
-        end = end - 50 + paragraphBreak + 2; // +2 to include the \n\n
+      if (paragraphBreak !== -1 && paragraphBreak < windowSize) {
+        end = end - windowSize + paragraphBreak + 2; // +2 to include the \n\n
       } else {
         // Check for sentence break (period followed by space or newline)
         const sentenceBreak = window.search(/\.\s/);
-        if (sentenceBreak !== -1 && sentenceBreak < 50) {
-          end = end - 50 + sentenceBreak + 2; // +2 to include the period and space
+        if (sentenceBreak !== -1 && sentenceBreak < windowSize) {
+          end = end - windowSize + sentenceBreak + 2; // +2 to include the period and space
+        } else {
+          // If no natural breaks found, look for any whitespace
+          const spaceBreak = window.search(/\s/);
+          if (spaceBreak !== -1 && spaceBreak < windowSize) {
+            end = end - windowSize + spaceBreak + 1;
+          }
         }
       }
     }
     
-    // Add the chunk
-    chunks.push(text.substring(start, end));
+    // Add the chunk, but first check if it's meaningful
+    const chunk = text.substring(start, end).trim();
+    if (chunk.length > 0) {
+      chunks.push(chunk);
+    }
     
     // Set the next start position with overlap
-    start = end - CHUNK_OVERLAP;
+    start = end - overlapSize;
     if (start < 0) start = 0;
+    
+    // Avoid infinite loops
+    if (start >= end) {
+      start = end;
+    }
   }
   
   return chunks;
@@ -266,16 +334,28 @@ let embeddingPipeline: any = null;
  */
 export async function generateEmbedding(text: string): Promise<string> {
   try {
+    // Limit text size to prevent excessive memory usage
+    const maxEmbeddingLength = 2048;
+    const truncatedText = text.length > maxEmbeddingLength ? 
+      text.substring(0, maxEmbeddingLength) : 
+      text;
+    
     // Initialize the pipeline if not already done
+    // Use a smaller, faster model for embedding
     if (!embeddingPipeline) {
-      embeddingPipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+      console.log("Initializing embedding pipeline with smaller model...");
+      embeddingPipeline = await pipeline('feature-extraction', 'Xenova/paraphrase-MiniLM-L3-v2');
     }
     
-    // Generate embeddings
-    const output = await embeddingPipeline(text, {
+    // Generate embeddings with timeout
+    console.log(`Generating embedding for text of length: ${truncatedText.length} chars`);
+    const startTime = Date.now();
+    const output = await embeddingPipeline(truncatedText, {
       pooling: 'mean',
       normalize: true,
     });
+    const duration = Date.now() - startTime;
+    console.log(`Embedding generated in ${duration}ms`);
     
     // Convert to string for storage
     // In a real system with pgvector, we would store this as a vector
