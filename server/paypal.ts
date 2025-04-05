@@ -3,6 +3,7 @@
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
 const PAYPAL_MODE = process.env.PAYPAL_MODE || 'sandbox'; // Default to sandbox for safety
+const PAYPAL_WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID;
 
 export const isPayPalConfigValid = !!(PAYPAL_CLIENT_ID && PAYPAL_SECRET);
 
@@ -19,31 +20,31 @@ export interface CreditPackage {
   credits: number;
 }
 
-// Define available credit packages
+// Define available credit packages (prices in USD, credits in hundredths of cents)
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {
-    id: 'small_pack',
-    name: 'Basic Pack',
-    description: '50,000 credits',
+    id: 'pack_5',
+    name: '$5 Package',
+    description: 'Access to $5 worth of API usage',
     price: 5.00,
     currency: 'USD',
-    credits: 50000
+    credits: 50000 // $5.00 in hundredths of cents
   },
   {
-    id: 'medium_pack',
-    name: 'Value Pack',
-    description: '110,000 credits',
+    id: 'pack_10',
+    name: '$10 Package',
+    description: 'Access to $10 worth of API usage',
     price: 10.00,
     currency: 'USD',
-    credits: 110000
+    credits: 100000 // $10.00 in hundredths of cents
   },
   {
-    id: 'large_pack',
-    name: 'Pro Pack',
-    description: '280,000 credits',
+    id: 'pack_25',
+    name: '$25 Package',
+    description: 'Access to $25 worth of API usage',
     price: 25.00,
     currency: 'USD',
-    credits: 280000
+    credits: 250000 // $25.00 in hundredths of cents
   }
 ];
 
@@ -52,7 +53,12 @@ export const CREDIT_VALUE_USD = 0.0001; // $0.0001 per credit (10,000 credits = 
 export const MARKUP_PERCENTAGE = 38; // 38% markup on base cost
 
 /**
- * Calculates credits to charge based on token usage and model pricing
+ * Calculate cost in hundredths of cents based on token usage and model pricing
+ * @param promptTokens Number of prompt tokens
+ * @param completionTokens Number of completion tokens
+ * @param promptPricePerM Prompt price in USD per million tokens
+ * @param completionPricePerM Completion price in USD per million tokens
+ * @returns Integer amount to deduct (in hundredths of cents)
  */
 export function calculateCreditsToCharge(
   promptTokens: number, 
@@ -61,17 +67,17 @@ export function calculateCreditsToCharge(
   completionPricePerM: number
 ): number {
   // Calculate base cost in USD
-  const baseCost = 
+  const baseCostUsd = 
     (promptTokens / 1_000_000 * promptPricePerM) + 
     (completionTokens / 1_000_000 * completionPricePerM);
   
   // Apply markup
-  const chargeAmountUsd = baseCost * (1 + MARKUP_PERCENTAGE/100);
+  const chargeAmountUsd = baseCostUsd * (1 + MARKUP_PERCENTAGE/100);
   
-  // Convert USD to credits and round up to avoid fractional credits
-  const creditsToDeduct = Math.ceil(chargeAmountUsd / CREDIT_VALUE_USD);
+  // Convert to hundredths of cents and round up
+  const amountInHundredthsOfCents = Math.ceil(chargeAmountUsd * 10000);
   
-  return creditsToDeduct;
+  return amountInHundredthsOfCents;
 }
 
 /**

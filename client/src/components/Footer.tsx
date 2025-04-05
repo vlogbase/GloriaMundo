@@ -1,5 +1,14 @@
 import { Link } from "wouter";
 import { Settings } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  creditBalance: number;
+}
 
 export const Footer = () => {
   // Function to open cookie settings
@@ -8,6 +17,13 @@ export const Footer = () => {
     const event = new CustomEvent('openCookieSettings');
     window.dispatchEvent(event);
   };
+
+  // Query for current user to conditionally show credits link
+  const { data: user } = useQuery<User | null>({ 
+    queryKey: ['/api/auth/me'],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    // Using the same query key as AuthButtons so it will share the cache
+  });
 
   return (
     <div className="w-full text-center py-2 text-xs text-muted-foreground/50 select-none">
@@ -18,6 +34,11 @@ export const Footer = () => {
         <Link href="/contact">
           <span className="hover:text-muted-foreground cursor-pointer transition-colors">Contact</span>
         </Link>
+        {user && (
+          <Link href="/credits">
+            <span className="hover:text-muted-foreground cursor-pointer transition-colors">Account / Credits</span>
+          </Link>
+        )}
         <button 
           onClick={openCookieSettings}
           className="hover:text-muted-foreground cursor-pointer transition-colors flex items-center"

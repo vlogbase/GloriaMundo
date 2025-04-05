@@ -49,6 +49,30 @@ export function CreditsPage() {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [paypalButtonsLoaded, setPaypalButtonsLoaded] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [paypalClientId, setPaypalClientId] = useState<string>("");
+  
+  // Fetch PayPal client ID from server config
+  useEffect(() => {
+    async function fetchPaypalClientId() {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.paypalClientId) {
+            setPaypalClientId(config.paypalClientId);
+          } else {
+            console.error('PayPal Client ID not found in config');
+          }
+        } else {
+          console.error('Failed to fetch config');
+        }
+      } catch (error) {
+        console.error('Error fetching PayPal client ID:', error);
+      }
+    }
+    
+    fetchPaypalClientId();
+  }, []);
   
   // Query for credit packages
   const { data: packages, isLoading: isLoadingPackages } = useQuery<CreditPackage[]>({
@@ -252,9 +276,18 @@ const handleCaptureOrder = (data: any = null) => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold">{user.creditBalance.toLocaleString()}</span>
-              <span className="text-muted-foreground">credits available</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold">${(user.creditBalance / 10000).toFixed(2)}</span>
+                <span className="text-muted-foreground">available balance</span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {user.creditBalance.toLocaleString()} credits ({user.creditBalance / 10000} USD)
+              </div>
+              <div className="mt-2 text-sm p-2 bg-primary/5 rounded-md">
+                <p>Credits are used for AI model usage. Each model has different pricing.</p>
+                <p className="mt-1">1 USD = 10,000 credits</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -273,14 +306,34 @@ const handleCaptureOrder = (data: any = null) => {
                   className={`cursor-pointer transition-all ${selectedPackage === pkg.id ? 'ring-2 ring-primary' : 'hover:shadow-lg'}`}
                   onClick={() => !orderId && handlePackageSelect(pkg.id)}
                 >
-                  <CardHeader>
-                    <CardTitle>{pkg.name}</CardTitle>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-xl">{pkg.name}</CardTitle>
                     <CardDescription>{pkg.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">${pkg.price.toFixed(2)}</div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {(pkg.credits / 10000).toFixed(1)} million tokens approximately
+                    <div className="flex flex-col gap-2">
+                      <div className="text-2xl font-bold">${pkg.price.toFixed(2)}</div>
+                      <div className="flex items-center gap-1">
+                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-sm font-medium">
+                          {pkg.credits.toLocaleString()} credits
+                        </span>
+                      </div>
+                      <div className="text-sm mt-2">
+                        <ul className="space-y-1">
+                          <li className="flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            ~{(pkg.credits / 10000).toFixed(2)} USD value
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Instant delivery
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </CardContent>
                   <CardFooter>
@@ -310,59 +363,99 @@ const handleCaptureOrder = (data: any = null) => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <div className="font-medium">
-                        {packages?.find(p => p.id === selectedPackage)?.name}
+                  <div className="bg-muted/50 p-4 rounded-lg mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="font-medium">
+                          {packages?.find(p => p.id === selectedPackage)?.name}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {packages?.find(p => p.id === selectedPackage)?.credits.toLocaleString()} credits
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {packages?.find(p => p.id === selectedPackage)?.description}
+                      <div className="font-bold text-xl">
+                        ${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}
                       </div>
                     </div>
-                    <div className="font-bold">
-                      ${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}
+                    
+                    <Separator className="my-4" />
+                    
+                    <div className="flex justify-between text-sm">
+                      <span>Subtotal</span>
+                      <span>${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span>Fees</span>
+                      <span>$0.00</span>
+                    </div>
+                    <div className="flex justify-between font-medium mt-3">
+                      <span>Total</span>
+                      <span>${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}</span>
                     </div>
                   </div>
                   
-                  <Separator className="my-4" />
-                  
                   <div className="py-4">
-                    <div id="paypal-button-container" className="py-2">
-                      <PayPalScriptProvider
-                        options={{
-                          clientId: import.meta.env.PAYPAL_CLIENT_ID || "", // Using environment variable
-                          currency: "USD",
-                          intent: "capture",
-                        }}
-                      >
-                        <PayPalCheckoutButtons
-                          orderId={orderId}
-                          packageDetails={packages?.find(p => p.id === selectedPackage)}
-                          onApprove={async (data) => {
-                            console.log("PayPal transaction approved", data);
-                            handleCaptureOrder(data);
-                            return Promise.resolve();
+                    <div className="mb-4">
+                      <h3 className="text-sm font-medium mb-2">Pay with:</h3>
+                      <div id="paypal-button-container" className="py-2">
+                        <PayPalScriptProvider
+                          options={{
+                            clientId: paypalClientId, // Using client ID fetched from server
+                            currency: "USD",
+                            intent: "capture",
                           }}
-                          onError={(error) => {
-                            console.error("PayPal error", error);
-                            toast({
-                              title: 'Payment Error',
-                              description: 'There was a problem processing your payment. Please try again.',
-                              variant: 'destructive',
-                            });
-                          }}
-                          onCancel={() => {
-                            console.log("PayPal transaction cancelled");
-                            toast({
-                              title: 'Payment Cancelled',
-                              description: 'You cancelled the payment process. You can try again when ready.',
-                            });
-                          }}
-                        />
-                      </PayPalScriptProvider>
+                        >
+                          <PayPalCheckoutButtons
+                            orderId={orderId}
+                            packageDetails={packages?.find(p => p.id === selectedPackage)}
+                            onApprove={async (data) => {
+                              console.log("PayPal transaction approved", data);
+                              handleCaptureOrder(data);
+                              return Promise.resolve();
+                            }}
+                            onError={(error) => {
+                              console.error("PayPal error", error);
+                              toast({
+                                title: 'Payment Error',
+                                description: 'There was a problem processing your payment. Please try again.',
+                                variant: 'destructive',
+                              });
+                            }}
+                            onCancel={() => {
+                              console.log("PayPal transaction cancelled");
+                              toast({
+                                title: 'Payment Cancelled',
+                                description: 'You cancelled the payment process. You can try again when ready.',
+                              });
+                            }}
+                          />
+                        </PayPalScriptProvider>
+                      </div>
                     </div>
-                    <div className="text-xs text-center text-muted-foreground mt-2">
-                      By completing this purchase, you agree to our Terms of Service
+                    
+                    <div className="mt-6 text-sm">
+                      <div className="bg-green-50 dark:bg-green-950/30 text-green-800 dark:text-green-300 p-3 rounded-md mb-4">
+                        <div className="flex items-start gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5">
+                            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                            <path d="m9 12 2 2 4-4"></path>
+                          </svg>
+                          <div>
+                            <p className="font-medium">Your credits will be added instantly after payment</p>
+                            <p className="text-sm mt-1 text-green-700 dark:text-green-400">No additional steps required</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-center text-muted-foreground mt-4">
+                        By completing this purchase, you agree to our Terms of Service.
+                        <Button 
+                          variant="link" 
+                          className="h-auto p-0 ml-1 text-xs"
+                          onClick={() => setSelectedPackage(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

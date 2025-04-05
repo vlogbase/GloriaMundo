@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 interface User {
   id: number;
@@ -82,49 +83,69 @@ export function AuthButtons() {
 
   // If user is logged in, show user menu
   if (user) {
+    // Format credit balance as dollars
+    const dollarAmount = user.creditBalance / 10000;
+    const displayBalance = dollarAmount.toFixed(2);
+    const lowBalance = dollarAmount < 0.50;
+
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={user.avatarUrl} alt={user.name} />
-              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <div className="flex items-center justify-start gap-2 p-2">
-            <div className="flex flex-col space-y-1 leading-none">
-              <p className="font-medium">{user.name}</p>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
-              <div className="flex items-center gap-1 mt-1">
-                <div className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                  {user.creditBalance.toLocaleString()} credits
+      <div className="flex items-center gap-2">
+        {/* Credit balance button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className={`hidden md:flex items-center ${lowBalance ? 'text-red-600' : 'text-primary'}`}
+          asChild
+        >
+          <Link href="/credits">
+            <span>Credit: ${displayBalance}{lowBalance ? ' Top Up' : ''}</span>
+          </Link>
+        </Button>
+        
+        {/* User dropdown menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={user.avatarUrl} alt={user.name} />
+                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <div className="flex items-center justify-start gap-2 p-2">
+              <div className="flex flex-col space-y-1 leading-none">
+                <p className="font-medium">{user.name}</p>
+                <p className="text-sm text-muted-foreground">{user.email}</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <div className={`text-sm font-medium bg-primary/10 px-2 py-0.5 rounded-full ${lowBalance ? 'text-red-600' : 'text-primary'}`}>
+                    ${displayBalance} ({user.creditBalance.toLocaleString()} credits)
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <DropdownMenuItem 
-            asChild
-          >
-            <a href="/credits" className="cursor-pointer flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="16"></line>
-                <line x1="8" y1="12" x2="16" y2="12"></line>
-              </svg>
-              <span>Buy Credits</span>
-            </a>
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            className="text-red-500 cursor-pointer flex items-center gap-2"
-            onClick={handleLogout}
-          >
-            <FaSignOutAlt className="h-4 w-4" />
-            <span>Logout</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <DropdownMenuItem 
+              asChild
+            >
+              <a href="/credits" className="cursor-pointer flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="16"></line>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                <span>Buy Credits</span>
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-red-500 cursor-pointer flex items-center gap-2"
+              onClick={handleLogout}
+            >
+              <FaSignOutAlt className="h-4 w-4" />
+              <span>Logout</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     );
   }
 

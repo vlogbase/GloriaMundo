@@ -181,6 +181,13 @@ const MODEL_CONFIGS = {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Config endpoint to expose public environment variables for the client
+  app.get("/api/config", (req, res) => {
+    res.json({
+      paypalClientId: process.env.PAYPAL_CLIENT_ID || ""
+    });
+  });
+  
   // Google OAuth Routes
   app.get('/auth/google', 
     passport.authenticate('google', { scope: ['profile', 'email'] })
@@ -1693,23 +1700,23 @@ Format your responses using markdown for better readability and organization.`;
               completionPrice: 0.0000015
             };
             
-            // Calculate credits to charge - uses pricing in dollars per million tokens
+            // Calculate cost in hundredths of cents - uses pricing in dollars per million tokens
             const promptPricePerM = pricing.promptPrice * 1_000_000; 
             const completionPricePerM = pricing.completionPrice * 1_000_000;
             
-            // Calculate total credits to deduct
-            const tokenCredits = calculateCreditsToCharge(
+            // Calculate total cost to deduct in hundredths of cents
+            const costInHundredthsOfCents = calculateCreditsToCharge(
               Math.ceil(promptTokens), 
               Math.ceil(completionTokens), 
               promptPricePerM, 
               completionPricePerM
             );
             
-            console.log(`Deducting ${tokenCredits} credits from user ${user.id} for streaming response`);
+            console.log(`Deducting ${costInHundredthsOfCents} hundredths of cents (${costInHundredthsOfCents/10000} USD) from user ${user.id} for streaming response`);
             
-            // Deduct credits from user's balance
+            // Deduct cost from user's balance
             try {
-              await storage.deductUserCredits(user.id, tokenCredits);
+              await storage.deductUserCredits(user.id, costInHundredthsOfCents);
             } catch (creditError) {
               console.error(`Error deducting credits from user ${user.id}:`, creditError);
               // Continue with the response even if credit deduction fails
@@ -1798,33 +1805,33 @@ Format your responses using markdown for better readability and organization.`;
                 };
               }
               
-              // Calculate credits to charge - uses pricing in dollars per million tokens
+              // Calculate cost in hundredths of cents - uses pricing in dollars per million tokens
               const promptPricePerM = pricing.promptPrice * 1_000_000; 
               const completionPricePerM = pricing.completionPrice * 1_000_000;
               
               // Add image cost if applicable
-              let imageCredits = 0;
+              let imageCostHundredthsCents = 0;
               if (image && modelType === "multimodal") {
-                const baseImageCost = 0.002; // $0.002 per image
-                imageCredits = Math.ceil(baseImageCost / CREDIT_VALUE_USD);
-                console.log(`Adding ${imageCredits} credits for image processing`);
+                const baseImageCostUsd = 0.002; // $0.002 per image
+                imageCostHundredthsCents = Math.ceil(baseImageCostUsd * 10000);
+                console.log(`Adding ${imageCostHundredthsCents} hundredths of cents (${baseImageCostUsd} USD) for image processing`);
               }
               
-              // Calculate total credits to deduct
-              const tokenCredits = calculateCreditsToCharge(
+              // Calculate token cost in hundredths of cents
+              const tokenCostHundredthsCents = calculateCreditsToCharge(
                 promptTokens, 
                 completionTokens, 
                 promptPricePerM, 
                 completionPricePerM
               );
               
-              const totalCreditsToDeduct = tokenCredits + imageCredits;
+              const totalCostHundredthsCents = tokenCostHundredthsCents + imageCostHundredthsCents;
               
-              console.log(`Deducting ${totalCreditsToDeduct} credits from user ${user.id}`);
+              console.log(`Deducting ${totalCostHundredthsCents} hundredths of cents (${totalCostHundredthsCents/10000} USD) from user ${user.id}`);
               
-              // Deduct credits from user's balance
+              // Deduct cost from user's balance
               try {
-                await storage.deductUserCredits(user.id, totalCreditsToDeduct);
+                await storage.deductUserCredits(user.id, totalCostHundredthsCents);
               } catch (creditError) {
                 console.error(`Error deducting credits from user ${user.id}:`, creditError);
                 // Continue with the response even if credit deduction fails

@@ -1,0 +1,32 @@
+Thanks for the progress update and the question. Please continue implementing Phase 3 with these refinements:
+
+**1. Use Decimal USD (Stored as Integer Hundredths-of-Cents):**
+   a. We will **not** use abstract "credits". We will track balances and costs directly in USD, storing values as integers representing **hundredths of a cent** ($0.0001).
+   b. Ensure the `creditBalance` column in the `users` table schema (`shared/schema.ts`) is an `INTEGER` or `BIGINT` type suitable for storing potentially large integer values. Re-run migrations if needed (`npx tsx ./db-migrate.ts`).
+   c. Update storage functions (`server/storage.ts`, e.g., `updateUserCreditBalance`) to work with this integer balance.
+
+**2. Implement Cost Calculation & Deduction (`server/routes.ts`):**
+   a. **Modify `POST /api/conversations/:id/messages` handler:**
+      * **Fetch/Cache Pricing:** Ensure access to OpenRouter model pricing (input/output USD per million tokens).
+      * **Credit Check (Before OR Call):** Get the user's integer `creditBalance`. Return a `402 Payment Required` error if `creditBalance <= 0`.
+      * **Cost Calculation (After Successful OR Call):**
+          * Get `prompt_tokens` and `completion_tokens` from the OpenRouter response `usage` object.
+          * Look up `input_price_usd_per_m` and `output_price_usd_per_m`.
+          * Calculate `base_cost_usd = (prompt_tokens / 1000000 * input_price_usd_per_m) + (completion_tokens / 1000000 * output_price_usd_per_m)`.
+          * Calculate `charge_amount_usd = base_cost_usd * 1.38` (38% markup).
+          * Calculate `deduct_integer = Math.ceil(charge_amount_usd * 10000)` (rounding up to the nearest hundredth of a cent).
+      * **Deduct Value:** Call the storage function to subtract `deduct_integer` from the user's integer `creditBalance`. Add logging.
+
+**3. Complete PayPal Backend Routes (`server/routes.ts` & `server/paypal.ts`):**
+   a. **Initialize Client:** Ensure `server/paypal.ts` initializes the PayPal SDK client correctly using Sandbox credentials from Replit Secrets (`PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_MODE`).
+   b. **Implement `POST /api/paypal/create-order`:** Define purchase packages server-side (e.g., `{ id: 'pack_5', name: '$5 Package', priceUSD: 5.00 }`). Use the PayPal SDK to create an order for the correct `priceUSD` ('USD'). Return `orderID`.
+   c. **Implement `POST /api/paypal/capture-order`:** Use the PayPal SDK to capture the payment. On successful capture, determine the USD amount captured (e.g., $5.00). Convert this to integer hundredths-of-cents (e.g., `5.00 * 10000 = 50000`). Call the storage function to **add** this integer amount to the user's `creditBalance`. Return success.
+   d. **Implement `POST /api/paypal/webhook`:** Implement basic webhook signature verification using `PAYPAL_WEBHOOK_ID` (from Replit Secrets). Log verified events.
+
+**4. Expose PayPal Client ID to Frontend (Agent's Question):**
+   a. Use the **Vite environment variable method**.
+   b. Instruct me to create/update the `.env` file (or Replit Secrets if preferred for `.env` handling) with `VITE_PAYPAL_CLIENT_ID=YOUR_SANDBOX_CLIENT_ID`. Make sure this variable starts with `VITE_` to be exposed by Vite.
+   c. Update `vite.config.ts` if necessary to ensure `VITE_` prefixed variables are available under `import.meta.env`.
+   d. Modify `client/src/pages/CreditsPage.tsx` to read the Client ID using `import.meta.env.VITE_PAYPAL_CLIENT_ID` and pass it to the `PayPalScriptProvider` options.
+
+Please implement the backend logic (Steps 1, 2, 3) first, then ensure the PayPal Client ID is exposed correctly (Step 4). We will finish the frontend `CreditsPage.tsx` UI and button integration in the next step. Remember to advise on necessary Replit Secrets (`PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_WEBHOOK_ID`, potentially `VITE_PAYPAL_CLIENT_ID` if using secrets for `.env`).
