@@ -1247,7 +1247,7 @@ Format your responses using markdown for better readability and organization.`;
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      let { content = "", modelType = "reasoning", modelId = "", image } = req.body;
+      let { content = "", modelType = "reasoning", modelId = "", image, documentContext = null } = req.body;
       
       // Ensure content is a string (even if empty)
       content = content || "";
@@ -1317,23 +1317,27 @@ Format your responses using markdown for better readability and organization.`;
       // Get previous messages to build the context
       const previousMessages = await storage.getMessagesByConversation(conversationId);
       
-      // Prepare messages for Perplexity API
+      // Prepare messages for API
       // Filter out any invalid messages and ensure proper role alternation
       let filteredMessages = previousMessages.filter(msg => msg.role === "user" || msg.role === "assistant");
       // Sort messages by ID to ensure correct sequence
       filteredMessages.sort((a, b) => a.id - b.id);
       
-      // Check for relevant documents and get RAG context
-      let ragContext = '';
-      try {
-        const { chunks, documents } = await findSimilarChunks(content, conversationId);
-        if (chunks.length > 0) {
-          ragContext = formatContextForPrompt(chunks, documents);
-          console.log(`Added RAG context from ${chunks.length} document chunks`);
+      // Check for relevant documents and get RAG context if not already provided by the client
+      let ragContext = documentContext || '';
+      if (!ragContext) {
+        try {
+          const { chunks, documents } = await findSimilarChunks(content, conversationId);
+          if (chunks.length > 0) {
+            ragContext = formatContextForPrompt(chunks, documents);
+            console.log(`Added RAG context from ${chunks.length} document chunks`);
+          }
+        } catch (error) {
+          console.error("Error fetching RAG context:", error);
+          // Continue without RAG context if there's an error
         }
-      } catch (error) {
-        console.error("Error fetching RAG context:", error);
-        // Continue without RAG context if there's an error
+      } else {
+        console.log("Using document context provided by client");
       }
 
       // Create model-specific system message

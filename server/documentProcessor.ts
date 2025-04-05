@@ -3,7 +3,8 @@ import { parse as parseHtml } from 'node-html-parser';
 import { DocumentChunk, Document, InsertDocumentChunk } from '@shared/schema';
 import { pipeline } from '@xenova/transformers';
 import { MongoClient, ObjectId } from 'mongodb';
-import { OpenAIClient, KeyCredential } from '@azure/openai';
+import { AzureOpenAI } from 'openai';
+import '@azure/openai/types';
 import { storage } from './storage';
 
 // Simple extractors for different file types
@@ -134,10 +135,12 @@ const MONGODB_DOCUMENTS_COLLECTION = 'documents';
 const MONGODB_CHUNKS_COLLECTION = 'document_chunks';
 
 // Initialize Azure OpenAI client
-const openAIClient = new OpenAIClient(
-  AZURE_OPENAI_ENDPOINT, 
-  new KeyCredential(AZURE_OPENAI_KEY)
-);
+const azureOpenAI = new AzureOpenAI({
+  apiKey: AZURE_OPENAI_KEY,
+  endpoint: AZURE_OPENAI_ENDPOINT,
+  deployment: AZURE_OPENAI_DEPLOYMENT_NAME,
+  apiVersion: "2023-12-01-preview"
+});
 
 // Initialize MongoDB client
 let mongoClient: MongoClient | null = null;
@@ -160,16 +163,15 @@ async function getMongoClient(): Promise<MongoClient> {
 /**
  * Process document and store it
  */
-export async function processDocument(
-  filePath: string, 
-  fileName: string,
-  fileType: string, 
-  fileSize: number,
-  conversationId: number,
-  userId?: number
-): Promise<Document> {
-  // Read file
-  const buffer = await readFile(filePath);
+export async function processDocument(params: {
+  buffer: Buffer;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  conversationId: number;
+  userId?: number;
+}): Promise<Document> {
+  const { buffer, fileName, fileType, fileSize, conversationId, userId } = params;
   
   // Extract text based on file type
   const text = await extractTextFromFile(buffer, fileType);
@@ -242,6 +244,24 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
   
   // Store chunks
   const documentChunks: DocumentChunk[] = [];
+  
+  // Check if MongoDB is available for storing chunks
+  let mongoClient: MongoClient | null = null;
+  let mongoDb: any = null;
+  let mongoChunksCollection: any = null;
+  
+  if (MONGODB_URI) {
+    try {
+      mongoClient = await getMongoClient();
+      mongoDb = mongoClient.db(MONGODB_DB_NAME);
+      mongoChunksCollection = mongoDb.collection(MONGODB_CHUNKS_COLLECTION);
+      console.log("MongoDB available for storing document chunks");
+    } catch (mongoError) {
+      console.error("Error connecting to MongoDB:", mongoError);
+      console.log("Falling back to in-memory storage for document chunks");
+    }
+  }
+  
   for (let i = 0; i < chunks.length; i++) {
     // Skip empty chunks
     if (!chunks[i].trim()) {
@@ -249,6 +269,7 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
       continue;
     }
     
+    // Create chunk in primary storage (in-memory or SQL)
     const chunk = await storage.createDocumentChunk({
       documentId: document.id,
       content: chunks[i],
@@ -256,6 +277,23 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     });
     
     documentChunks.push(chunk);
+    
+    // Store in MongoDB if available for vector search
+    if (mongoChunksCollection) {
+      try {
+        await mongoChunksCollection.insertOne({
+          id: chunk.id.toString(),
+          documentId: document.id.toString(),
+          content: chunks[i],
+          chunkIndex: i,
+          // Empty embedding for now, will be updated later
+          embedding: "",
+          createdAt: new Date()
+        });
+      } catch (mongoInsertError) {
+        console.error(`Error storing chunk ${i} in MongoDB:`, mongoInsertError);
+      }
+    }
     
     // Log progress
     if (i % 10 === 0 || i === chunks.length - 1) {
@@ -278,7 +316,21 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     await Promise.all(batch.map(async (chunk) => {
       try {
         const embedding = await generateEmbedding(chunk.content);
+        
+        // Update embedding in primary storage
         await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+        
+        // Update embedding in MongoDB if available
+        if (mongoChunksCollection) {
+          try {
+            await mongoChunksCollection.updateOne(
+              { id: chunk.id.toString() },
+              { $set: { embedding } }
+            );
+          } catch (mongoUpdateError) {
+            console.error(`Error updating embedding for chunk ${chunk.id} in MongoDB:`, mongoUpdateError);
+          }
+        }
       } catch (error) {
         console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
       }
@@ -363,7 +415,9 @@ function splitTextIntoChunks(text: string, chunkSize = MAX_CHUNK_SIZE, overlapSi
   return chunks;
 }
 
-// Create a pipeline for generating embeddings
+// Flag to track if we're using Azure OpenAI for embeddings
+// We'll fall back to local model if Azure OpenAI is not available or fails
+let usingAzureOpenAI = true;
 let embeddingPipeline: any = null;
 
 /**
@@ -372,30 +426,53 @@ let embeddingPipeline: any = null;
 export async function generateEmbedding(text: string): Promise<string> {
   try {
     // Limit text size to prevent excessive memory usage
-    const maxEmbeddingLength = 2048;
+    const maxEmbeddingLength = 8191; // Azure OpenAI embedding model limit
     const truncatedText = text.length > maxEmbeddingLength ? 
       text.substring(0, maxEmbeddingLength) : 
       text;
     
+    if (usingAzureOpenAI) {
+      try {
+        console.log(`Generating embedding with Azure OpenAI for text of length: ${truncatedText.length} chars`);
+        const startTime = Date.now();
+        
+        // Use Azure OpenAI to generate embeddings
+        const response = await azureOpenAI.embeddings.create({
+          input: truncatedText,
+          model: AZURE_OPENAI_DEPLOYMENT_NAME
+        });
+        
+        const embedding = response.data[0].embedding;
+        const duration = Date.now() - startTime;
+        console.log(`Azure OpenAI Embedding generated in ${duration}ms`);
+        
+        // Convert to string for storage
+        return JSON.stringify(embedding);
+      } catch (azureError) {
+        console.error('Azure OpenAI embedding failed, falling back to local model:', azureError);
+        usingAzureOpenAI = false;
+        // Fall through to use local model
+      }
+    }
+    
+    // If Azure OpenAI failed or is disabled, use local model
     // Initialize the pipeline if not already done
-    // Use a smaller, faster model for embedding
     if (!embeddingPipeline) {
-      console.log("Initializing embedding pipeline with smaller model...");
+      console.log("Initializing local embedding pipeline as fallback...");
       embeddingPipeline = await pipeline('feature-extraction', 'Xenova/paraphrase-MiniLM-L3-v2');
     }
     
-    // Generate embeddings with timeout
-    console.log(`Generating embedding for text of length: ${truncatedText.length} chars`);
+    // Generate embeddings using local model
+    console.log(`Generating embedding with local model for text of length: ${truncatedText.length} chars`);
     const startTime = Date.now();
     const output = await embeddingPipeline(truncatedText, {
       pooling: 'mean',
       normalize: true,
     });
     const duration = Date.now() - startTime;
-    console.log(`Embedding generated in ${duration}ms`);
+    console.log(`Local embedding generated in ${duration}ms`);
     
     // Convert to string for storage
-    // In a real system with pgvector, we would store this as a vector
     return JSON.stringify(Array.from(output.data));
   } catch (error) {
     console.error('Error generating embedding:', error);
@@ -423,6 +500,115 @@ export async function findSimilarChunks(query: string, conversationId: number, l
     // Extract document IDs
     const documentIds = documents.map(doc => doc.id);
     
+    // If MongoDB is available, use it for vector similarity search
+    if (MONGODB_URI) {
+      try {
+        const client = await getMongoClient();
+        const db = client.db(MONGODB_DB_NAME);
+        const chunksCollection = db.collection(MONGODB_CHUNKS_COLLECTION);
+        
+        console.log(`Searching for similar chunks in MongoDB using ${documentIds.length} document(s)`);
+        
+        // Parse the embedding from JSON string to array
+        const embeddingVector = JSON.parse(queryEmbedding);
+        
+        // Prepare the MongoDB aggregation pipeline for vector search
+        // This is a simplistic approach - in a production environment, you would use $vectorSearch
+        // Here we'll use a combination of filtering and manual similarity computation
+        const chunks = await chunksCollection.find({
+          documentId: { $in: documentIds.map(id => id.toString()) }
+        }).toArray();
+        
+        console.log(`Found ${chunks.length} chunks in MongoDB for the specified documents`);
+        
+        // If we have chunks with embeddings, compute similarity
+        if (chunks.length > 0) {
+          // Filter chunks that have embeddings
+          const chunksWithEmbeddings = chunks.filter(chunk => chunk.embedding);
+          
+          if (chunksWithEmbeddings.length > 0) {
+            console.log(`Computing similarity for ${chunksWithEmbeddings.length} chunks with embeddings`);
+            
+            // Compute cosine similarity for each chunk
+            // Use any type to avoid TypeScript errors with MongoDB documents
+            const chunksWithSimilarity: any[] = [];
+            
+            for (const chunk of chunksWithEmbeddings) {
+              try {
+                if (chunk && chunk.embedding && typeof chunk.embedding === 'string') {
+                  const chunkEmbedding = JSON.parse(chunk.embedding);
+                  const similarity = cosineSimilarity(embeddingVector, chunkEmbedding);
+                  
+                  // Create a new object with all properties from the original chunk plus similarity
+                  chunksWithSimilarity.push({
+                    ...chunk,
+                    similarity
+                  });
+                }
+              } catch (error) {
+                console.error(`Error computing similarity for chunk:`, error);
+                
+                // Add with zero similarity if parsing fails
+                chunksWithSimilarity.push({
+                  ...chunk,
+                  similarity: 0
+                });
+              }
+            }
+            
+            // Sort by similarity (descending) and take the top results
+            const topChunks = chunksWithSimilarity
+              .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+              .slice(0, limit);
+              
+            console.log(`Selected top ${topChunks.length} chunks by similarity`);
+            
+            // Convert MongoDB documents to DocumentChunk objects
+            const documentChunks: DocumentChunk[] = [];
+            
+            for (const chunk of topChunks) {
+              try {
+                if (chunk && typeof chunk === 'object') {
+                  const docChunk: DocumentChunk = {
+                    id: parseInt(String(chunk.id || "0")),
+                    documentId: parseInt(String(chunk.documentId || "0")),
+                    content: String(chunk.content || ""),
+                    chunkIndex: Number(chunk.chunkIndex || 0),
+                    embedding: String(chunk.embedding || ""),
+                    // Add required properties from DocumentChunk type
+                    createdAt: new Date()
+                  };
+                  
+                  documentChunks.push(docChunk);
+                }
+              } catch (parseError) {
+                console.error("Error converting MongoDB chunk to DocumentChunk:", parseError);
+              }
+            }
+            
+            // Create a map of document IDs to documents for easy access
+            const documentMap: Record<number, Document> = {};
+            documents.forEach(doc => {
+              documentMap[doc.id] = doc;
+            });
+            
+            return {
+              chunks: documentChunks,
+              documents: documentMap
+            };
+          }
+        }
+        
+        console.log("No suitable chunks found in MongoDB, falling back to in-memory search");
+      } catch (mongoError) {
+        console.error("Error in MongoDB similarity search:", mongoError);
+        console.log("Falling back to in-memory search");
+      }
+    }
+    
+    // Fall back to in-memory search if MongoDB fails or is not available
+    console.log("Using in-memory similarity search");
+    
     // Get all chunks for these documents
     const allChunks: DocumentChunk[] = [];
     for (const docId of documentIds) {
@@ -430,7 +616,7 @@ export async function findSimilarChunks(query: string, conversationId: number, l
       allChunks.push(...documentChunks);
     }
     
-    // Search for similar chunks
+    // Search for similar chunks using the storage interface
     const similarChunks = await storage.searchSimilarChunks(queryEmbedding, limit);
     
     // Create a map of document IDs to documents for easy access
@@ -447,6 +633,30 @@ export async function findSimilarChunks(query: string, conversationId: number, l
     console.error('Error finding similar chunks:', error);
     return { chunks: [], documents: {} };
   }
+}
+
+// Helper function to compute cosine similarity between two vectors
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (vecA.length !== vecB.length) {
+    throw new Error('Vectors must have the same dimensions');
+  }
+  
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+  
+  // Handle zero vectors
+  if (normA === 0 || normB === 0) {
+    return 0;
+  }
+  
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 /**

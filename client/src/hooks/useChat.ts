@@ -77,6 +77,33 @@ export const useChat = () => {
     }
   }, [setLocation, toast]);
 
+  // Get relevant document context for a query
+  const getDocumentContext = useCallback(async (conversationId: number, query: string) => {
+    if (!conversationId) return null;
+    
+    try {
+      console.log(`[useChat] Getting document context for query in conversation ${conversationId}`);
+      const response = await fetch(`/api/conversations/${conversationId}/rag?query=${encodeURIComponent(query)}`);
+      
+      if (!response.ok) {
+        console.warn(`[useChat] Failed to get document context: ${response.status}`);
+        return null;
+      }
+      
+      const data = await response.json();
+      console.log(`[useChat] Document context retrieved:`, data);
+      
+      if (data.hasContext) {
+        return data.context;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[useChat] Error getting document context:', error);
+      return null;
+    }
+  }, []);
+
   // Send a message
   const sendMessage = useCallback(async (conversationId: number, content: string, image?: string) => {
     // Log whether this is the first message ever (debugging first message bug)
@@ -155,18 +182,33 @@ export const useChat = () => {
         modelMetadata = { modelId: "openai/o3-mini" }; // Using a more reliable free model
       }
       
+      // Try to get document context for this query
+      let documentContext = null;
+      try {
+        // Only attempt to get document context for non-image queries
+        if (!image) {
+          documentContext = await getDocumentContext(conversationId, messageContent);
+          console.log('[useChat] Document context for query:', documentContext ? 'Found' : 'None');
+        }
+      } catch (contextError) {
+        console.error('[useChat] Error getting document context:', contextError);
+        // Continue without document context if there's an error
+      }
+      
       // Define the proper type for our payload
       interface MessagePayload {
         content: string;
         image?: string;
         modelType: ModelType | 'openrouter';
         modelId?: string;
+        documentContext?: string | null;
       }
       
       const payload: MessagePayload = { 
         content: messageContent, // Always use clean text content
         image,
         modelType: selectedModel,
+        documentContext, // Include document context if available
         ...modelMetadata // Include any model-specific metadata
       };
       
@@ -176,7 +218,8 @@ export const useChat = () => {
         modelType: selectedModel,
         modelId: payload.modelId || 'not set',
         isOpenRouterSelected: selectedModel === 'openrouter',
-        storedCustomModelId: customOpenRouterModelId
+        storedCustomModelId: customOpenRouterModelId,
+        hasDocumentContext: !!documentContext
       });
       
       const response = await apiRequest(

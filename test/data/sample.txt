@@ -1,0 +1,14 @@
+This is a sample text document for testing the RAG system in GloriaMundo.
+
+The document processing system should be able to:
+1. Extract text from this file
+2. Split it into chunks
+3. Generate embeddings for each chunk
+4. Store the chunks in MongoDB
+5. Retrieve relevant chunks based on semantic similarity
+
+This functionality will allow users to upload their own documents and have the AI reference these documents during conversations.
+
+Retrieval Augmented Generation (RAG) enhances the capabilities of large language models by allowing them to access external knowledge not present in their training data. This is particularly useful for domain-specific knowledge, personal data, or up-to-date information.
+
+GloriaMundo aims to provide a seamless way for users to leverage their own documents to enhance their conversations with various AI models.

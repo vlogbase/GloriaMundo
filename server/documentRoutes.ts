@@ -87,14 +87,17 @@ export function registerDocumentRoutes(app: Express) {
         // We'll respond immediately to prevent timeouts, then process in the background
         if (file.size > 5 * 1024 * 1024) { // 5MB threshold for very large files
           // Start processing in the background without waiting
-          const documentPromise = processDocument(
-            file.path,
-            file.originalname,
-            file.mimetype,
-            file.size,
+          const fs = require('fs');
+          const buffer = fs.readFileSync(file.path);
+          
+          const documentPromise = processDocument({
+            buffer,
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: file.size,
             conversationId,
             userId
-          ).then(doc => {
+          }).then(doc => {
             console.log(`Large document processed successfully in background. Document ID: ${doc.id}`);
           }).catch(error => {
             console.error('Error processing large document in background:', error);
@@ -133,14 +136,17 @@ export function registerDocumentRoutes(app: Express) {
       }
       
       // For regular files, process normally
-      const document = await processDocument(
-        file.path,
-        file.originalname,
-        file.mimetype,
-        file.size,
+      const fs = require('fs');
+      const buffer = fs.readFileSync(file.path);
+      
+      const document = await processDocument({
+        buffer,
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        fileSize: file.size,
         conversationId,
         userId
-      );
+      });
       
       console.log(`Document processed successfully. Document ID: ${document.id}`);
       

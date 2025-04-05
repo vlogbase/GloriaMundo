@@ -1,0 +1,33 @@
+# Test Document for RAG System
+
+## Introduction to Gloria Mundo
+
+Gloria Mundo is an advanced AI assistant that combines the best of multiple AI models with the ability to access and reference uploaded documents. This retrieval-augmented generation (RAG) capability allows Gloria Mundo to provide more accurate and contextually relevant responses.
+
+## Key Features
+
+1. **Multi-model Support**: Gloria Mundo can switch between different AI models based on the task at hand.
+2. **Document Processing**: Users can upload documents in various formats (PDF, DOCX, TXT) which are processed and stored for reference.
+3. **Context-Aware Responses**: When answering questions, Gloria Mundo can pull relevant information from uploaded documents.
+4. **Memory Retention**: Within a conversation, Gloria Mundo maintains chat history regardless of which AI model is being used.
+
+## Technical Implementation
+
+The RAG system works through these components:
+- Document chunking: Large documents are split into manageable chunks
+- Embedding generation: Each chunk is converted into a vector representation
+- Similarity search: When a question is asked, the system finds chunks with similar semantic meaning
+- Context integration: Relevant chunks are provided to the AI model as additional context
+
+## Sample Use Cases
+
+1. Summarizing research papers
+2. Answering specific questions about uploaded manuals or guides
+3. Extracting insights from complex documents
+4. Analyzing and comparing information across multiple documents
+
+## Important Information for Testing
+
+The secret code for validating this RAG system is: "GLORIA-RAG-2025".
+
+If you see this information in a response, it means the document retrieval system is working correctly.
