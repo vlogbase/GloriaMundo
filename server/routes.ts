@@ -7,13 +7,16 @@ import passport from "passport";
 import { db } from "./db";
 import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
+import fs from 'fs';
+import path from 'path';
 import {
   isPayPalConfigValid,
   CREDIT_PACKAGES,
   calculateCreditsToCharge,
   createPayPalOrder,
   capturePayPalOrder,
-  verifyPayPalWebhook
+  verifyPayPalWebhook,
+  CREDIT_VALUE_USD
 } from "./paypal";
 
 type ModelType = "reasoning" | "search" | "multimodal";
@@ -104,25 +107,75 @@ function isValidApiKey(key: string | undefined | null): boolean {
   return isLongEnough;
 }
 
+// Load model pricing data from models.json
+const loadModelPricing = () => {
+  try {
+    const modelsData = fs.readFileSync(path.join(process.cwd(), 'models.json'), 'utf8');
+    return JSON.parse(modelsData);
+  } catch (error) {
+    console.error('Error loading models.json:', error);
+    return [];
+  }
+};
+
+// Cache the model pricing data
+const modelPricingData = loadModelPricing();
+
+// Function to get model pricing by model ID (for OpenRouter models)
+const getModelPricing = (modelId: string) => {
+  const model = modelPricingData.find((m: any) => m.id === modelId);
+  if (model) {
+    return {
+      promptPrice: parseFloat(model.pricing.prompt) || 0,
+      completionPrice: parseFloat(model.pricing.completion) || 0
+    };
+  }
+  // Default pricing if model not found
+  return {
+    promptPrice: 0.000001, // Default to $0.000001 per token if unknown
+    completionPrice: 0.000002 // Default to $0.000002 per token if unknown
+  };
+};
+
+// Default model pricing for our standard models
+const DEFAULT_MODEL_PRICING = {
+  reasoning: {
+    promptPrice: 0.0000005, // $0.0000005 per token
+    completionPrice: 0.0000015 // $0.0000015 per token
+  },
+  search: {
+    promptPrice: 0.000001, // $0.000001 per token
+    completionPrice: 0.000002 // $0.000002 per token
+  },
+  multimodal: {
+    promptPrice: 0.000001, // $0.000001 per token
+    completionPrice: 0.000002, // $0.000002 per token
+    imagePrice: 0.002 // $0.002 per image
+  }
+};
+
 // Define model configurations
 const MODEL_CONFIGS = {
   reasoning: {
     apiProvider: "groq",
     modelName: "deepseek-r1-distill-llama-70b",
     apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-    apiKey: GROQ_API_KEY
+    apiKey: GROQ_API_KEY,
+    pricing: DEFAULT_MODEL_PRICING.reasoning
   },
   search: {
     apiProvider: "perplexity",
     modelName: "sonar-reasoning",  // Updated with the correct model name
     apiUrl: "https://api.perplexity.ai/chat/completions",
-    apiKey: PERPLEXITY_API_KEY
+    apiKey: PERPLEXITY_API_KEY,
+    pricing: DEFAULT_MODEL_PRICING.search
   },
   multimodal: {
     apiProvider: "groq",
     modelName: "llama-3.2-90b-vision-preview",
     apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-    apiKey: GROQ_API_KEY
+    apiKey: GROQ_API_KEY,
+    pricing: DEFAULT_MODEL_PRICING.multimodal
   }
 };
 
@@ -1098,6 +1151,26 @@ Format your responses using markdown for better readability and organization.`;
         return res.status(400).json({ message: "Message content or image is required" });
       }
       
+      // Get user from session
+      const user = req.user as Express.User;
+      if (!user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      // Retrieve user credit balance
+      const userDetails = await storage.getUser(user.id);
+      if (!userDetails) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Check if user has credits
+      if (userDetails.creditBalance <= 0) {
+        return res.status(402).json({ 
+          message: "Insufficient credits. Please purchase more credits to continue.",
+          error: "INSUFFICIENT_CREDITS"
+        });
+      }
+      
       // If an image is present, force the model type to multimodal
       if (image) {
         console.log("Image detected, forcing model type to multimodal");
@@ -1605,6 +1678,44 @@ Format your responses using markdown for better readability and organization.`;
             assistantMessage = updatedMessage;
           }
           
+          // Estimate token usage for streaming response since we don't get usage data directly
+          if (user) {
+            // Approximate tokens based on content length
+            // OpenAI uses ~4 chars per token as a rough estimate
+            const promptTokens = JSON.stringify(messages).length / 4;
+            const completionTokens = assistantContent.length / 4;
+            
+            console.log(`Estimated streaming token usage: prompt=${Math.ceil(promptTokens)}, completion=${Math.ceil(completionTokens)}`);
+            
+            // Use default pricing for reasoning model
+            const pricing = MODEL_CONFIGS.reasoning.pricing || {
+              promptPrice: 0.0000005,
+              completionPrice: 0.0000015
+            };
+            
+            // Calculate credits to charge - uses pricing in dollars per million tokens
+            const promptPricePerM = pricing.promptPrice * 1_000_000; 
+            const completionPricePerM = pricing.completionPrice * 1_000_000;
+            
+            // Calculate total credits to deduct
+            const tokenCredits = calculateCreditsToCharge(
+              Math.ceil(promptTokens), 
+              Math.ceil(completionTokens), 
+              promptPricePerM, 
+              completionPricePerM
+            );
+            
+            console.log(`Deducting ${tokenCredits} credits from user ${user.id} for streaming response`);
+            
+            // Deduct credits from user's balance
+            try {
+              await storage.deductUserCredits(user.id, tokenCredits);
+            } catch (creditError) {
+              console.error(`Error deducting credits from user ${user.id}:`, creditError);
+              // Continue with the response even if credit deduction fails
+            }
+          }
+          
           // Final message to signal completion
           res.write(`data: ${JSON.stringify({ 
             type: "done", 
@@ -1665,6 +1776,60 @@ Format your responses using markdown for better readability and organization.`;
             const updatedMessage = await storage.getMessage(assistantMessage.id);
             if (updatedMessage) {
               assistantMessage = updatedMessage;
+            }
+            
+            // Process token usage and deduct credits from user's balance
+            if (data.usage && user) {
+              const promptTokens = data.usage.prompt_tokens || 0;
+              const completionTokens = data.usage.completion_tokens || 0;
+              
+              console.log(`Message token usage: prompt=${promptTokens}, completion=${completionTokens}`);
+              
+              // Get pricing based on the model used
+              let pricing;
+              if (modelId && (modelId.startsWith("openai/") || modelId.includes("/"))) {
+                // OpenRouter model
+                pricing = getModelPricing(modelId);
+              } else {
+                // Default model based on model type
+                pricing = modelConfig.pricing || DEFAULT_MODEL_PRICING[modelType as keyof typeof DEFAULT_MODEL_PRICING] || {
+                  promptPrice: 0.000001,
+                  completionPrice: 0.000002
+                };
+              }
+              
+              // Calculate credits to charge - uses pricing in dollars per million tokens
+              const promptPricePerM = pricing.promptPrice * 1_000_000; 
+              const completionPricePerM = pricing.completionPrice * 1_000_000;
+              
+              // Add image cost if applicable
+              let imageCredits = 0;
+              if (image && modelType === "multimodal") {
+                const baseImageCost = 0.002; // $0.002 per image
+                imageCredits = Math.ceil(baseImageCost / CREDIT_VALUE_USD);
+                console.log(`Adding ${imageCredits} credits for image processing`);
+              }
+              
+              // Calculate total credits to deduct
+              const tokenCredits = calculateCreditsToCharge(
+                promptTokens, 
+                completionTokens, 
+                promptPricePerM, 
+                completionPricePerM
+              );
+              
+              const totalCreditsToDeduct = tokenCredits + imageCredits;
+              
+              console.log(`Deducting ${totalCreditsToDeduct} credits from user ${user.id}`);
+              
+              // Deduct credits from user's balance
+              try {
+                await storage.deductUserCredits(user.id, totalCreditsToDeduct);
+              } catch (creditError) {
+                console.error(`Error deducting credits from user ${user.id}:`, creditError);
+                // Continue with the response even if credit deduction fails
+                // We'll handle this better in a future version
+              }
             }
           } catch (extractError) {
             console.error(`Error extracting content from ${modelConfig.apiProvider} response:`, extractError);

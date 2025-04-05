@@ -11,9 +11,13 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Spinner } from "@/components/Spinner"; // You may need to create this component
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from "@/hooks/use-toast";
+import { 
+  PayPalScriptProvider, 
+  PayPalButtons,
+  usePayPalScriptReducer
+} from "@paypal/react-paypal-js";
 
 interface CreditPackage {
   id: string;
@@ -49,23 +53,47 @@ export function CreditsPage() {
   // Query for credit packages
   const { data: packages, isLoading: isLoadingPackages } = useQuery<CreditPackage[]>({
     queryKey: ['/api/credits/packages'],
+    queryFn: async () => {
+      const response = await fetch('/api/credits/packages');
+      if (!response.ok) {
+        throw new Error('Failed to fetch credit packages');
+      }
+      return response.json();
+    },
     retry: 3
   });
 
   // Query for current user
   const { data: user, isLoading: isLoadingUser } = useQuery<User | null>({
-    queryKey: ['/api/auth/me']
+    queryKey: ['/api/auth/me'],
+    queryFn: async () => {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) {
+        if (response.status === 401) {
+          return null; // Not authenticated
+        }
+        throw new Error('Failed to fetch user data');
+      }
+      return response.json();
+    }
   });
 
   // Mutation for creating a PayPal order
   const createOrderMutation = useMutation({
     mutationFn: async (packageId: string) => {
-      const response = await apiRequest('/api/credits/create-order', {
+      const response = await fetch('/api/paypal/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packageId }),
       });
-      return response.orderId;
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      
+      const data = await response.json();
+      return data.orderId;
     },
     onSuccess: (orderId) => {
       setOrderId(orderId);
@@ -83,17 +111,23 @@ export function CreditsPage() {
   // Mutation for capturing a PayPal order
   const captureOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      const response = await apiRequest('/api/credits/capture-order', {
+      const response = await fetch('/api/paypal/capture-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId }),
       });
-      return response;
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      
+      return response.json();
     },
     onSuccess: (data) => {
       toast({
         title: 'Payment Successful',
-        description: `Successfully added ${data.credits.toLocaleString()} credits to your account.`,
+        description: `Successfully added ${data.credits ? data.credits.toLocaleString() : ''} credits to your account.`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setOrderId(null);
@@ -113,17 +147,73 @@ export function CreditsPage() {
     createOrderMutation.mutate(packageId);
   };
 
-  const renderPayPalButtons = (orderId: string) => {
-    // This function will be implemented to render PayPal buttons
-    // For now, we'll just simulate it with a button
-    setPaypalButtonsLoaded(true);
-  };
+  // PayPal Button component that will be rendered when an order is created
+const PayPalCheckoutButtons = ({ 
+  orderId, 
+  packageDetails,
+  onApprove,
+  onError,
+  onCancel
+}: { 
+  orderId: string, 
+  packageDetails: CreditPackage | undefined,
+  onApprove: (data: any) => Promise<void>,
+  onError: (error: any) => void,
+  onCancel: () => void
+}) => {
+  const [{ isPending, isResolved, isRejected }] = usePayPalScriptReducer();
 
-  const handleCaptureOrder = () => {
-    if (orderId) {
-      captureOrderMutation.mutate(orderId);
-    }
-  };
+  if (isPending) {
+    return <Spinner />;
+  }
+
+  if (isRejected) {
+    return (
+      <div className="text-center text-red-500">
+        <p>PayPal failed to load. Please try again later.</p>
+        <Button 
+          variant="outline" 
+          className="mt-2" 
+          onClick={() => window.location.reload()}
+        >
+          Reload Page
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <PayPalButtons
+      style={{ 
+        layout: 'vertical',
+        color: 'blue',
+        shape: 'rect',
+        label: 'pay'
+      }}
+      createOrder={() => Promise.resolve(orderId)}
+      onApprove={async (data, actions) => {
+        return onApprove(data);
+      }}
+      onError={(err) => {
+        onError(err);
+      }}
+      onCancel={() => {
+        onCancel();
+      }}
+    />
+  );
+};
+
+const renderPayPalButtons = (orderId: string) => {
+  // Mark buttons as loaded
+  setPaypalButtonsLoaded(true);
+};
+
+const handleCaptureOrder = (data: any = null) => {
+  if (orderId) {
+    captureOrderMutation.mutate(orderId);
+  }
+};
 
   if (isLoadingUser || isLoadingPackages) {
     return <div className="container mx-auto py-12"><Spinner /></div>;
@@ -237,19 +327,39 @@ export function CreditsPage() {
                   <Separator className="my-4" />
                   
                   <div className="py-4">
-                    {/* In a real implementation, this would be replaced with the PayPal SDK buttons */}
                     <div id="paypal-button-container" className="py-2">
-                      {paypalButtonsLoaded ? (
-                        <Button 
-                          className="w-full" 
-                          onClick={handleCaptureOrder}
-                          disabled={captureOrderMutation.isPending}
-                        >
-                          {captureOrderMutation.isPending ? <Spinner /> : 'Simulate PayPal Payment'}
-                        </Button>
-                      ) : (
-                        <Spinner />
-                      )}
+                      <PayPalScriptProvider
+                        options={{
+                          clientId: import.meta.env.PAYPAL_CLIENT_ID || "", // Using environment variable
+                          currency: "USD",
+                          intent: "capture",
+                        }}
+                      >
+                        <PayPalCheckoutButtons
+                          orderId={orderId}
+                          packageDetails={packages?.find(p => p.id === selectedPackage)}
+                          onApprove={async (data) => {
+                            console.log("PayPal transaction approved", data);
+                            handleCaptureOrder(data);
+                            return Promise.resolve();
+                          }}
+                          onError={(error) => {
+                            console.error("PayPal error", error);
+                            toast({
+                              title: 'Payment Error',
+                              description: 'There was a problem processing your payment. Please try again.',
+                              variant: 'destructive',
+                            });
+                          }}
+                          onCancel={() => {
+                            console.log("PayPal transaction cancelled");
+                            toast({
+                              title: 'Payment Cancelled',
+                              description: 'You cancelled the payment process. You can try again when ready.',
+                            });
+                          }}
+                        />
+                      </PayPalScriptProvider>
                     </div>
                     <div className="text-xs text-center text-muted-foreground mt-2">
                       By completing this purchase, you agree to our Terms of Service

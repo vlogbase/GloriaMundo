@@ -19,6 +19,7 @@ function Router() {
       <Route path="/" component={Chat} />
       <Route path="/chat/:id" component={Chat} />
       <Route path="/conversation/:id" component={Chat} /> {/* Keep old route for backward compatibility */}
+      <Route path="/credits" component={CreditsPage} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/contact" component={Contact} />
       <Route component={NotFound} />
