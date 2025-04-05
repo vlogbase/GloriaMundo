@@ -194,7 +194,7 @@ export function CreditsPage() {
     onSuccess: (data) => {
       toast({
         title: 'Payment Successful',
-        description: `Successfully added ${data.credits ? data.credits.toLocaleString() : ''} credits to your account.`,
+        description: `Successfully added funds to your account.`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setOrderId(null);
@@ -293,7 +293,7 @@ const handleCaptureOrder = (data: any = null) => {
           <CardHeader>
             <CardTitle>Sign In Required</CardTitle>
             <CardDescription>
-              You need to sign in to purchase credits.
+              You need to sign in to add funds to your account.
             </CardDescription>
           </CardHeader>
           <CardFooter>
@@ -309,13 +309,13 @@ const handleCaptureOrder = (data: any = null) => {
   return (
     <div className="container mx-auto py-12">
       <div className="flex flex-col space-y-6 max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold">Credits</h1>
+        <h1 className="text-3xl font-bold">Account Balance</h1>
         
         <Card>
           <CardHeader>
             <CardTitle>Your Balance</CardTitle>
             <CardDescription>
-              Credits are used to access AI models
+              Your account balance for AI model usage
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -324,12 +324,8 @@ const handleCaptureOrder = (data: any = null) => {
                 <span className="text-2xl font-bold">${(user.creditBalance / 10000).toFixed(2)}</span>
                 <span className="text-muted-foreground">available balance</span>
               </div>
-              <div className="text-sm text-muted-foreground">
-                {user.creditBalance.toLocaleString()} credits ({user.creditBalance / 10000} USD)
-              </div>
               <div className="mt-2 text-sm p-2 bg-primary/5 rounded-md">
-                <p>Credits are used for AI model usage. Each model has different pricing.</p>
-                <p className="mt-1">1 USD = 10,000 credits</p>
+                <p>This balance is used for AI model usage. Different models have different pricing based on their capabilities.</p>
               </div>
             </div>
           </CardContent>
@@ -337,7 +333,7 @@ const handleCaptureOrder = (data: any = null) => {
         
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-2 w-full max-w-md">
-            <TabsTrigger value="purchase">Purchase Credits</TabsTrigger>
+            <TabsTrigger value="purchase">Add Funds</TabsTrigger>
             <TabsTrigger value="history">Purchase History</TabsTrigger>
           </TabsList>
           
@@ -356,18 +352,19 @@ const handleCaptureOrder = (data: any = null) => {
                   <CardContent>
                     <div className="flex flex-col gap-2">
                       <div className="text-2xl font-bold">${pkg.price.toFixed(2)}</div>
-                      <div className="flex items-center gap-1">
-                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-sm font-medium">
-                          {pkg.credits.toLocaleString()} credits
-                        </span>
-                      </div>
                       <div className="text-sm mt-2">
                         <ul className="space-y-1">
                           <li className="flex items-center gap-1">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
                               <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
-                            ~{(pkg.credits / 10000).toFixed(2)} USD value
+                            ${pkg.price.toFixed(2)} + $0.40 fee
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Total: ${(pkg.price + 0.40).toFixed(2)}
                           </li>
                           <li className="flex items-center gap-1">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
@@ -403,7 +400,7 @@ const handleCaptureOrder = (data: any = null) => {
                 <CardHeader>
                   <CardTitle>Custom Amount</CardTitle>
                   <CardDescription>
-                    Enter a custom USD amount to purchase credits
+                    Enter a custom USD amount to add to your account
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -449,9 +446,8 @@ const handleCaptureOrder = (data: any = null) => {
                         <span>Total:</span>
                         <span>${customAmount ? (parseFloat(customAmount) + 0.40).toFixed(2) : "0.40"}</span>
                       </div>
-                      <div className="text-sm mt-3">
-                        <span className="text-muted-foreground">You'll receive: </span>
-                        {customAmount ? (parseFloat(customAmount) * 10000).toLocaleString() : "0"} credits
+                      <div className="text-sm mt-3 text-muted-foreground">
+                        Transaction fee applies to all purchases
                       </div>
                     </div>
                   </div>
@@ -486,7 +482,7 @@ const handleCaptureOrder = (data: any = null) => {
                 <CardHeader>
                   <CardTitle>Complete Your Purchase</CardTitle>
                   <CardDescription>
-                    Proceed with payment to add credits to your account
+                    Proceed with payment to add funds to your account
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -501,9 +497,9 @@ const handleCaptureOrder = (data: any = null) => {
                         <div className="text-sm text-muted-foreground">
                           {selectedPackage === 'custom'
                             ? isCustomAmount && customAmount 
-                              ? `${(parseFloat(customAmount) * 10000).toLocaleString()} credits` 
+                              ? `Custom amount payment` 
                               : ''
-                            : packages?.find(p => p.id === selectedPackage)?.credits.toLocaleString() + ' credits'}
+                            : 'Standard package'}
                         </div>
                       </div>
                       <div className="font-bold text-xl">
@@ -529,7 +525,7 @@ const handleCaptureOrder = (data: any = null) => {
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span>Fees</span>
-                      <span>{selectedPackage === 'custom' ? '$0.40' : '$0.00'}</span>
+                      <span>$0.40</span>
                     </div>
                     <div className="flex justify-between font-medium mt-3">
                       <span>Total</span>
@@ -538,7 +534,7 @@ const handleCaptureOrder = (data: any = null) => {
                           ? isCustomAmount && customAmount 
                             ? `$${(parseFloat(customAmount) + 0.40).toFixed(2)}` 
                             : '$0.40'
-                          : `$${packages?.find(p => p.id === selectedPackage)?.price.toFixed(2)}`}
+                          : `$${((packages?.find(p => p.id === selectedPackage)?.price || 0) + 0.40).toFixed(2)}`}
                       </span>
                     </div>
                   </div>
@@ -590,7 +586,7 @@ const handleCaptureOrder = (data: any = null) => {
                             <path d="m9 12 2 2 4-4"></path>
                           </svg>
                           <div>
-                            <p className="font-medium">Your credits will be added instantly after payment</p>
+                            <p className="font-medium">Funds will be added instantly after payment</p>
                             <p className="text-sm mt-1 text-green-700 dark:text-green-400">No additional steps required</p>
                           </div>
                         </div>
@@ -617,7 +613,7 @@ const handleCaptureOrder = (data: any = null) => {
               <CardHeader>
                 <CardTitle>Purchase History</CardTitle>
                 <CardDescription>
-                  Your recent credit purchases
+                  Your recent payments
                 </CardDescription>
               </CardHeader>
               <CardContent>
