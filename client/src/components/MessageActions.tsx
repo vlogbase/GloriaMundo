@@ -167,37 +167,80 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
         </Button>
       </div>
       
-      {/* Model and token information for assistant messages - Improved formatting */}
+      {/* Enhanced Model and token information display */}
       {message.role === "assistant" && message.modelId && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="text-xs text-muted-foreground mt-2 px-2 py-1 bg-muted/40 rounded-md">
+              <div className="text-xs text-muted-foreground mt-2 px-2 py-1 bg-muted/40 rounded-md inline-flex items-center">
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold">{getShortModelName(message.modelId)}</span>
+                  {/* Model name with icon */}
+                  <span className="font-semibold flex items-center">
+                    <svg viewBox="0 0 24 24" className="w-3 h-3 mr-1 fill-current" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0 1.5a6 6 0 100-12 6 6 0 000 12zm0-4.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+                    </svg>
+                    {getShortModelName(message.modelId)}
+                  </span>
+                  
+                  {/* Token usage with clear labeling */}
                   {(message.promptTokens || message.completionTokens) && (
-                    <span className="opacity-80 flex gap-2">
-                      {message.promptTokens && (
-                        <span className="border-r pr-2">
-                          {message.promptTokens} in
-                        </span>
-                      )}
-                      {message.completionTokens && (
-                        <span>
-                          {message.completionTokens} out
-                        </span>
-                      )}
+                    <span className="opacity-75 flex items-center gap-2 border-l border-muted-foreground/30 pl-2 ml-1">
+                      {/* Token icon */}
+                      <svg 
+                        viewBox="0 0 24 24" 
+                        className="w-3 h-3 mr-0.5 fill-current" 
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path d="M12 22a10 10 0 110-20 10 10 0 010 20zm0-15v5l4 4" />
+                      </svg>
+                      
+                      {/* Token counts with descriptive labels */}
+                      <span className="flex items-center">
+                        {message.promptTokens && (
+                          <span className="flex items-center mr-2">
+                            <span className="opacity-75 mr-1">In:</span> 
+                            <span className="font-medium">{message.promptTokens}</span>
+                          </span>
+                        )}
+                        
+                        {message.completionTokens && (
+                          <span className="flex items-center">
+                            <span className="opacity-75 mr-1">Out:</span> 
+                            <span className="font-medium">{message.completionTokens}</span>
+                          </span>
+                        )}
+                      </span>
                     </span>
                   )}
                 </div>
               </div>
             </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p className="font-medium">Model: {message.modelId}</p>
-              {message.promptTokens && <p>Input tokens: {message.promptTokens}</p>}
-              {message.completionTokens && <p>Output tokens: {message.completionTokens}</p>}
-              {message.promptTokens && message.completionTokens && 
-                <p className="font-medium">Total tokens: {message.promptTokens + message.completionTokens}</p>}
+            <TooltipContent side="bottom" className="p-3 max-w-xs">
+              <p className="font-medium mb-1">Model information</p>
+              <p className="text-xs mb-2 text-muted-foreground">{message.modelId}</p>
+              
+              <div className="grid grid-cols-2 gap-1 text-sm">
+                {message.promptTokens && (
+                  <div>
+                    <span className="text-muted-foreground">Input:</span>{" "}
+                    <span className="font-medium">{message.promptTokens} tokens</span>
+                  </div>
+                )}
+                
+                {message.completionTokens && (
+                  <div>
+                    <span className="text-muted-foreground">Output:</span>{" "}
+                    <span className="font-medium">{message.completionTokens} tokens</span>
+                  </div>
+                )}
+                
+                {message.promptTokens && message.completionTokens && (
+                  <div className="col-span-2 mt-1 pt-1 border-t">
+                    <span className="text-muted-foreground">Total:</span>{" "}
+                    <span className="font-medium">{message.promptTokens + message.completionTokens} tokens</span>
+                  </div>
+                )}
+              </div>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

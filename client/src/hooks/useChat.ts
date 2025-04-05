@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Message, ModelType } from "@/lib/types";
 import { apiRequest } from "@/lib/queryClient";
@@ -7,7 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
 
 export const useChat = () => {
-  // Initialize with an empty array but only on the first render
+  // Logging for useChat initialization (debugging first message issue)
+  console.log('[useChat] Hook initializing...');
+  
+  // Initialize with an empty array for messages
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
@@ -15,16 +18,26 @@ export const useChat = () => {
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedModel, customOpenRouterModelId } = useModelSelection();
+  
+  // For debugging the first message issue
+  const isFirstMessageSentRef = useRef(false);
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (conversationId: number) => {
     setIsLoadingMessages(true);
+    console.log(`[useChat] Loading conversation ${conversationId}`);
+    
     try {
+      // First set the active conversation ID to ensure it's updated before fetching messages
+      // This order is important for proper state management
+      setActiveConversationId(conversationId);
+      
       const response = await fetch(`/api/conversations/${conversationId}/messages`);
       
       if (!response.ok) {
         if (response.status === 404) {
           // Conversation not found
+          console.log(`[useChat] Conversation ${conversationId} not found`);
           setLocation("/");
           return;
         }
@@ -32,10 +45,18 @@ export const useChat = () => {
       }
       
       const data = await response.json();
+      console.log(`[useChat] Loaded ${data.length} messages for conversation ${conversationId}`);
       
-      // Set the messages directly without adding test links
+      // Check and log if we have user's first message in the data
+      const userMessages = data.filter((msg: Message) => msg.role === 'user');
+      if (userMessages.length > 0) {
+        console.log(`[useChat] First user message in loaded data:`, userMessages[0]);
+      } else {
+        console.log(`[useChat] No user messages found in loaded data`);
+      }
+      
+      // Set the messages using functional update to ensure we have the latest state
       setMessages(data);
-      setActiveConversationId(conversationId);
       
       // Check if there are any AI responses in the loaded conversation
       if (data.some((message: Message) => message.role === 'assistant')) {
@@ -58,8 +79,14 @@ export const useChat = () => {
 
   // Send a message
   const sendMessage = useCallback(async (conversationId: number, content: string, image?: string) => {
+    // Log whether this is the first message ever (debugging first message bug)
+    const isFirstEver = !isFirstMessageSentRef.current;
+    console.log(`[useChat] sendMessage called: isFirstEver=${isFirstEver}, conversationId=${conversationId}`);
+    console.log('[useChat] Current messages state:', messages);
+    
     // If not the active conversation, load it first
     if (activeConversationId !== conversationId) {
+      console.log(`[useChat] Changing active conversation from ${activeConversationId} to ${conversationId}`);
       setActiveConversationId(conversationId);
       setLocation(`/chat/${conversationId}`);
     }
@@ -92,7 +119,19 @@ export const useChat = () => {
     };
     
     // Ensure user message is always added to the messages array
-    setMessages((prev) => [...prev, tempUserMessage]);
+    console.log('[useChat] BEFORE adding user message. Current messages:', messages);
+    setMessages((prev) => {
+      const updatedMessages = [...prev, tempUserMessage];
+      console.log('[useChat] Adding user message. State changing from', prev, 'to', updatedMessages);
+      return updatedMessages;
+    });
+    
+    // Mark that we've sent the first message (for debugging tracking)
+    if (!isFirstMessageSentRef.current) {
+      console.log('[useChat] This is the first message ever sent in this session');
+      isFirstMessageSentRef.current = true;
+    }
+    
     setIsLoadingResponse(true);
 
     try {
@@ -156,6 +195,9 @@ export const useChat = () => {
       // Check if the response has the expected structure with both userMessage and assistantMessage
       if (data && data.userMessage && data.assistantMessage) {
         // Update the temporary user message and add the assistant message
+        console.log('[useChat] Response received. About to update messages with userMessage and assistantMessage');
+        console.log('[useChat] Current messages before update:', messages);
+        
         setMessages((prev) => {
           // Find and replace the temporary user message
           // Use messageContent which may have been cleaned from JSON string
@@ -165,10 +207,17 @@ export const useChat = () => {
             msg.id === tempUserMessage.id
           );
           
+          console.log(`[useChat] Found user message at index: ${userMsgIndex}, tempUserMessage.id: ${tempUserMessage.id}`);
+          
           const newMessages = [...prev];
           if (userMsgIndex !== -1) {
             // Replace the temporary user message with the server-provided one
+            console.log('[useChat] Replacing temp user message with server message');
             newMessages[userMsgIndex] = data.userMessage;
+          } else {
+            // If user message is not found, this could be the bug causing the first message to disappear
+            console.log('[useChat] WARNING: Could not find user message to replace. Adding it manually.');
+            newMessages.unshift(data.userMessage); // Add to beginning to ensure it appears first
           }
           
           // Add the assistant message if it's not already present
@@ -176,6 +225,7 @@ export const useChat = () => {
             newMessages.push(data.assistantMessage);
           }
           
+          console.log('[useChat] New messages state will be:', newMessages);
           return newMessages;
         });
       } else if (data && data.role === 'assistant' && data.id) {
@@ -233,7 +283,7 @@ export const useChat = () => {
     } finally {
       setIsLoadingResponse(false);
     }
-  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
+  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast, messages]);
 
   // Start a new conversation
   const startNewConversation = useCallback(async () => {

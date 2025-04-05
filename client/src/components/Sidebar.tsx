@@ -84,11 +84,12 @@ export const Sidebar = ({
             />
             <Button 
               variant="outline" 
-              className="p-2 w-full flex justify-center"
+              className="p-2 w-full flex flex-col items-center justify-center gap-1"
               onClick={onNewConversation} 
               title="New Chat"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
+              <span className="text-xs font-medium">New</span>
             </Button>
             {/* Toggle expand button moved closer to top controls */}
             <Button 

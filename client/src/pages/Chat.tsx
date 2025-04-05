@@ -106,18 +106,34 @@ export default function Chat() {
   
   // Handle regular scrolling behavior when messages change
   useEffect(() => {
-    // When loading is done, scroll to the latest message
-    if (!isLoadingResponse && messages.length > 0) {
-      if (latestMessageRef.current) {
-        latestMessageRef.current.scrollIntoView({ 
-          behavior: "smooth", 
-          block: "start" // Ensures we scroll to the top of the message
-        });
-      } else if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    console.log('[Chat] Messages state changed, message count:', messages.length);
+    
+    // When messages are loaded or updated
+    if (messages.length > 0) {
+      // Special handling for first message to ensure it's visible
+      const firstMessage = document.querySelector('.first-message');
+      if (firstMessage) {
+        console.log('[Chat] First message element found, scrolling to it');
+        firstMessage.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      
+      // When loading is done, scroll to the latest message
+      if (!isLoadingResponse) {
+        if (latestMessageRef.current) {
+          console.log('[Chat] Scrolling to latest message');
+          latestMessageRef.current.scrollIntoView({ 
+            behavior: "smooth", 
+            block: "start" // Ensures we scroll to the top of the message
+          });
+        } else if (messagesEndRef.current) {
+          console.log('[Chat] No latest message ref found, scrolling to end');
+          messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
       }
     } else if (messagesEndRef.current) {
       // If there are no messages yet, scroll to the bottom
+      console.log('[Chat] No messages, scrolling to end');
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isLoadingResponse]);
@@ -232,12 +248,39 @@ export default function Chat() {
             <>
 
               
+              {/* Debug info showing total message count */}
+              <div className="text-xs text-muted-foreground opacity-50 mb-4">
+                Message count: {messages.length}
+              </div>
+
+              {/* Specific user message presence logging for first message debugging */}
+              {(() => {
+                const userMessages = messages.filter(m => m.role === 'user');
+                const assistantMessages = messages.filter(m => m.role === 'assistant');
+                console.log('[Chat] Current messages state:', {
+                  total: messages.length,
+                  userCount: userMessages.length,
+                  assistantCount: assistantMessages.length,
+                  firstMessage: messages.length > 0 ? messages[0] : null
+                });
+                return null;
+              })()}
+              
               {messages.map((message: Message, index: number) => {
                 // Add refs to both user and AI messages
                 const isLatestAssistantMessage = index === messages.length - 1 && message.role === 'assistant';
-                const isLatestUserMessage = index === messages.length - 2 && message.role === 'user' && isLoadingResponse;
+                const isLatestUserMessage = index === messages.length - 1 && message.role === 'user' && isLoadingResponse;
+                const isFirstEverMessage = index === 0;
                 
-
+                // For debugging, log each message being rendered
+                console.log(`[Chat] Rendering message ${index}:`, {
+                  id: message.id,
+                  role: message.role,
+                  content: message.content ? message.content.substring(0, 30) + '...' : 'No content',
+                  isLatestAssistantMessage,
+                  isLatestUserMessage,
+                  isFirstEverMessage
+                });
                 
                 // Determine which ref to use
                 let refToUse = undefined;
@@ -247,8 +290,15 @@ export default function Chat() {
                   refToUse = userMessageRef;
                 }
                 
+                // Add a key that's more unique and stable than just the message ID
+                const messageKey = `${message.role}-${message.id}-${index}`;
+                
                 return (
-                  <div key={message.id} ref={refToUse}>
+                  <div 
+                    key={messageKey} 
+                    ref={refToUse}
+                    className={isFirstEverMessage ? 'first-message' : ''}
+                  >
                     <ChatMessage message={message} />
                   </div>
                 );
