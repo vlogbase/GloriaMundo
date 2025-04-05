@@ -19,6 +19,8 @@ import {
   verifyPayPalWebhook,
   CREDIT_VALUE_USD
 } from "./paypal";
+import { registerDocumentRoutes } from "./documentRoutes";
+import { findSimilarChunks, formatContextForPrompt } from "./documentProcessor";
 
 type ModelType = "reasoning" | "search" | "multimodal";
 import 'express-session';
@@ -40,7 +42,7 @@ declare global {
 }
 
 // Middleware to check if user is authenticated
-const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+export const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
   if (req.isAuthenticated()) {
     return next();
   }
@@ -892,6 +894,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort messages by ID to ensure correct sequence
       filteredMessages.sort((a, b) => a.id - b.id);
       
+      // Check for relevant documents and get RAG context
+      let ragContext = '';
+      try {
+        const { chunks, documents } = await findSimilarChunks(content, conversationId);
+        if (chunks.length > 0) {
+          ragContext = formatContextForPrompt(chunks, documents);
+          console.log(`Added RAG context from ${chunks.length} document chunks`);
+        }
+      } catch (error) {
+        console.error("Error fetching RAG context:", error);
+        // Continue without RAG context if there's an error
+      }
+      
       // Create model-specific system message
       let systemContent = `You are GloriaMundo, an AI assistant powered by ${modelConfig.apiProvider}'s ${modelConfig.modelName} model. Your purpose is to provide accurate, thorough, and helpful information in response to user queries.
 
@@ -917,6 +932,11 @@ Response Guidelines:
 - Present multiple perspectives on complex issues
 - Identify underlying assumptions and logical implications
 - Clarify ambiguities and potential misunderstandings`;
+
+      // Add RAG context to system message if available
+      if (ragContext) {
+        systemContent += `\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to enhance your response when relevant.`;
+      }
 
       systemContent += `\n\nTone:
 Your communication style should be:
@@ -1303,6 +1323,19 @@ Format your responses using markdown for better readability and organization.`;
       // Sort messages by ID to ensure correct sequence
       filteredMessages.sort((a, b) => a.id - b.id);
       
+      // Check for relevant documents and get RAG context
+      let ragContext = '';
+      try {
+        const { chunks, documents } = await findSimilarChunks(content, conversationId);
+        if (chunks.length > 0) {
+          ragContext = formatContextForPrompt(chunks, documents);
+          console.log(`Added RAG context from ${chunks.length} document chunks`);
+        }
+      } catch (error) {
+        console.error("Error fetching RAG context:", error);
+        // Continue without RAG context if there's an error
+      }
+
       // Create model-specific system message
       let systemContent = `You are GloriaMundo, an AI assistant powered by ${modelConfig.apiProvider}'s ${modelConfig.modelName} model. Your purpose is to provide accurate, thorough, and helpful information in response to user queries.
 
@@ -1356,6 +1389,11 @@ Your communication style should be:
 Remember that your purpose is to provide accurate, helpful information that addresses the user's query directly.
 
 Format your responses using markdown for better readability and organization.`;
+
+      // Add RAG context to system message if available
+      if (ragContext) {
+        systemContent += `\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to enhance your response when relevant.`;
+      }
 
       // Initialize the messages array with proper typing for both text and multimodal messages
       const messages: ApiMessage[] = [];
@@ -2102,6 +2140,9 @@ Format your responses using markdown for better readability and organization.`;
       res.status(500).json({ message: "Failed to clear conversations" });
     }
   });
+
+  // Register document routes for RAG functionality
+  registerDocumentRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

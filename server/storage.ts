@@ -1,10 +1,12 @@
 import { 
   users, type User, type InsertUser, 
   conversations, type Conversation, type InsertConversation,
-  messages, type Message, type InsertMessage
+  messages, type Message, type InsertMessage,
+  documents, type Document, type InsertDocument,
+  documentChunks, type DocumentChunk, type InsertDocumentChunk
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 
 // Define the user presets interface
 export interface UserPresets {
@@ -38,25 +40,46 @@ export interface IStorage {
   getMessagesByConversation(conversationId: number): Promise<Message[]>;
   createMessage(message: Partial<InsertMessage>): Promise<Message>;
   updateMessage(id: number, updates: Partial<InsertMessage>): Promise<Message | undefined>;
+  
+  // Document methods
+  getDocument(id: number): Promise<Document | undefined>;
+  getDocumentsByConversation(conversationId: number): Promise<Document[]>;
+  createDocument(document: Partial<InsertDocument>): Promise<Document>;
+  deleteDocument(id: number): Promise<void>;
+  
+  // Document chunk methods
+  getDocumentChunk(id: number): Promise<DocumentChunk | undefined>;
+  getChunksByDocument(documentId: number): Promise<DocumentChunk[]>;
+  createDocumentChunk(chunk: Partial<InsertDocumentChunk>): Promise<DocumentChunk>;
+  updateDocumentChunkEmbedding(id: number, embedding: string): Promise<DocumentChunk | undefined>;
+  searchSimilarChunks(embedding: string, limit?: number): Promise<DocumentChunk[]>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private conversations: Map<number, Conversation>;
   private messages: Map<number, Message>;
+  private documents: Map<number, Document>;
+  private documentChunks: Map<number, DocumentChunk>;
   
   private userId: number;
   private conversationId: number;
   private messageId: number;
+  private documentId: number;
+  private documentChunkId: number;
 
   constructor() {
     this.users = new Map();
     this.conversations = new Map();
     this.messages = new Map();
+    this.documents = new Map();
+    this.documentChunks = new Map();
     
     this.userId = 1;
     this.conversationId = 1;
     this.messageId = 1;
+    this.documentId = 1;
+    this.documentChunkId = 1;
   }
 
   // User methods
@@ -426,6 +449,201 @@ export class MemStorage implements IStorage {
     
     this.messages.set(id, updatedMessage);
     return updatedMessage;
+  }
+  
+  // Document methods
+  async getDocument(id: number): Promise<Document | undefined> {
+    try {
+      const documentFromDb = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+      
+      if (documentFromDb.length > 0) {
+        return documentFromDb[0];
+      }
+    } catch (error) {
+      console.error('Database error when getting document:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    return this.documents.get(id);
+  }
+  
+  async getDocumentsByConversation(conversationId: number): Promise<Document[]> {
+    try {
+      const documentsFromDb = await db.select().from(documents)
+        .where(eq(documents.conversationId, conversationId))
+        .orderBy(asc(documents.createdAt));
+      
+      if (documentsFromDb.length > 0) {
+        return documentsFromDb;
+      }
+    } catch (error) {
+      console.error('Database error when getting documents by conversation:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    return Array.from(this.documents.values())
+      .filter(doc => doc.conversationId === conversationId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+  
+  async createDocument(data: Partial<InsertDocument>): Promise<Document> {
+    if (!data.conversationId) {
+      throw new Error("conversationId is required");
+    }
+    
+    if (!data.fileName) {
+      throw new Error("fileName is required");
+    }
+    
+    if (!data.fileType) {
+      throw new Error("fileType is required");
+    }
+    
+    if (!data.fileSize) {
+      throw new Error("fileSize is required");
+    }
+    
+    if (!data.content) {
+      throw new Error("content is required");
+    }
+    
+    const id = this.documentId++;
+    const now = new Date();
+    
+    const document: Document = {
+      id,
+      conversationId: data.conversationId,
+      userId: data.userId || null,
+      fileName: data.fileName,
+      fileType: data.fileType,
+      fileSize: data.fileSize,
+      content: data.content,
+      metadata: data.metadata || null,
+      createdAt: now
+    };
+    
+    this.documents.set(id, document);
+    return document;
+  }
+  
+  async deleteDocument(id: number): Promise<void> {
+    // Delete the document
+    this.documents.delete(id);
+    
+    // Delete all associated chunks
+    const chunkIds = Array.from(this.documentChunks.entries())
+      .filter(([_, chunk]) => chunk.documentId === id)
+      .map(([id, _]) => id);
+    
+    for (const chunkId of chunkIds) {
+      this.documentChunks.delete(chunkId);
+    }
+  }
+  
+  // Document chunk methods
+  async getDocumentChunk(id: number): Promise<DocumentChunk | undefined> {
+    try {
+      const chunkFromDb = await db.select().from(documentChunks).where(eq(documentChunks.id, id)).limit(1);
+      
+      if (chunkFromDb.length > 0) {
+        return chunkFromDb[0];
+      }
+    } catch (error) {
+      console.error('Database error when getting document chunk:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    return this.documentChunks.get(id);
+  }
+  
+  async getChunksByDocument(documentId: number): Promise<DocumentChunk[]> {
+    try {
+      const chunksFromDb = await db.select().from(documentChunks)
+        .where(eq(documentChunks.documentId, documentId))
+        .orderBy(asc(documentChunks.chunkIndex));
+      
+      if (chunksFromDb.length > 0) {
+        return chunksFromDb;
+      }
+    } catch (error) {
+      console.error('Database error when getting chunks by document:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    return Array.from(this.documentChunks.values())
+      .filter(chunk => chunk.documentId === documentId)
+      .sort((a, b) => a.chunkIndex - b.chunkIndex);
+  }
+  
+  async createDocumentChunk(data: Partial<InsertDocumentChunk>): Promise<DocumentChunk> {
+    if (!data.documentId) {
+      throw new Error("documentId is required");
+    }
+    
+    if (!data.content) {
+      throw new Error("content is required");
+    }
+    
+    if (data.chunkIndex === undefined) {
+      throw new Error("chunkIndex is required");
+    }
+    
+    const id = this.documentChunkId++;
+    const now = new Date();
+    
+    const chunk: DocumentChunk = {
+      id,
+      documentId: data.documentId,
+      content: data.content,
+      chunkIndex: data.chunkIndex,
+      embedding: data.embedding || null,
+      createdAt: now
+    };
+    
+    this.documentChunks.set(id, chunk);
+    return chunk;
+  }
+  
+  async updateDocumentChunkEmbedding(id: number, embedding: string): Promise<DocumentChunk | undefined> {
+    const chunk = this.documentChunks.get(id);
+    
+    if (!chunk) {
+      return undefined;
+    }
+    
+    const updatedChunk: DocumentChunk = {
+      ...chunk,
+      embedding
+    };
+    
+    this.documentChunks.set(id, updatedChunk);
+    return updatedChunk;
+  }
+  
+  /**
+   * Search for document chunks with similar embeddings to the provided embedding
+   * This is a naive implementation for in-memory storage
+   * In a real-world scenario, this would use vector similarity search in a database
+   */
+  async searchSimilarChunks(embedding: string, limit: number = 5): Promise<DocumentChunk[]> {
+    try {
+      // For real PostgreSQL implementation, we would use pgvector here
+      // For this demo, just return some chunks
+      // In a production environment, we would:
+      // 1. Parse the embedding string to a vector
+      // 2. Use vector operations to find similar chunks
+      // 3. Return the most similar chunks
+      
+      // Return document chunks sorted by createdAt as a fallback
+      const allChunks = Array.from(this.documentChunks.values())
+        .filter(chunk => chunk.embedding !== null) // Only include chunks with embeddings
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      return allChunks.slice(0, limit);
+    } catch (error) {
+      console.error('Error searching similar chunks:', error);
+      return [];
+    }
   }
 }
 

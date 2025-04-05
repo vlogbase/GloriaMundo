@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -75,3 +75,50 @@ export type Conversation = typeof conversations.$inferSelect;
 
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
+
+// Document schema for storing uploaded documents
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").references(() => conversations.id).notNull(),
+  userId: integer("user_id").references(() => users.id),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(), // MIME type
+  fileSize: integer("file_size").notNull(), // in bytes
+  content: text("content").notNull(), // The extracted text content
+  metadata: jsonb("metadata"), // Additional metadata about the document
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).pick({
+  conversationId: true,
+  userId: true,
+  fileName: true,
+  fileType: true,
+  fileSize: true,
+  content: true,
+  metadata: true,
+});
+
+// Document chunk schema for storing smaller chunks of documents for retrieval
+export const documentChunks = pgTable("document_chunks", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").references(() => documents.id).notNull(),
+  content: text("content").notNull(), // The chunk text content
+  chunkIndex: integer("chunk_index").notNull(), // Position in the document
+  embedding: text("embedding"), // The embedding vector as a string (to be converted to array)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDocumentChunkSchema = createInsertSchema(documentChunks).pick({
+  documentId: true,
+  content: true,
+  chunkIndex: true,
+  embedding: true,
+});
+
+// Export types for documents
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+
+export type InsertDocumentChunk = z.infer<typeof insertDocumentChunkSchema>;
+export type DocumentChunk = typeof documentChunks.$inferSelect;
