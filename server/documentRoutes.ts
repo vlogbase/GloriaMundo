@@ -280,8 +280,9 @@ export function registerDocumentRoutes(app: Express) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
       
-      // Get relevant chunks
-      const { chunks, documents } = await findSimilarChunks(query, conversationId);
+      // Get relevant chunks with userId for proper security filtering
+      const userId = req.user?.id;
+      const { chunks, documents } = await findSimilarChunks(query, conversationId, 5, userId);
       
       if (chunks.length === 0) {
         return res.json({ 

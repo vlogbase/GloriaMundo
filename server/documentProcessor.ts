@@ -813,6 +813,11 @@ export async function generateEmbedding(text: string): Promise<string> {
       
       console.log(`Successfully generated embedding with Azure OpenAI (${embedding.length} dimensions)`);
       
+      // Verify dimensions are as expected for text-embedding-3-large
+      if (embedding.length !== 3072) {
+        console.warn(`Warning: Generated embedding has ${embedding.length} dimensions, expected 3072 for text-embedding-3-large`);
+      }
+      
       // Convert to string for storage
       result = JSON.stringify(embedding);
       

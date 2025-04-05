@@ -47,11 +47,18 @@ async function createVectorIndex() {
           { embedding: "vector" },
           { 
             name: "vector_index",
-            vectorDimension: 1536, // OpenAI embedding dimension
+            vectorDimension: 3072, // OpenAI text-embedding-3-large dimension
             vectorDistanceMetric: "cosine"
           }
         );
         console.log('Vector index created successfully');
+        
+        // Also create regular indexes for better performance with filters
+        console.log('Creating additional supporting indexes...');
+        await chunksCollection.createIndex({ documentId: 1 }, { name: "document_id_index" });
+        await chunksCollection.createIndex({ userId: 1 }, { name: "user_id_index" });
+        await chunksCollection.createIndex({ documentId: 1, userId: 1 }, { name: "doc_user_index" });
+        console.log('Supporting indexes created successfully');
       } catch (indexError) {
         console.error('Failed to create vector index. This usually means your MongoDB instance does not support vector search.');
         console.error('If using MongoDB Atlas, ensure you have a cluster that supports vector search.');
@@ -60,7 +67,12 @@ async function createVectorIndex() {
         // Create a regular index for documentId for better query performance as fallback
         console.log('Creating regular index on documentId field as fallback...');
         await chunksCollection.createIndex({ documentId: 1 }, { name: "document_id_index" });
-        console.log('Regular index created successfully');
+        
+        // Create a compound index of documentId and userId for better security and performance
+        console.log('Creating compound index on documentId and userId fields...');
+        await chunksCollection.createIndex({ documentId: 1, userId: 1 }, { name: "doc_user_index" });
+        
+        console.log('Regular indexes created successfully');
       }
     }
   } catch (error) {
