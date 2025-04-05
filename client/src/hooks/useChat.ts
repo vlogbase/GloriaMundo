@@ -136,8 +136,30 @@ export const useChat = () => {
       console.log("Received response from server:", data);
       
       // The backend returns the assistant message directly
-      // Check if the response has necessary Message properties
-      if (data && data.role === 'assistant' && data.id) {
+      // Check if the response has the expected structure with both userMessage and assistantMessage
+      if (data && data.userMessage && data.assistantMessage) {
+        // Update the temporary user message and add the assistant message
+        setMessages((prev) => {
+          // Find and replace the temporary user message
+          const userMsgIndex = prev.findIndex(msg => 
+            msg.role === "user" && msg.content === content && msg.id === tempUserMessage.id
+          );
+          
+          const newMessages = [...prev];
+          if (userMsgIndex !== -1) {
+            // Replace the temporary user message with the server-provided one
+            newMessages[userMsgIndex] = data.userMessage;
+          }
+          
+          // Add the assistant message if it's not already present
+          if (!prev.some(msg => msg.id === data.assistantMessage.id)) {
+            newMessages.push(data.assistantMessage);
+          }
+          
+          return newMessages;
+        });
+      } else if (data && data.role === 'assistant' && data.id) {
+        // Fallback for backward compatibility - old API format
         // Add the assistant message to our messages array
         setMessages((prev) => [...prev, data]);
       } else {

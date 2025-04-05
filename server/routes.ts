@@ -1990,9 +1990,12 @@ Format your responses using markdown for better readability and organization.`;
           responseStructure: "{ userMessage, assistantMessage }"
         });
         
-        // Send only the assistant message as the response
+        // Send both user and assistant messages as the response
         // This matches what the frontend expects in useChat.ts
-        res.json(assistantMessage);
+        res.json({
+          userMessage,
+          assistantMessage
+        });
       } catch (error) {
         // Log error with additional diagnostic information
         console.error(`Error with ${modelType} model (${modelConfig.apiProvider}):`, {
@@ -2035,12 +2038,16 @@ Format your responses using markdown for better readability and organization.`;
         
         // Log the error response we're sending
         console.log("Sending error response to client:", {
+          userMessageId: userMessage.id,
           assistantMessageId: assistantMessage.id,
-          errorResponseStructure: "assistantMessage only"
+          errorResponseStructure: "{ userMessage, assistantMessage }"
         });
         
-        // Send only the assistant message as the response to match the success case
-        res.json(assistantMessage);
+        // Send both messages to match the success case format
+        res.json({
+          userMessage,
+          assistantMessage
+        });
       }
     } catch (error) {
       console.error('Server error:', error);
