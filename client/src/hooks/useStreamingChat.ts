@@ -12,7 +12,7 @@ export const useStreamingChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
-  const { selectedModel } = useModelSelection();
+  const { selectedModel, customOpenRouterModelId } = useModelSelection();
   
   // Reference to the currently streaming message
   const streamingMessageRef = useRef<{
@@ -115,14 +115,20 @@ export const useStreamingChat = () => {
                           window.location.host.includes('.gloriamundo.com') ||
                           !window.location.host.includes('localhost');
       
-      // In production environments or with non-reasoning models, don't use streaming
-      // This avoids streaming issues in deployed environments
-      if (selectedModel === "reasoning" && !isProduction) {
-        // We're using streaming in a development environment
+      // Enable streaming for both OpenRouter and reasoning models
+      // Always enable streaming for OpenRouter, and for reasoning models in development environments
+      if (selectedModel === "openrouter" || (selectedModel === "reasoning" && !isProduction)) {
+        // Set up streaming for this request
         streamingMessageRef.current = null;
         
         // Create a new EventSource connection
-        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
+        // For OpenRouter models, include both modelType="openrouter" and the specific modelId
+        const isOpenRouter = selectedModel === "openrouter";
+        const modelType = isOpenRouter ? "openrouter" : selectedModel;
+        const modelId = isOpenRouter && customOpenRouterModelId ? customOpenRouterModelId : "";
+        const eventSource = new EventSource(
+          `/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${modelType}${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ''}`
+        );
         eventSourceRef.current = eventSource;
         
         eventSource.onmessage = (event) => {
@@ -275,7 +281,7 @@ export const useStreamingChat = () => {
         return;
       }
       
-      // For non-streaming approach (production or non-reasoning models), use regular fetch
+      // For non-streaming approach (non-OpenRouter models in production or other model types), use regular fetch
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
@@ -291,11 +297,11 @@ export const useStreamingChat = () => {
     } finally {
       // For non-streaming requests, we need to set loading to false here
       // (For streaming requests, this is done in the "done" event handler)
-      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
+      if ((selectedModel !== "reasoning" && selectedModel !== "openrouter") || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
-  }, [activeConversationId, selectedModel, setLocation, toast]);
+  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
   
   // Helper function to handle non-streaming requests
   const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
@@ -310,7 +316,9 @@ export const useStreamingChat = () => {
         body: JSON.stringify({ 
           content,
           image,
-          modelType: selectedModel
+          modelType: selectedModel,
+          // Include the modelId for OpenRouter
+          ...(selectedModel === "openrouter" && customOpenRouterModelId ? { modelId: customOpenRouterModelId } : {})
         }),
       });
       

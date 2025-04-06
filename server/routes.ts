@@ -856,10 +856,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
-      // Only allow reasoning model for streaming (fail fast for other models)
-      if (modelType !== "reasoning") {
+      // Allow reasoning model and OpenRouter for streaming (fail fast for other models)
+      if (modelType !== "reasoning" && modelType !== "openrouter") {
         return res.status(400).json({ 
-          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
+          message: `Streaming is only supported for the reasoning model and OpenRouter models, not for ${modelType}.`
         });
       }
       
@@ -871,7 +871,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the model configuration based on the requested model type
-      const modelConfig = MODEL_CONFIGS.reasoning; // Always use reasoning for streaming
+      let modelConfig;
+      
+      if (modelType === "openrouter") {
+        // Use OpenRouter configuration
+        modelConfig = {
+          apiProvider: "openrouter",
+          modelName: modelId, // Use the specific model ID from OpenRouter
+          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+          apiKey: OPENROUTER_API_KEY
+        };
+        console.log(`Streaming using OpenRouter with model: ${modelId}`);
+      } else {
+        // Use reasoning model as default for streaming
+        modelConfig = MODEL_CONFIGS.reasoning;
+      }
       
       // Always use streaming for this endpoint
       const shouldStream = true;
@@ -1302,8 +1316,9 @@ Format your responses using markdown for better readability and organization.`;
         modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       }
       
-      // Disable streaming (using standard requests only)
-      const shouldStream = false;
+      // Enable streaming for OpenRouter and reasoning models
+      // OpenRouter API supports streaming similar to OpenAI's implementation
+      const shouldStream = modelConfig.apiProvider === "openrouter" || modelType === "reasoning";
 
       // Create user message
       const userMessage = await storage.createMessage({
