@@ -856,10 +856,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
-      // Allow reasoning model and OpenRouter for streaming (fail fast for other models)
-      if (modelType !== "reasoning" && modelType !== "openrouter") {
+      // Only allow reasoning model for streaming (fail fast for other models)
+      if (modelType !== "reasoning") {
         return res.status(400).json({ 
-          message: `Streaming is only supported for the reasoning model and OpenRouter models, not for ${modelType}.`
+          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
         });
       }
       
@@ -871,21 +871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the model configuration based on the requested model type
-      let modelConfig;
-      
-      if (modelType === "openrouter") {
-        // Use OpenRouter configuration
-        modelConfig = {
-          apiProvider: "openrouter",
-          modelName: modelId, // Use the specific model ID from OpenRouter
-          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-          apiKey: OPENROUTER_API_KEY
-        };
-        console.log(`Streaming using OpenRouter with model: ${modelId}`);
-      } else {
-        // Use reasoning model as default for streaming
-        modelConfig = MODEL_CONFIGS.reasoning;
-      }
+      const modelConfig = MODEL_CONFIGS.reasoning; // Always use reasoning for streaming
       
       // Always use streaming for this endpoint
       const shouldStream = true;
@@ -1051,25 +1037,17 @@ Format your responses using markdown for better readability and organization.`;
           stream: true
         };
         
-        // Set up Server-Sent Events with headers to ensure reliable streaming
+        // Set up Server-Sent Events
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Important for Nginx proxy
-        res.setHeader('Transfer-Encoding', 'chunked'); // Ensure chunked encoding
         
-        // Make the API request with proper headers to ensure no buffering
+        // Make the API request
         const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${modelConfig.apiKey}`,
-            "Accept": "text/event-stream",
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-            // Add OpenRouter-specific headers for proper attribution
-            "HTTP-Referer": "https://gloriamundo.com",
-            "X-Title": "GloriaMundo AI"
+            "Authorization": `Bearer ${modelConfig.apiKey}`
           },
           body: JSON.stringify(payload)
         });
@@ -1127,26 +1105,12 @@ Format your responses using markdown for better readability and organization.`;
                 const delta = parsed.choices[0]?.delta?.content || "";
                 
                 if (delta) {
-                  // Log timing information for each chunk
-                  console.log(`[${new Date().toISOString()}] Streaming chunk: "${delta.substring(0, 20)}${delta.length > 20 ? '...' : ''}"`);
-                  
-                  // Add to full response
                   assistantContent += delta;
-                  
-                  // Stream this chunk to the client
-                  const chunkData = JSON.stringify({ 
+                  res.write(`data: ${JSON.stringify({ 
                     type: "chunk", 
                     content: delta,
                     id: assistantMessage.id
-                  });
-                  
-                  // Write the chunk to the response
-                  res.write(`data: ${chunkData}\n\n`);
-                  
-                  // Express/Node.js response doesn't have a standard flush method
-                  // Instead, set content headers that might help prevent buffering
-                  res.setHeader('X-Accel-Buffering', 'no');
-                  res.setHeader('Cache-Control', 'no-cache, no-transform');
+                  })}\n\n`);
                 }
               } catch (e) {
                 console.error("Error parsing streaming response:", e);
@@ -1338,9 +1302,8 @@ Format your responses using markdown for better readability and organization.`;
         modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       }
       
-      // Enable streaming for OpenRouter and reasoning models
-      // OpenRouter API supports streaming similar to OpenAI's implementation
-      const shouldStream = modelConfig.apiProvider === "openrouter" || modelType === "reasoning";
+      // Disable streaming (using standard requests only)
+      const shouldStream = false;
 
       // Create user message
       const userMessage = await storage.createMessage({
@@ -1751,12 +1714,7 @@ Format your responses using markdown for better readability and organization.`;
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${modelConfig.apiKey}`,
-            // Add OpenRouter-specific headers
-            ...(modelConfig.apiProvider === "openrouter" ? {
-              "HTTP-Referer": "https://gloriamundo.com",
-              "X-Title": "GloriaMundo AI"
-            } : {})
+            "Authorization": `Bearer ${modelConfig.apiKey}`
           },
           body: JSON.stringify(payload)
         });
@@ -1783,10 +1741,8 @@ Format your responses using markdown for better readability and organization.`;
         if (shouldStream) {
           // Set up Server-Sent Events
           res.setHeader('Content-Type', 'text/event-stream');
-          res.setHeader('Cache-Control', 'no-cache, no-transform');
+          res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Connection', 'keep-alive');
-          res.setHeader('X-Accel-Buffering', 'no'); // Important for Nginx proxy
-          res.setHeader('Transfer-Encoding', 'chunked'); // Ensure chunked encoding
           
           const reader = response.body?.getReader();
           if (!reader) {

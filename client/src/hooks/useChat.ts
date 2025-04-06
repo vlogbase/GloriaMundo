@@ -7,6 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
 
 export const useChat = () => {
+  // Logging for useChat initialization (debugging first message issue)
+  console.log('[useChat] Hook initializing...');
+  
   // Initialize with an empty array for messages
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);

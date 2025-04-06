@@ -12,7 +12,7 @@ export const useStreamingChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
-  const { selectedModel, customOpenRouterModelId } = useModelSelection();
+  const { selectedModel } = useModelSelection();
   
   // Reference to the currently streaming message
   const streamingMessageRef = useRef<{
@@ -115,145 +115,19 @@ export const useStreamingChat = () => {
                           window.location.host.includes('.gloriamundo.com') ||
                           !window.location.host.includes('localhost');
       
-      // Enable streaming for both OpenRouter and reasoning models
-      // Always enable streaming for OpenRouter, and for reasoning models in development environments
-      if (selectedModel === "openrouter" || (selectedModel === "reasoning" && !isProduction)) {
-        // Set up streaming for this request
+      // In production environments or with non-reasoning models, don't use streaming
+      // This avoids streaming issues in deployed environments
+      if (selectedModel === "reasoning" && !isProduction) {
+        // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
         // Create a new EventSource connection
-        // For OpenRouter models, include both modelType="openrouter" and the specific modelId
-        const isOpenRouter = selectedModel === "openrouter";
-        const modelType = isOpenRouter ? "openrouter" : selectedModel;
-        const modelId = isOpenRouter && customOpenRouterModelId ? customOpenRouterModelId : "";
-        
-        // Construct the stream URL and log it for debugging
-        const streamUrl = `/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${modelType}${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ''}`;
-        console.log('Setting up EventSource for streaming:', { 
-          modelType,
-          modelId,
-          isOpenRouter,
-          streamUrl
-        });
-        
-        // Create the EventSource
-        const eventSource = new EventSource(streamUrl);
+        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
         eventSourceRef.current = eventSource;
         
-        // EventSource management - define message handlers
-        console.log('DEBUG - Setting up EventSource handlers');
-        
-        eventSource.onopen = () => {
-          console.log('DEBUG - EventSource connection opened');
-        };
-        
         eventSource.onmessage = (event) => {
-          // Declare variables at the outer scope so they're accessible in catch block
-          let data: any = null;
-          let jsonString = "";
-          
           try {
-            // Get the raw data and log it
-            const rawData = event.data;
-            console.log('DEBUG - EventSource raw data received:', rawData);
-            console.log('DEBUG - EventSource data type:', typeof rawData);
-            
-            // IMPORTANT: Explicitly check for and handle the 'data:' prefix
-            // Even though EventSource is supposed to strip this, we're seeing errors indicating it's not always doing so
-            if (typeof rawData === 'string') {
-              jsonString = rawData;
-              
-              // More robust handling of the "data:" prefix in various formats
-              if (rawData.startsWith("data:")) {
-                console.log('DEBUG - Detected "data:" prefix');
-                
-                // Find the position after the "data:" prefix
-                // This handles both "data:" and "data: " formats (with or without space)
-                const colonPos = rawData.indexOf(':');
-                if (colonPos >= 0) {
-                  // Extract everything after the colon (and optional space)
-                  const afterColon = rawData.substring(colonPos + 1);
-                  jsonString = afterColon.trim();
-                  console.log('DEBUG - Stripped "data:" prefix, result:', jsonString);
-                }
-              }
-              
-              // Special case for [DONE] marker
-              if (jsonString === '[DONE]') {
-                console.log('DEBUG - Stream complete with [DONE] marker');
-                return;
-              }
-              
-              // Log the cleaned string we're about to parse
-              console.log('DEBUG - Attempting to parse JSON string:', jsonString);
-            } else {
-              console.error('DEBUG - Expected string data but received:', typeof rawData);
-              throw new Error(`Unexpected data type: ${typeof rawData}`);
-            }
-            
-            // Parse the JSON data with extra error handling and recovery
-            try {
-              // First attempt - standard JSON parsing
-              data = JSON.parse(jsonString);
-              console.log('DEBUG - Successfully parsed JSON:', data);
-            } catch (jsonError) {
-              console.error('DEBUG - First JSON parse error:', jsonError);
-              console.error('DEBUG - Failed to parse string:', jsonString);
-              
-              // If the first parse fails, let's try multiple recovery options
-              try {
-                // Option 1: Try to sanitize the string by removing any unexpected characters at the beginning
-                let sanitizedString = jsonString;
-                
-                // Look for the first '{' character which should be the start of valid JSON
-                const firstBraceIndex = jsonString.indexOf('{');
-                if (firstBraceIndex > 0) {
-                  sanitizedString = jsonString.substring(firstBraceIndex);
-                  console.log('DEBUG - Found JSON object starting at position', firstBraceIndex);
-                  console.log('DEBUG - Sanitized string:', sanitizedString);
-                  
-                  // Try parsing the sanitized string
-                  data = JSON.parse(sanitizedString);
-                  console.log('DEBUG - Successfully parsed sanitized JSON:', data);
-                } else {
-                  // Option 2: If the string starts with '{' but might have trailing content
-                  const lastBraceIndex = jsonString.lastIndexOf('}');
-                  if (lastBraceIndex > 0 && lastBraceIndex < jsonString.length - 1) {
-                    sanitizedString = jsonString.substring(0, lastBraceIndex + 1);
-                    console.log('DEBUG - Found truncated JSON ending at position', lastBraceIndex);
-                    console.log('DEBUG - Sanitized string:', sanitizedString);
-                    
-                    // Try parsing the trimmed string
-                    data = JSON.parse(sanitizedString);
-                    console.log('DEBUG - Successfully parsed truncated JSON:', data);
-                  } else {
-                    // Option 3: For extreme cases, try to dynamically find valid JSON structure
-                    // This is a more aggressive recovery option but may help in certain cases
-                    try {
-                      // Use regex to find pattern that looks like a JSON object
-                      const jsonPattern = /{[^]*?}/;
-                      const matched = jsonString.match(jsonPattern);
-                      if (matched && matched[0]) {
-                        console.log('DEBUG - Extracted potential JSON using regex');
-                        data = JSON.parse(matched[0]);
-                        console.log('DEBUG - Successfully parsed regex-extracted JSON:', data);
-                      } else {
-                        throw new Error('No valid JSON pattern found');
-                      }
-                    } catch (regexError) {
-                      // Rethrow to be caught by outer recovery catch
-                      throw regexError;
-                    }
-                  }
-                }
-              } catch (recoveryError) {
-                // If all recovery attempts fail, log and re-throw the original error
-                console.error('DEBUG - All JSON parse recovery attempts failed');
-                console.error('DEBUG - Recovery error:', recoveryError);
-                console.error('DEBUG - Original raw data was:', rawData);
-                throw jsonError; // Re-throw the original error to be caught by the outer try/catch
-              }
-            }
+            const data = JSON.parse(event.data);
             
             // Handle different event types
             switch (data.type) {
@@ -276,38 +150,16 @@ export const useStreamingChat = () => {
                 break;
                 
               case "chunk":
-                // Log every chunk for debugging
-                console.log(`[${new Date().toISOString()}] Received chunk:`, {
-                  id: data.id,
-                  content: data.content,
-                  contentLength: data.content.length
-                });
-                
                 // Update the streaming message reference
                 if (streamingMessageRef.current && streamingMessageRef.current.id === data.id) {
-                  // Add new content to our running total
                   streamingMessageRef.current.content += data.content;
                   
-                  // Important: Use a local variable to capture the full current content
-                  // This prevents race conditions with setState being asynchronous
-                  const updatedContent = streamingMessageRef.current.content;
-                  
                   // Update the message in the state with the new content
-                  // Use a function form of setState to ensure we always have latest state
-                  setMessages((prev) => {
-                    return prev.map(msg => 
-                      msg.id === data.id 
-                        ? { ...msg, content: updatedContent } 
-                        : msg
-                    );
-                  });
-                  
-                  // Immediately force a UI update by setting streaming complete 
-                  // and then resetting it after a short delay
-                  setStreamingComplete(true);
-                  setTimeout(() => setStreamingComplete(false), 10);
-                } else {
-                  console.warn("Received chunk for unknown message ID:", data.id);
+                  setMessages((prev) => prev.map(msg => 
+                    msg.id === data.id 
+                      ? { ...msg, content: streamingMessageRef.current!.content } 
+                      : msg
+                  ));
                 }
                 break;
                 
@@ -361,34 +213,13 @@ export const useStreamingChat = () => {
                 console.warn("Unknown event type:", data.type);
             }
           } catch (parseError) {
-            // Log the error with detailed information for debugging
-            console.error("Error parsing SSE message:", parseError);
-            console.error("Raw data:", event.data);
+            console.error("Error parsing SSE message:", parseError, "Raw data:", event.data);
             
-            // Provide a more specific error message based on the error type
-            let errorDescription = "Received invalid data from server. Falling back to standard mode.";
-            
-            if (parseError instanceof Error) {
-              if (parseError.message.includes("Unexpected token")) {
-                // JSON syntax error - provide more specific information
-                errorDescription = "Response format error: Invalid JSON structure. Falling back to standard mode.";
-                console.error("JSON syntax error detected - likely the 'data:' prefix wasn't handled correctly");
-                
-                // Let's log the first 20-30 chars of the data to debug prefix issues
-                if (typeof event.data === 'string') {
-                  const dataStart = event.data.substring(0, 30);
-                  console.error(`Data starts with: "${dataStart}..."`);
-                }
-              } else if (parseError.message.includes("is not defined")) {
-                errorDescription = "Response processing error: Missing expected data. Falling back to standard mode.";
-              }
-            }
-            
-            // Show toast with informative error
+            // This is likely a JSON parsing error or malformed data
             toast({
               variant: "destructive",
               title: "Response Format Error",
-              description: errorDescription,
+              description: "Received invalid data from server. Falling back to standard mode.",
             });
             
             // Clean up and fall back
@@ -444,7 +275,7 @@ export const useStreamingChat = () => {
         return;
       }
       
-      // For non-streaming approach (non-OpenRouter models in production or other model types), use regular fetch
+      // For non-streaming approach (production or non-reasoning models), use regular fetch
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
@@ -460,11 +291,11 @@ export const useStreamingChat = () => {
     } finally {
       // For non-streaming requests, we need to set loading to false here
       // (For streaming requests, this is done in the "done" event handler)
-      if ((selectedModel !== "reasoning" && selectedModel !== "openrouter") || eventSourceRef.current === null) {
+      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
-  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
+  }, [activeConversationId, selectedModel, setLocation, toast]);
   
   // Helper function to handle non-streaming requests
   const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
@@ -479,9 +310,7 @@ export const useStreamingChat = () => {
         body: JSON.stringify({ 
           content,
           image,
-          modelType: selectedModel,
-          // Include the modelId for OpenRouter
-          ...(selectedModel === "openrouter" && customOpenRouterModelId ? { modelId: customOpenRouterModelId } : {})
+          modelType: selectedModel
         }),
       });
       
