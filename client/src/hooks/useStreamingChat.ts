@@ -110,23 +110,22 @@ export const useStreamingChat = () => {
         eventSourceRef.current = null;
       }
       
-      // Always try streaming first for all model types in all environments
-      console.log(`Sending message with selectedModel: ${selectedModel}, has image: ${!!image}`);
+      // Check if we're running in a deployed/production environment
+      const isProduction = window.location.host.includes('.replit.app') || 
+                          window.location.host.includes('.gloriamundo.com') ||
+                          !window.location.host.includes('localhost');
       
-      // Track if this is a streaming attempt
-      const isStreamingAttempt = true;
-      streamingMessageRef.current = null;
-      
-      // Create a new EventSource connection with a generous timeout
-      // Note: Adding a timestamp to prevent caching issues that might affect streaming
-      const timestamp = Date.now();
-      const streamUrl = `/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}&_t=${timestamp}`;
-      
-      console.log("Starting streaming chat from:", streamUrl);
-      const eventSource = new EventSource(streamUrl);
-      eventSourceRef.current = eventSource;
-      
-      eventSource.onmessage = (event) => {
+      // In production environments or with non-reasoning models, don't use streaming
+      // This avoids streaming issues in deployed environments
+      if (selectedModel === "reasoning" && !isProduction) {
+        // We're using streaming in a development environment
+        streamingMessageRef.current = null;
+        
+        // Create a new EventSource connection
+        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
+        eventSourceRef.current = eventSource;
+        
+        eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             
@@ -156,24 +155,11 @@ export const useStreamingChat = () => {
                   streamingMessageRef.current.content += data.content;
                   
                   // Update the message in the state with the new content
-                  // Use a direct state update approach for better performance during streaming
-                  setMessages((prev) => {
-                    // Make a shallow copy of the messages array
-                    const newMessages = [...prev];
-                    
-                    // Find the message that needs to be updated
-                    const index = newMessages.findIndex(msg => msg.id === data.id);
-                    
-                    if (index !== -1) {
-                      // Update just that message
-                      newMessages[index] = {
-                        ...newMessages[index],
-                        content: streamingMessageRef.current!.content
-                      };
-                    }
-                    
-                    return newMessages;
-                  });
+                  setMessages((prev) => prev.map(msg => 
+                    msg.id === data.id 
+                      ? { ...msg, content: streamingMessageRef.current!.content } 
+                      : msg
+                  ));
                 }
                 break;
                 
@@ -287,6 +273,10 @@ export const useStreamingChat = () => {
         
         // Return early as the event source will handle the rest
         return;
+      }
+      
+      // For non-streaming approach (production or non-reasoning models), use regular fetch
+      await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
       console.error("Error sending message:", error);
@@ -301,15 +291,14 @@ export const useStreamingChat = () => {
     } finally {
       // For non-streaming requests, we need to set loading to false here
       // (For streaming requests, this is done in the "done" event handler)
-      if (eventSourceRef.current === null) {
+      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
   }, [activeConversationId, selectedModel, setLocation, toast]);
   
-  // Helper function to handle non-streaming requests when streaming fails
+  // Helper function to handle non-streaming requests
   const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
-    console.log("Falling back to non-streaming mode for:", {conversationId, contentLength: content.length, hasImage: !!image});
     // originalContent is the raw content before potential JSON parsing
     const messageContent = content; // Clean content is passed in directly now
     try {

@@ -843,13 +843,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Streaming endpoint for chat messages
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
-    // Set proper headers for Server-Sent Events (SSE)
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no' // Disable Nginx buffering if present
-    });
     try {
       const conversationId = parseInt(req.params.id);
       const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
@@ -863,11 +856,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
+      // Only allow reasoning model for streaming (fail fast for other models)
+      if (modelType !== "reasoning") {
+        return res.status(400).json({ 
+          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
+        });
+      }
+      
+      // If an image is present, don't allow streaming (since we need to use multimodal model)
+      if (image) {
+        return res.status(400).json({ 
+          message: "Streaming is not supported for image inputs. Please use the standard API endpoint."
+        });
+      }
+      
       // Get the model configuration based on the requested model type
-      // Use the requested model type (reasoning, search, multimodal)
-      const validTypes = ["reasoning", "search", "multimodal"];
-      const actualModelType = validTypes.includes(modelType as string) ? modelType as ModelType : "reasoning";
-      const modelConfig = MODEL_CONFIGS[actualModelType];
+      const modelConfig = MODEL_CONFIGS.reasoning; // Always use reasoning for streaming
       
       // Always use streaming for this endpoint
       const shouldStream = true;
@@ -955,19 +959,6 @@ Format your responses using markdown for better readability and organization.`;
         }
       ];
       
-      // Special handling for image messages in multimodal models
-      const hasImage = image && image.length > 0;
-      if (hasImage && actualModelType === "multimodal") {
-        // For multimodal models, we need to format the message differently to include the image
-        messages.splice(1, 0, {
-          role: "user",
-          content: [
-            { type: "text", text: content as string },
-            { type: "image_url", image_url: { url: image as string } }
-          ]
-        } as MultimodalMessage);
-      }
-      
       // Ensure proper alternation of user and assistant messages
       let lastRole = "assistant"; // Start with assistant so first user message can be added
       
@@ -1046,7 +1037,10 @@ Format your responses using markdown for better readability and organization.`;
           stream: true
         };
         
-        // Headers already set at the start of the handler
+        // Set up Server-Sent Events
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
         
         // Make the API request
         const response = await fetch(modelConfig.apiUrl, {
@@ -1108,38 +1102,18 @@ Format your responses using markdown for better readability and organization.`;
               
               try {
                 const parsed = JSON.parse(data);
-                console.log("Streaming chunk received:", parsed);
-                
-                // Check for different response formats
-                const delta = parsed.choices[0]?.delta?.content || 
-                              parsed.choices[0]?.message?.content || 
-                              "";
+                const delta = parsed.choices[0]?.delta?.content || "";
                 
                 if (delta) {
                   assistantContent += delta;
-                  console.log("Sending chunk to client:", delta);
-                  
-                  // Immediately flush this chunk to the client
                   res.write(`data: ${JSON.stringify({ 
                     type: "chunk", 
                     content: delta,
                     id: assistantMessage.id
                   })}\n\n`);
-                  
-                  // Force flush the response immediately (if supported)
-                  // This isn't necessary in all environments but helps ensure immediate delivery
-                  try {
-                    // @ts-ignore - Some Express implementations support flush
-                    if (typeof res.flush === 'function') {
-                      // @ts-ignore
-                      res.flush();
-                    }
-                  } catch (e) {
-                    // Silently ignore if flush is not supported
-                  }
                 }
               } catch (e) {
-                console.error("Error parsing streaming response:", e, "Raw data:", data);
+                console.error("Error parsing streaming response:", e);
               }
             }
           }
@@ -1266,22 +1240,7 @@ Format your responses using markdown for better readability and organization.`;
       }
     } catch (error) {
       console.error('Server streaming error:', error);
-      // Send an SSE-formatted error response instead of standard JSON
-      // This ensures the client can process it properly
-      try {
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : "Unknown server error during streaming";
-          
-        res.write(`data: ${JSON.stringify({ 
-          type: "error",
-          message: "Failed to process streaming message: " + errorMessage
-        })}\n\n`);
-        res.end();
-      } catch (e) {
-        // Last resort if we can't even send an SSE message
-        res.end();
-      }
+      res.status(500).json({ message: "Failed to process streaming message" });
     }
   });
 
@@ -1343,10 +1302,8 @@ Format your responses using markdown for better readability and organization.`;
         modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       }
       
-      // Enable streaming for all model types and environments
-      // Note: The client will use the streaming endpoint directly, so this is mainly
-      // for API consistency and potential future use
-      const shouldStream = true;
+      // Disable streaming (using standard requests only)
+      const shouldStream = false;
 
       // Create user message
       const userMessage = await storage.createMessage({
