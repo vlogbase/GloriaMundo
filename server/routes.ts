@@ -21,6 +21,14 @@ import {
 } from "./paypal";
 import { registerDocumentRoutes } from "./documentRoutes";
 import { findSimilarChunks, formatContextForPrompt } from "./documentProcessor";
+import { 
+  ErrorCategory, 
+  ApiError, 
+  parseOpenRouterError, 
+  handleInternalError, 
+  sendErrorResponse,
+  getUserMessageForCategory
+} from "./errorHandler";
 
 type ModelType = "reasoning" | "search" | "multimodal";
 import 'express-session';
@@ -368,8 +376,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test API connections without sending real messages
   // OpenRouter Models endpoint
   app.get("/api/openrouter/models", async (req, res) => {
+    const { parseOpenRouterError, handleInternalError, sendErrorResponse, ErrorCategory } = require("./errorHandler");
+    
     if (!isOpenRouterKeyValid) {
-      return res.status(401).json({ message: "Valid OpenRouter API key is required" });
+      sendErrorResponse(res, {
+        status: 401,
+        category: ErrorCategory.CONFIGURATION,
+        message: "Valid OpenRouter API key is required",
+        userMessage: "OpenRouter API key is missing or invalid. Please provide a valid API key in the application settings."
+      });
+      return;
     }
 
     try {
@@ -384,10 +400,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("OpenRouter API error:", errorText);
-        return res.status(response.status).json({ 
-          message: "Failed to fetch models from OpenRouter", 
-          error: errorText 
-        });
+        const apiError = parseOpenRouterError(response.status, errorText);
+        sendErrorResponse(res, apiError);
+        return;
       }
 
       const data = await response.json();
@@ -420,10 +435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(models);
     } catch (error) {
       console.error("Error fetching OpenRouter models:", error);
-      return res.status(500).json({ 
-        message: "Failed to fetch models from OpenRouter", 
-        error: error instanceof Error ? error.message : String(error)
-      });
+      const apiError = handleInternalError(error, "OpenRouter models API");
+      sendErrorResponse(res, apiError);
     }
   });
 
@@ -510,9 +523,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!response.ok) {
         const errorText = await response.text();
-        return res.status(response.status).json({ 
-          error: `API returned ${response.status}`, 
-          details: errorText,
+        // Use our error handling system for more detailed error information
+        const apiError = parseOpenRouterError(response.status, errorText);
+        
+        return res.status(response.status).json({
+          error: `API returned ${response.status}`,
+          category: apiError.category,
+          message: apiError.userMessage,
+          technicalDetails: apiError.message,
           provider
         });
       }
@@ -524,10 +542,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error(`Error testing ${provider} API connection:`, error);
-      return res.status(500).json({ 
-        error: "Failed to test API connection", 
+      
+      // Use our error handling system for a better error response
+      const apiError = handleInternalError(error, provider);
+      
+      return res.status(apiError.status).json({
+        error: "Failed to test API connection",
         provider,
-        message: error instanceof Error ? error.message : String(error)
+        category: apiError.category,
+        message: apiError.userMessage,
+        technicalDetails: apiError.message
       });
     }
   });
@@ -1133,7 +1157,14 @@ Format your responses using markdown for better readability and organization.`;
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`${modelConfig.apiProvider} API streaming error: ${errorText}`);
-          throw new Error(`${modelConfig.apiProvider} API returned ${response.status}`);
+          
+          // Parse the error using our enhanced error handler
+          const apiError = parseOpenRouterError(response.status, errorText);
+          
+          // Throw a more detailed error message
+          throw new Error(
+            `${modelConfig.apiProvider} API error: ${apiError.message} (Status: ${response.status}, Category: ${apiError.category})`
+          );
         }
 
         // Create initial message with placeholder content (will be updated with streaming data)
@@ -1271,41 +1302,46 @@ Format your responses using markdown for better readability and organization.`;
         
         res.end();
       } catch (error) {
-        // Create a detailed error message for the client
+        // Create a detailed error message for the client using our error categorization system
         let errorMessage = "Failed to process streaming response";
         
         if (error instanceof Error) {
           console.error(`Error in streaming response:`, error.message);
           
-          // Provide more specific error messages based on the error type
-          if (error.message.includes("Failed to get reader")) {
-            errorMessage = "Server could not process the streaming response";
-          } else if (error.message.includes("API returned")) {
-            // Extract the status code if present
-            const statusMatch = error.message.match(/API returned (\d+)/);
-            if (statusMatch && statusMatch[1]) {
-              const status = statusMatch[1];
-              
-              // Customize message based on status code
-              if (status === "401" || status === "403") {
-                errorMessage = "Authentication error with the API. Please try a different model.";
-              } else if (status === "429") {
-                errorMessage = "API rate limit exceeded. Please try again in a moment.";
-              } else if (status === "500") {
-                errorMessage = "API server error. Please try again or select a different model.";
-              } else if (status === "502" || status === "504") {
-                errorMessage = "API gateway timeout. The server is currently experiencing high load.";
-              } else {
-                errorMessage = `API error (${status}). Please try again or select a different model.`;
-              }
-            } else {
-              errorMessage = "API error. Please try again or select a different model.";
-            }
-          } else if (error.message.toLowerCase().includes("timeout")) {
-            errorMessage = "Request timed out. The server is taking too long to respond.";
+          let apiError: ApiError;
+          
+          if (error.message.includes("API error:")) {
+            // This is a pre-categorized error from our error handler
+            const errorText = error.message;
+            // Extract category from error message if available
+            const categoryMatch = errorText.match(/Category:\s+(\w+)/);
+            const category = categoryMatch ? categoryMatch[1] as ErrorCategory : ErrorCategory.UNKNOWN;
+            
+            // Get user-friendly message based on category
+            errorMessage = getUserMessageForCategory(category, modelType);
+          } else if (error.message.includes("Failed to get reader")) {
+            apiError = {
+              status: 500,
+              category: ErrorCategory.INTERNAL_SERVER,
+              message: "Failed to get reader from response",
+              userMessage: "Server could not process the streaming response"
+            };
+            errorMessage = apiError.userMessage;
+          } else {
+            // Use handleInternalError to categorize other types of errors
+            apiError = handleInternalError(error, modelConfig.apiProvider);
+            errorMessage = apiError.userMessage;
           }
         } else {
           console.error(`Unknown error in streaming response:`, error);
+          // Handle unknown errors
+          const apiError = {
+            status: 500,
+            category: ErrorCategory.UNKNOWN,
+            message: "Unknown error in streaming response",
+            userMessage: getUserMessageForCategory(ErrorCategory.UNKNOWN, modelType)
+          };
+          errorMessage = apiError.userMessage;
         }
         
         // Send the error event to the client
@@ -1800,7 +1836,15 @@ Format your responses using markdown for better readability and organization.`;
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`${modelConfig.apiProvider} API error details: ${errorText}`);
-          throw new Error(`${modelConfig.apiProvider} API returned ${response.status}`);
+          
+          // Use the error handler to parse the error
+          const { parseOpenRouterError } = require("./errorHandler");
+          const apiError = parseOpenRouterError(response.status, errorText);
+          
+          // Add more context to the error message
+          throw new Error(
+            `${modelConfig.apiProvider} API error: ${apiError.message} (Status: ${response.status}, Category: ${apiError.category})`
+          );
         }
 
         // Handle streaming vs non-streaming responses
@@ -2139,25 +2183,30 @@ Format your responses using markdown for better readability and organization.`;
           messagesCount: messages.length
         });
         
-        // Create a more detailed error message to help debugging
-        let errorMessage = `I apologize, but I encountered an error while processing your request with the ${modelType} model.`;
-        
-        // Add specific suggestions based on the error
-        if (error instanceof Error) {
-          const errorText = error.message.toLowerCase();
+        // Parse error message and categorize it
+        let apiError: ApiError;
+        if (error instanceof Error && error.message.includes('API error:')) {
+          // This is a pre-categorized error from our error handler
+          const errorText = error.message;
+          // Extract category from error message if available
+          const categoryMatch = errorText.match(/Category:\s+(\w+)/);
+          const category = categoryMatch ? categoryMatch[1] as ErrorCategory : ErrorCategory.UNKNOWN;
           
-          if (errorText.includes("timeout") || errorText.includes("network")) {
-            errorMessage += " There seems to be a network issue. Please check your connection and try again.";
-          } else if (errorText.includes("unauthorized") || errorText.includes("authentication") || errorText.includes("401")) {
-            errorMessage += " There might be an issue with the API authentication. Please try a different model or contact support.";
-          } else if (errorText.includes("quota") || errorText.includes("rate limit") || errorText.includes("429")) {
-            errorMessage += " The API rate limit may have been exceeded. Please try again in a moment or select a different model.";
-          } else {
-            errorMessage += " Please try again or select a different model.";
-          }
+          // Create error object with appropriate user message
+          apiError = {
+            status: 500,
+            category: category,
+            message: errorText,
+            userMessage: getUserMessageForCategory(category, modelType)
+          };
         } else {
-          errorMessage += " Please try again or select a different model.";
+          // Use the handleInternalError utility to categorize other errors
+          apiError = handleInternalError(error, modelConfig.apiProvider);
         }
+        
+        // Create a user-friendly error message based on the error category
+        let errorMessage = `I apologize, but I encountered an error while processing your request with the ${modelType} model.`;
+        errorMessage += " " + apiError.userMessage;
         
         // Create a fallback response (ensure content is never empty)
         const assistantMessage = await storage.createMessage({
