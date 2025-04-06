@@ -856,22 +856,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
-      // Only allow reasoning model for streaming (fail fast for other models)
-      if (modelType !== "reasoning") {
-        return res.status(400).json({ 
-          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
-        });
-      }
-      
-      // If an image is present, don't allow streaming (since we need to use multimodal model)
-      if (image) {
-        return res.status(400).json({ 
-          message: "Streaming is not supported for image inputs. Please use the standard API endpoint."
-        });
-      }
-      
       // Get the model configuration based on the requested model type
-      const modelConfig = MODEL_CONFIGS.reasoning; // Always use reasoning for streaming
+      // Use the requested model type (reasoning, search, multimodal)
+      const validTypes = ["reasoning", "search", "multimodal"];
+      const actualModelType = validTypes.includes(modelType as string) ? modelType as ModelType : "reasoning";
+      const modelConfig = MODEL_CONFIGS[actualModelType];
       
       // Always use streaming for this endpoint
       const shouldStream = true;
@@ -958,6 +947,19 @@ Format your responses using markdown for better readability and organization.`;
           content: systemContent,
         }
       ];
+      
+      // Special handling for image messages in multimodal models
+      const hasImage = image && image.length > 0;
+      if (hasImage && actualModelType === "multimodal") {
+        // For multimodal models, we need to format the message differently to include the image
+        messages.splice(1, 0, {
+          role: "user",
+          content: [
+            { type: "text", text: content as string },
+            { type: "image_url", image_url: { url: image as string } }
+          ]
+        } as MultimodalMessage);
+      }
       
       // Ensure proper alternation of user and assistant messages
       let lastRole = "assistant"; // Start with assistant so first user message can be added

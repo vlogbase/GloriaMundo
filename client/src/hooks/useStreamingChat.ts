@@ -110,22 +110,14 @@ export const useStreamingChat = () => {
         eventSourceRef.current = null;
       }
       
-      // Check if we're running in a deployed/production environment
-      const isProduction = window.location.host.includes('.replit.app') || 
-                          window.location.host.includes('.gloriamundo.com') ||
-                          !window.location.host.includes('localhost');
+      // Always use streaming for all model types in all environments
+      streamingMessageRef.current = null;
       
-      // In production environments or with non-reasoning models, don't use streaming
-      // This avoids streaming issues in deployed environments
-      if (selectedModel === "reasoning" && !isProduction) {
-        // We're using streaming in a development environment
-        streamingMessageRef.current = null;
-        
-        // Create a new EventSource connection
-        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
-        eventSourceRef.current = eventSource;
-        
-        eventSource.onmessage = (event) => {
+      // Create a new EventSource connection
+      const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             
@@ -273,10 +265,6 @@ export const useStreamingChat = () => {
         
         // Return early as the event source will handle the rest
         return;
-      }
-      
-      // For non-streaming approach (production or non-reasoning models), use regular fetch
-      await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
       console.error("Error sending message:", error);
@@ -291,7 +279,7 @@ export const useStreamingChat = () => {
     } finally {
       // For non-streaming requests, we need to set loading to false here
       // (For streaming requests, this is done in the "done" event handler)
-      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
+      if (eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
