@@ -126,29 +126,54 @@ export const useStreamingChat = () => {
         const isOpenRouter = selectedModel === "openrouter";
         const modelType = isOpenRouter ? "openrouter" : selectedModel;
         const modelId = isOpenRouter && customOpenRouterModelId ? customOpenRouterModelId : "";
-        const eventSource = new EventSource(
-          `/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${modelType}${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ''}`
-        );
+        
+        // Construct the stream URL and log it for debugging
+        const streamUrl = `/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${modelType}${modelId ? `&modelId=${encodeURIComponent(modelId)}` : ''}`;
+        console.log('Setting up EventSource for streaming:', { 
+          modelType,
+          modelId,
+          isOpenRouter,
+          streamUrl
+        });
+        
+        // Create the EventSource
+        const eventSource = new EventSource(streamUrl);
         eventSourceRef.current = eventSource;
         
+        // EventSource management - define message handlers
+        console.log('DEBUG - Setting up EventSource handlers');
+        
+        eventSource.onopen = () => {
+          console.log('DEBUG - EventSource connection opened');
+        };
+        
         eventSource.onmessage = (event) => {
+          // EventSource automatically parses the 'data:' part for us, so 'event.data' contains just the data
+          // This means we don't need to manually strip 'data:' prefixes as the browser's EventSource implementation does this
+          
+          // Declare variables at the outer scope so they're accessible in catch block
+          let data: any = null;
+          
           try {
-            // Preprocess SSE data to handle the "data:" prefix
-            let jsonString = event.data;
-            
-            // If the data starts with "data:", remove that prefix
-            if (typeof jsonString === 'string' && jsonString.startsWith('data:')) {
-              jsonString = jsonString.substring(5).trim(); // Remove 'data:' prefix and trim
-            }
+            // VERBOSE LOGGING: Log the raw event data received from EventSource
+            console.log('DEBUG - EventSource data received:', event.data);
+            console.log('DEBUG - EventSource data type:', typeof event.data);
             
             // Special case for [DONE] marker
-            if (jsonString === '[DONE]') {
-              console.log('Stream complete with [DONE] marker');
+            if (event.data === '[DONE]') {
+              console.log('DEBUG - Stream complete with [DONE] marker');
               return;
             }
             
-            // Now parse the cleaned JSON string
-            const data = JSON.parse(jsonString);
+            // Parse the JSON data
+            try {
+              data = JSON.parse(event.data);
+              console.log('DEBUG - Successfully parsed JSON:', data);
+            } catch (jsonError) {
+              console.error('DEBUG - JSON parse error:', jsonError);
+              console.error('DEBUG - Failed to parse string:', event.data);
+              throw jsonError; // Re-throw to be caught by the outer try/catch
+            }
             
             // Handle different event types
             switch (data.type) {
@@ -237,11 +262,6 @@ export const useStreamingChat = () => {
             // Log the error with detailed information for debugging
             console.error("Error parsing SSE message:", parseError);
             console.error("Raw data:", event.data);
-            
-            // If we have preprocessed JSON string, log that too
-            if (typeof jsonString === 'string' && jsonString !== event.data) {
-              console.error("Preprocessed data (after removing 'data:' prefix):", jsonString);
-            }
             
             // This is likely a JSON parsing error or malformed data
             toast({
