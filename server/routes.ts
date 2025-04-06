@@ -1051,17 +1051,25 @@ Format your responses using markdown for better readability and organization.`;
           stream: true
         };
         
-        // Set up Server-Sent Events
+        // Set up Server-Sent Events with headers to ensure reliable streaming
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Important for Nginx proxy
+        res.setHeader('Transfer-Encoding', 'chunked'); // Ensure chunked encoding
         
-        // Make the API request
+        // Make the API request with proper headers to ensure no buffering
         const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${modelConfig.apiKey}`
+            "Authorization": `Bearer ${modelConfig.apiKey}`,
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            // Add OpenRouter-specific headers for proper attribution
+            "HTTP-Referer": "https://gloriamundo.com",
+            "X-Title": "GloriaMundo AI"
           },
           body: JSON.stringify(payload)
         });
@@ -1138,7 +1146,7 @@ Format your responses using markdown for better readability and organization.`;
                   // Express/Node.js response doesn't have a standard flush method
                   // Instead, set content headers that might help prevent buffering
                   res.setHeader('X-Accel-Buffering', 'no');
-                  res.setHeader('Cache-Control', 'no-cache');
+                  res.setHeader('Cache-Control', 'no-cache, no-transform');
                 }
               } catch (e) {
                 console.error("Error parsing streaming response:", e);
@@ -1743,7 +1751,12 @@ Format your responses using markdown for better readability and organization.`;
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${modelConfig.apiKey}`
+            "Authorization": `Bearer ${modelConfig.apiKey}`,
+            // Add OpenRouter-specific headers
+            ...(modelConfig.apiProvider === "openrouter" ? {
+              "HTTP-Referer": "https://gloriamundo.com",
+              "X-Title": "GloriaMundo AI"
+            } : {})
           },
           body: JSON.stringify(payload)
         });
@@ -1770,8 +1783,10 @@ Format your responses using markdown for better readability and organization.`;
         if (shouldStream) {
           // Set up Server-Sent Events
           res.setHeader('Content-Type', 'text/event-stream');
-          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Cache-Control', 'no-cache, no-transform');
           res.setHeader('Connection', 'keep-alive');
+          res.setHeader('X-Accel-Buffering', 'no'); // Important for Nginx proxy
+          res.setHeader('Transfer-Encoding', 'chunked'); // Ensure chunked encoding
           
           const reader = response.body?.getReader();
           if (!reader) {

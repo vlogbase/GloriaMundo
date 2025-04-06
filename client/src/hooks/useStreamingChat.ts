@@ -148,30 +148,48 @@ export const useStreamingChat = () => {
         };
         
         eventSource.onmessage = (event) => {
-          // EventSource automatically parses the 'data:' part for us, so 'event.data' contains just the data
-          // This means we don't need to manually strip 'data:' prefixes as the browser's EventSource implementation does this
-          
           // Declare variables at the outer scope so they're accessible in catch block
           let data: any = null;
+          let jsonString = "";
           
           try {
-            // VERBOSE LOGGING: Log the raw event data received from EventSource
-            console.log('DEBUG - EventSource data received:', event.data);
-            console.log('DEBUG - EventSource data type:', typeof event.data);
+            // Get the raw data and log it
+            const rawData = event.data;
+            console.log('DEBUG - EventSource raw data received:', rawData);
+            console.log('DEBUG - EventSource data type:', typeof rawData);
             
-            // Special case for [DONE] marker
-            if (event.data === '[DONE]') {
-              console.log('DEBUG - Stream complete with [DONE] marker');
-              return;
+            // IMPORTANT: Explicitly check for and handle the 'data:' prefix
+            // Even though EventSource is supposed to strip this, we're seeing errors indicating it's not always doing so
+            if (typeof rawData === 'string') {
+              jsonString = rawData;
+              
+              // Check for and remove the "data: " prefix if present
+              if (rawData.startsWith("data: ")) {
+                console.log('DEBUG - Stripping "data: " prefix from event data');
+                jsonString = rawData.substring(6).trim();
+              }
+              
+              // Special case for [DONE] marker
+              if (jsonString === '[DONE]') {
+                console.log('DEBUG - Stream complete with [DONE] marker');
+                return;
+              }
+              
+              // Log the cleaned string we're about to parse
+              console.log('DEBUG - Attempting to parse JSON string:', jsonString);
+            } else {
+              console.error('DEBUG - Expected string data but received:', typeof rawData);
+              throw new Error(`Unexpected data type: ${typeof rawData}`);
             }
             
-            // Parse the JSON data
+            // Parse the JSON data with extra error handling
             try {
-              data = JSON.parse(event.data);
+              data = JSON.parse(jsonString);
               console.log('DEBUG - Successfully parsed JSON:', data);
             } catch (jsonError) {
               console.error('DEBUG - JSON parse error:', jsonError);
-              console.error('DEBUG - Failed to parse string:', event.data);
+              console.error('DEBUG - Failed to parse string:', jsonString);
+              console.error('DEBUG - Original raw data was:', rawData);
               throw jsonError; // Re-throw to be caught by the outer try/catch
             }
             
