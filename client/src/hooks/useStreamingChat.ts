@@ -133,7 +133,22 @@ export const useStreamingChat = () => {
         
         eventSource.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data);
+            // Preprocess SSE data to handle the "data:" prefix
+            let jsonString = event.data;
+            
+            // If the data starts with "data:", remove that prefix
+            if (typeof jsonString === 'string' && jsonString.startsWith('data:')) {
+              jsonString = jsonString.substring(5).trim(); // Remove 'data:' prefix and trim
+            }
+            
+            // Special case for [DONE] marker
+            if (jsonString === '[DONE]') {
+              console.log('Stream complete with [DONE] marker');
+              return;
+            }
+            
+            // Now parse the cleaned JSON string
+            const data = JSON.parse(jsonString);
             
             // Handle different event types
             switch (data.type) {
@@ -219,7 +234,14 @@ export const useStreamingChat = () => {
                 console.warn("Unknown event type:", data.type);
             }
           } catch (parseError) {
-            console.error("Error parsing SSE message:", parseError, "Raw data:", event.data);
+            // Log the error with detailed information for debugging
+            console.error("Error parsing SSE message:", parseError);
+            console.error("Raw data:", event.data);
+            
+            // If we have preprocessed JSON string, log that too
+            if (typeof jsonString === 'string' && jsonString !== event.data) {
+              console.error("Preprocessed data (after removing 'data:' prefix):", jsonString);
+            }
             
             // This is likely a JSON parsing error or malformed data
             toast({
