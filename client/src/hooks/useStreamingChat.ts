@@ -196,16 +196,38 @@ export const useStreamingChat = () => {
                 break;
                 
               case "chunk":
+                // Log every chunk for debugging
+                console.log(`[${new Date().toISOString()}] Received chunk:`, {
+                  id: data.id,
+                  content: data.content,
+                  contentLength: data.content.length
+                });
+                
                 // Update the streaming message reference
                 if (streamingMessageRef.current && streamingMessageRef.current.id === data.id) {
+                  // Add new content to our running total
                   streamingMessageRef.current.content += data.content;
                   
+                  // Important: Use a local variable to capture the full current content
+                  // This prevents race conditions with setState being asynchronous
+                  const updatedContent = streamingMessageRef.current.content;
+                  
                   // Update the message in the state with the new content
-                  setMessages((prev) => prev.map(msg => 
-                    msg.id === data.id 
-                      ? { ...msg, content: streamingMessageRef.current!.content } 
-                      : msg
-                  ));
+                  // Use a function form of setState to ensure we always have latest state
+                  setMessages((prev) => {
+                    return prev.map(msg => 
+                      msg.id === data.id 
+                        ? { ...msg, content: updatedContent } 
+                        : msg
+                    );
+                  });
+                  
+                  // Immediately force a UI update by setting streaming complete 
+                  // and then resetting it after a short delay
+                  setStreamingComplete(true);
+                  setTimeout(() => setStreamingComplete(false), 10);
+                } else {
+                  console.warn("Received chunk for unknown message ID:", data.id);
                 }
                 break;
                 

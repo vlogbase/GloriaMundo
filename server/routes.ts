@@ -1119,12 +1119,26 @@ Format your responses using markdown for better readability and organization.`;
                 const delta = parsed.choices[0]?.delta?.content || "";
                 
                 if (delta) {
+                  // Log timing information for each chunk
+                  console.log(`[${new Date().toISOString()}] Streaming chunk: "${delta.substring(0, 20)}${delta.length > 20 ? '...' : ''}"`);
+                  
+                  // Add to full response
                   assistantContent += delta;
-                  res.write(`data: ${JSON.stringify({ 
+                  
+                  // Stream this chunk to the client
+                  const chunkData = JSON.stringify({ 
                     type: "chunk", 
                     content: delta,
                     id: assistantMessage.id
-                  })}\n\n`);
+                  });
+                  
+                  // Write the chunk to the response
+                  res.write(`data: ${chunkData}\n\n`);
+                  
+                  // Express/Node.js response doesn't have a standard flush method
+                  // Instead, set content headers that might help prevent buffering
+                  res.setHeader('X-Accel-Buffering', 'no');
+                  res.setHeader('Cache-Control', 'no-cache');
                 }
               } catch (e) {
                 console.error("Error parsing streaming response:", e);

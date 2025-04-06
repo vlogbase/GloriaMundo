@@ -1,0 +1,24 @@
+Okay, I've reviewed the routes.ts (backend) and usechat.ts (frontend hook) files. Here's the analysis of the 404 errors:
+
+Key Findings:
+
+Missing RAG Route (/api/conversations/:id/rag):
+
+Your frontend code (usechat.ts in the getDocumentContext function) correctly tries to fetch context using GET /api/conversations/:id/rag?query=....
+However, looking through the provided routes.ts file, there is no route definition for GET /api/conversations/:id/rag. This is why you are getting a 404 error for this specific request – the backend doesn't have an endpoint at that path to handle it.
+Interestingly, the logic to find and format RAG context (findSimilarChunks, formatContextForPrompt) is present within the main message handling routes (POST /api/conversations/:id/messages and the streaming GET endpoint), suggesting the backend might be designed to handle RAG internally when a message is sent, rather than via a separate pre-fetch endpoint.
+Document Upload Route (/api/conversations/:id/documents):
+
+Your frontend code (usechat.ts in the uploadDocument function) correctly tries to POST to /api/conversations/:id/documents.
+The routes.ts file does call registerDocumentRoutes(app);. This function (likely defined in a separate ./documentRoutes.ts file, which wasn't provided) is almost certainly where the /api/conversations/:id/documents route should be defined.
+The 404 error for this endpoint indicates that either the route is missing or incorrectly defined within that registerDocumentRoutes function or the file it imports from (./documentRoutes.ts), or there's an issue with how it's being registered in the main Express app.
+Recommendations for Your Team:
+
+Fix RAG Context Fetching (Choose ONE approach):
+
+Option A (Modify Frontend - Recommended based on backend code): Change the frontend (usechat.ts). Remove the getDocumentContext function entirely. Modify the sendMessage function to stop calling getDocumentContext. Let the backend handle the RAG lookup internally when /api/conversations/:id/messages (POST or GET stream) is called, as the code in routes.ts seems prepared to do this.
+Option B (Modify Backend): If you want a separate endpoint for fetching RAG context beforehand, the team needs to implement the GET /api/conversations/:id/rag route in the backend (likely within the logic handled by registerDocumentRoutes or directly in routes.ts). This new route would need to call findSimilarChunks and return the context.
+Fix Document Upload (Backend):
+
+The team must investigate the registerDocumentRoutes function and the associated file (likely ./documentRoutes.ts). They need to ensure the POST /api/conversations/:id/documents route is correctly defined, implemented, and handles the file upload process.
+The good news is the original streaming SyntaxError appears to be resolved based on these logs. The current issue is purely related to these missing or misconfigured backend API routes for RAG and document handling.
