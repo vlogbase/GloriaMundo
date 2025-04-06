@@ -750,34 +750,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API routes
   app.get("/api/conversations", async (req, res) => {
     try {
-      // Initialize session user conversations if not exists
-      if (!req.session.userConversations) {
-        req.session.userConversations = [];
+      let conversations;
+      
+      // Check if user is authenticated
+      if (req.isAuthenticated()) {
+        // If user is authenticated, get their conversations from the database
+        const userId = (req.user as Express.User).id;
+        console.log(`Getting conversations for authenticated user ID: ${userId}`);
+        conversations = await storage.getConversationsByUserId(userId);
+        console.log(`Found ${conversations.length} conversations for user ${userId}`);
+      } else {
+        // For unauthenticated users, use session-based conversations
+        // Initialize session user conversations if not exists
+        if (!req.session.userConversations) {
+          req.session.userConversations = [];
+        }
+        
+        // Get all conversations
+        const allConversations = await storage.getConversations();
+        
+        // If session has no conversations yet but there are conversations in storage,
+        // restore them to the session (this helps with persistence)
+        if (req.session.userConversations.length === 0 && allConversations.length > 0) {
+          // Store conversation IDs with null userId in the session (these are anonymous conversations)
+          req.session.userConversations = allConversations
+            .filter(conv => conv.userId === null)
+            .map(conv => conv.id);
+          
+          await new Promise<void>((resolve) => {
+            req.session.save(() => resolve());
+          });
+          console.log("Restored anonymous conversations to session:", req.session.userConversations);
+        }
+        
+        // Get all conversations and filter by user session if available
+        conversations = req.session.userConversations.length > 0
+          ? allConversations.filter(conv => req.session.userConversations?.includes(conv.id))
+          : [];
+        
+        console.log(`Returning ${conversations.length} conversations for anonymous session`);
       }
       
-      // Get all conversations
-      const allConversations = await storage.getConversations();
-      
-      // If session has no conversations yet but there are conversations in storage,
-      // restore them to the session (this helps with persistence)
-      if (req.session.userConversations.length === 0 && allConversations.length > 0) {
-        // Store all conversation IDs in the session
-        req.session.userConversations = allConversations.map(conv => conv.id);
-        await new Promise<void>((resolve) => {
-          req.session.save(() => resolve());
-        });
-        console.log("Restored conversations to session:", req.session.userConversations);
-      }
-      
-      // Get all conversations and filter by user session if available
-      const userConversations = req.session.userConversations.length > 0
-        ? allConversations.filter(conv => req.session.userConversations?.includes(conv.id))
-        : allConversations;
-      
-      // Log the filtered conversations
-      console.log(`Returning ${userConversations.length} conversations for session`);
-      
-      res.json(userConversations);
+      res.json(conversations);
     } catch (error) {
       console.error("Error fetching conversations:", error);
       res.status(500).json({ message: "Failed to fetch conversations" });
@@ -799,15 +813,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set userId if user is authenticated
       const userId = req.isAuthenticated() ? (req.user as Express.User).id : null;
       
+      // Create the conversation with the appropriate userId (null for anonymous)
       const conversation = await storage.createConversation({ 
         title, 
         userId
       });
       
-      // Add conversation ID to user session
-      req.session.userConversations.push(conversation.id);
-      // Save session changes
-      req.session.save();
+      // For anonymous users, keep track of the conversation in the session
+      if (!userId) {
+        // Add conversation ID to user session
+        req.session.userConversations.push(conversation.id);
+        // Save session changes
+        req.session.save();
+        console.log(`Added conversation ${conversation.id} to anonymous session`);
+      } else {
+        console.log(`Created conversation ${conversation.id} for authenticated user ${userId}`);
+      }
       
       res.json(conversation);
     } catch (error) {
@@ -825,8 +846,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Conversation not found" });
       }
       
+      // Check if user is authorized to access this conversation
+      if (conversation.userId !== null) {
+        // This is a registered user's conversation - check if it belongs to current user
+        if (!req.isAuthenticated() || (req.user as Express.User).id !== conversation.userId) {
+          return res.status(403).json({ message: "You don't have permission to access this conversation" });
+        }
+      } else {
+        // This is an anonymous conversation - check if it's in the session
+        if (!req.session.userConversations?.includes(id)) {
+          return res.status(403).json({ message: "You don't have permission to access this conversation" });
+        }
+      }
+      
       res.json(conversation);
     } catch (error) {
+      console.error("Error fetching conversation:", error);
       res.status(500).json({ message: "Failed to fetch conversation" });
     }
   });
@@ -834,9 +869,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
+      
+      // Get the conversation first to check permissions
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      // Check if user is authorized to access this conversation
+      if (conversation.userId !== null) {
+        // This is a registered user's conversation - check if it belongs to current user
+        if (!req.isAuthenticated() || (req.user as Express.User).id !== conversation.userId) {
+          return res.status(403).json({ message: "You don't have permission to access this conversation" });
+        }
+      } else {
+        // This is an anonymous conversation - check if it's in the session
+        if (!req.session.userConversations?.includes(conversationId)) {
+          return res.status(403).json({ message: "You don't have permission to access this conversation" });
+        }
+      }
+      
       const messages = await storage.getMessagesByConversation(conversationId);
       res.json(messages);
     } catch (error) {
+      console.error("Error fetching messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
     }
   });
@@ -845,6 +902,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
+      
+      // Get the conversation first to check permissions
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      // Check if user is authorized to access this conversation
+      if (conversation.userId !== null) {
+        // This is a registered user's conversation - check if it belongs to current user
+        if (!req.isAuthenticated() || (req.user as Express.User).id !== conversation.userId) {
+          return res.status(403).json({ message: "You don't have permission to access this conversation" });
+        }
+      } else {
+        // This is an anonymous conversation - check if it's in the session
+        if (!req.session.userConversations?.includes(conversationId)) {
+          return res.status(403).json({ message: "You don't have permission to access this conversation" });
+        }
+      }
+      
       const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
         content?: string;
         modelType?: string;
@@ -2113,6 +2191,26 @@ Format your responses using markdown for better readability and organization.`;
     try {
       const id = parseInt(req.params.id);
       
+      // Get the conversation first to check permissions
+      const conversation = await storage.getConversation(id);
+      
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      // Check if user is authorized to delete this conversation
+      if (conversation.userId !== null) {
+        // This is a registered user's conversation - check if it belongs to current user
+        if (!req.isAuthenticated() || (req.user as Express.User).id !== conversation.userId) {
+          return res.status(403).json({ message: "You don't have permission to delete this conversation" });
+        }
+      } else {
+        // This is an anonymous conversation - check if it's in the session
+        if (!req.session.userConversations?.includes(id)) {
+          return res.status(403).json({ message: "You don't have permission to delete this conversation" });
+        }
+      }
+      
       // Remove from session if it exists
       if (req.session.userConversations) {
         req.session.userConversations = req.session.userConversations.filter(
@@ -2131,13 +2229,32 @@ Format your responses using markdown for better readability and organization.`;
 
   app.delete("/api/conversations", async (req, res) => {
     try {
-      // Clear user session conversations
-      if (req.session.userConversations) {
-        req.session.userConversations = [];
-        req.session.save();
+      if (req.isAuthenticated()) {
+        // For authenticated users, clear only their conversations
+        const userId = (req.user as Express.User).id;
+        const userConversations = await storage.getConversationsByUserId(userId);
+        
+        // Delete each conversation individually
+        for (const conv of userConversations) {
+          await storage.deleteConversation(conv.id);
+        }
+        
+        console.log(`Cleared ${userConversations.length} conversations for authenticated user ${userId}`);
+      } else {
+        // For anonymous users, clear only session conversations
+        if (req.session.userConversations && req.session.userConversations.length > 0) {
+          // Delete each conversation in the session
+          for (const convId of req.session.userConversations) {
+            await storage.deleteConversation(convId);
+          }
+          console.log(`Cleared ${req.session.userConversations.length} conversations for anonymous session`);
+          
+          // Clear session data
+          req.session.userConversations = [];
+          req.session.save();
+        }
       }
       
-      await storage.clearConversations();
       res.json({ success: true });
     } catch (error) {
       console.error("Error clearing conversations:", error);

@@ -6,7 +6,7 @@ import {
   documentChunks, type DocumentChunk, type InsertDocumentChunk
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, inArray, isNull } from "drizzle-orm";
 
 // Define the user presets interface
 export interface UserPresets {
@@ -29,6 +29,7 @@ export interface IStorage {
   
   // Conversation methods
   getConversations(): Promise<Conversation[]>;
+  getConversationsByUserId(userId: number): Promise<Conversation[]>;
   getConversation(id: number): Promise<Conversation | undefined>;
   createConversation(conversation: Partial<InsertConversation>): Promise<Conversation>;
   updateConversationTitle(id: number, title: string): Promise<Conversation | undefined>;
@@ -316,32 +317,134 @@ export class MemStorage implements IStorage {
   
   // Conversation methods
   async getConversations(): Promise<Conversation[]> {
+    // Try getting conversations from database first
+    try {
+      const conversationsFromDb = await db.select().from(conversations).orderBy(conversations.updatedAt);
+      
+      if (conversationsFromDb.length > 0) {
+        // Sort conversations by updated date in descending order
+        return conversationsFromDb.sort((a, b) => 
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      }
+    } catch (error) {
+      console.error('Database error when getting all conversations:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     // Sort conversations by updated date in descending order
     return Array.from(this.conversations.values())
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
   
+  async getConversationsByUserId(userId: number): Promise<Conversation[]> {
+    // Try getting conversations from database first
+    try {
+      const conversationsFromDb = await db.select().from(conversations)
+        .where(eq(conversations.userId, userId))
+        .orderBy(conversations.updatedAt);
+      
+      if (conversationsFromDb.length > 0) {
+        // Sort conversations by updated date in descending order
+        return conversationsFromDb.sort((a, b) => 
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      }
+    } catch (error) {
+      console.error(`Database error when getting conversations for user ${userId}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    // Filter by userId and sort by updated date in descending order
+    return Array.from(this.conversations.values())
+      .filter(conversation => conversation.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+  
   async getConversation(id: number): Promise<Conversation | undefined> {
+    // Try getting conversation from database first
+    try {
+      const conversationFromDb = await db.select().from(conversations)
+        .where(eq(conversations.id, id))
+        .limit(1);
+      
+      if (conversationFromDb.length > 0) {
+        return conversationFromDb[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting conversation ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     return this.conversations.get(id);
   }
   
   async createConversation(data: Partial<InsertConversation>): Promise<Conversation> {
-    const id = this.conversationId++;
     const now = new Date();
+    const title = data.title ?? "New Conversation";
+    
+    // Try to create conversation in database first
+    try {
+      const result = await db.insert(conversations)
+        .values({
+          userId: data.userId ?? null,
+          title: title,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning();
+      
+      if (result.length > 0) {
+        console.log('Created conversation in database:', result[0]);
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Database error when creating conversation:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    const id = this.conversationId++;
     
     const conversation: Conversation = {
       id,
       userId: data.userId ?? null,
-      title: data.title ?? "New Conversation",
+      title: title,
       createdAt: now,
       updatedAt: now
     };
     
     this.conversations.set(id, conversation);
+    console.log('Created conversation in memory:', conversation);
     return conversation;
   }
   
   async updateConversationTitle(id: number, title: string): Promise<Conversation | undefined> {
+    const now = new Date();
+    
+    // Try to update in database first
+    try {
+      const conversationFromDb = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
+      
+      if (conversationFromDb.length > 0) {
+        // Update in database
+        const result = await db.update(conversations)
+          .set({ 
+            title,
+            updatedAt: now
+          })
+          .where(eq(conversations.id, id))
+          .returning();
+        
+        if (result.length > 0) {
+          console.log(`Updated conversation ${id} title in database to "${title}"`);
+          return result[0];
+        }
+      }
+    } catch (error) {
+      console.error(`Database error when updating conversation ${id} title:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     const conversation = this.conversations.get(id);
     
     if (!conversation) {
@@ -351,14 +454,33 @@ export class MemStorage implements IStorage {
     const updated = {
       ...conversation,
       title,
-      updatedAt: new Date()
+      updatedAt: now
     };
     
     this.conversations.set(id, updated);
+    console.log(`Updated conversation ${id} title in memory to "${title}"`);
     return updated;
   }
   
   async deleteConversation(id: number): Promise<void> {
+    // Try to delete from database first
+    try {
+      // First, delete related messages
+      await db.delete(messages)
+        .where(eq(messages.conversationId, id))
+        .execute();
+        
+      // Then delete the conversation
+      await db.delete(conversations)
+        .where(eq(conversations.id, id))
+        .execute();
+        
+      console.log(`Deleted conversation ${id} and its messages from database`);
+    } catch (error) {
+      console.error(`Database error when deleting conversation ${id}:`, error);
+    }
+    
+    // Also remove from memory storage as a fallback
     // Delete the conversation
     this.conversations.delete(id);
     
@@ -370,20 +492,83 @@ export class MemStorage implements IStorage {
     for (const messageId of messageIds) {
       this.messages.delete(messageId);
     }
+    
+    console.log(`Deleted conversation ${id} from memory storage`);
   }
   
   async clearConversations(): Promise<void> {
+    // Only clear anonymous conversations for now to avoid data loss
+    // This is a safety measure since this method is typically used for cleanup
+    try {
+      // Get all conversations
+      const allConversations = await db.select().from(conversations);
+      
+      // Filter to just find anonymous conversations (userId is null)
+      const anonymousConversations = allConversations.filter(conv => conv.userId === null);
+        
+      if (anonymousConversations.length > 0) {
+        const anonymousConvIds = anonymousConversations.map(conv => conv.id);
+        
+        // Delete all messages belonging to anonymous conversations
+        for (const convId of anonymousConvIds) {
+          await db.delete(messages)
+            .where(eq(messages.conversationId, convId))
+            .execute();
+        }
+        
+        // Delete all anonymous conversations
+        for (const convId of anonymousConvIds) {
+          await db.delete(conversations)
+            .where(eq(conversations.id, convId))
+            .execute();
+        }
+        
+        console.log(`Cleared ${anonymousConversations.length} anonymous conversations from database`);
+      }
+    } catch (error) {
+      console.error('Database error when clearing conversations:', error);
+    }
+    
+    // Clear in-memory storage too
     this.conversations.clear();
     this.messages.clear();
+    console.log('Cleared all conversations from memory storage');
   }
   
   // Message methods
   async getMessage(id: number): Promise<Message | undefined> {
+    // Try database first
+    try {
+      const messageFromDb = await db.select().from(messages).where(eq(messages.id, id)).limit(1);
+      
+      if (messageFromDb.length > 0) {
+        return messageFromDb[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting message ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     return this.messages.get(id);
   }
   
   async getMessagesByConversation(conversationId: number): Promise<Message[]> {
-    // Return messages sorted by created date
+    // Try database first
+    try {
+      const messagesFromDb = await db.select().from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .orderBy(asc(messages.createdAt));
+      
+      if (messagesFromDb.length > 0) {
+        console.log(`Retrieved ${messagesFromDb.length} messages for conversation ${conversationId} from database`);
+        return messagesFromDb;
+      }
+    } catch (error) {
+      console.error(`Database error when getting messages for conversation ${conversationId}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    console.log(`Falling back to in-memory storage for messages in conversation ${conversationId}`);
     return Array.from(this.messages.values())
       .filter(msg => msg.conversationId === conversationId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -402,8 +587,40 @@ export class MemStorage implements IStorage {
       throw new Error("Either content or image is required");
     }
     
-    const id = this.messageId++;
     const now = new Date();
+    
+    // Try to create message in database first
+    try {
+      const result = await db.insert(messages)
+        .values({
+          conversationId: data.conversationId,
+          role: data.role,
+          content: data.content || "", // Default to empty string if only image is provided
+          image: data.image || null,
+          citations: data.citations ?? null,
+          modelId: data.modelId || null,
+          promptTokens: data.promptTokens || null,
+          completionTokens: data.completionTokens || null,
+          createdAt: now
+        })
+        .returning();
+      
+      if (result.length > 0) {
+        console.log(`Created message in database for conversation ${data.conversationId}`);
+        
+        // Update the conversation's updatedAt timestamp in the database
+        await db.update(conversations)
+          .set({ updatedAt: now })
+          .where(eq(conversations.id, data.conversationId));
+        
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Database error when creating message:', error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    const id = this.messageId++;
     
     const message: Message = {
       id,
@@ -419,6 +636,7 @@ export class MemStorage implements IStorage {
     };
     
     this.messages.set(id, message);
+    console.log(`Created message in memory for conversation ${data.conversationId}`);
     
     // Update the conversation's updatedAt timestamp
     const conversation = this.conversations.get(data.conversationId);
@@ -433,6 +651,40 @@ export class MemStorage implements IStorage {
   }
   
   async updateMessage(id: number, updates: Partial<InsertMessage>): Promise<Message | undefined> {
+    // Try to update in database first
+    try {
+      // Get the existing message from DB
+      const messageFromDb = await db.select().from(messages).where(eq(messages.id, id)).limit(1);
+      
+      if (messageFromDb.length > 0) {
+        const existingMessage = messageFromDb[0];
+        
+        // Prepare the updates
+        const updatesToApply: Partial<Message> = {};
+        
+        if (updates.content !== undefined) updatesToApply.content = updates.content;
+        if (updates.image !== undefined) updatesToApply.image = updates.image;
+        if (updates.citations !== undefined) updatesToApply.citations = updates.citations;
+        if (updates.modelId !== undefined) updatesToApply.modelId = updates.modelId;
+        if (updates.promptTokens !== undefined) updatesToApply.promptTokens = updates.promptTokens;
+        if (updates.completionTokens !== undefined) updatesToApply.completionTokens = updates.completionTokens;
+        
+        // Update in database
+        const result = await db.update(messages)
+          .set(updatesToApply)
+          .where(eq(messages.id, id))
+          .returning();
+        
+        if (result.length > 0) {
+          console.log(`Updated message ${id} in database`);
+          return result[0];
+        }
+      }
+    } catch (error) {
+      console.error(`Database error when updating message ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
     const message = this.messages.get(id);
     
     if (!message) {
@@ -450,6 +702,7 @@ export class MemStorage implements IStorage {
     };
     
     this.messages.set(id, updatedMessage);
+    console.log(`Updated message ${id} in memory`);
     return updatedMessage;
   }
   
