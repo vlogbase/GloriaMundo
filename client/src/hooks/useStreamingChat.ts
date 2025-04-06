@@ -111,10 +111,16 @@ export const useStreamingChat = () => {
       }
       
       // Always use streaming for all model types in all environments
+      console.log(`Sending message with selectedModel: ${selectedModel}, has image: ${!!image}`);
       streamingMessageRef.current = null;
       
-      // Create a new EventSource connection
-      const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
+      // Create a new EventSource connection with a generous timeout
+      // Note: Adding a timestamp to prevent caching issues that might affect streaming
+      const timestamp = Date.now();
+      const streamUrl = `/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}&_t=${timestamp}`;
+      
+      console.log("Starting streaming chat from:", streamUrl);
+      const eventSource = new EventSource(streamUrl);
       eventSourceRef.current = eventSource;
       
       eventSource.onmessage = (event) => {
@@ -147,11 +153,24 @@ export const useStreamingChat = () => {
                   streamingMessageRef.current.content += data.content;
                   
                   // Update the message in the state with the new content
-                  setMessages((prev) => prev.map(msg => 
-                    msg.id === data.id 
-                      ? { ...msg, content: streamingMessageRef.current!.content } 
-                      : msg
-                  ));
+                  // Use a direct state update approach for better performance during streaming
+                  setMessages((prev) => {
+                    // Make a shallow copy of the messages array
+                    const newMessages = [...prev];
+                    
+                    // Find the message that needs to be updated
+                    const index = newMessages.findIndex(msg => msg.id === data.id);
+                    
+                    if (index !== -1) {
+                      // Update just that message
+                      newMessages[index] = {
+                        ...newMessages[index],
+                        content: streamingMessageRef.current!.content
+                      };
+                    }
+                    
+                    return newMessages;
+                  });
                 }
                 break;
                 

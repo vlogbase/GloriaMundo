@@ -1104,18 +1104,38 @@ Format your responses using markdown for better readability and organization.`;
               
               try {
                 const parsed = JSON.parse(data);
-                const delta = parsed.choices[0]?.delta?.content || "";
+                console.log("Streaming chunk received:", parsed);
+                
+                // Check for different response formats
+                const delta = parsed.choices[0]?.delta?.content || 
+                              parsed.choices[0]?.message?.content || 
+                              "";
                 
                 if (delta) {
                   assistantContent += delta;
+                  console.log("Sending chunk to client:", delta);
+                  
+                  // Immediately flush this chunk to the client
                   res.write(`data: ${JSON.stringify({ 
                     type: "chunk", 
                     content: delta,
                     id: assistantMessage.id
                   })}\n\n`);
+                  
+                  // Force flush the response immediately (if supported)
+                  // This isn't necessary in all environments but helps ensure immediate delivery
+                  try {
+                    // @ts-ignore - Some Express implementations support flush
+                    if (typeof res.flush === 'function') {
+                      // @ts-ignore
+                      res.flush();
+                    }
+                  } catch (e) {
+                    // Silently ignore if flush is not supported
+                  }
                 }
               } catch (e) {
-                console.error("Error parsing streaming response:", e);
+                console.error("Error parsing streaming response:", e, "Raw data:", data);
               }
             }
           }
@@ -1304,8 +1324,10 @@ Format your responses using markdown for better readability and organization.`;
         modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       }
       
-      // Disable streaming (using standard requests only)
-      const shouldStream = false;
+      // Enable streaming for all model types and environments
+      // Note: The client will use the streaming endpoint directly, so this is mainly
+      // for API consistency and potential future use
+      const shouldStream = true;
 
       // Create user message
       const userMessage = await storage.createMessage({
