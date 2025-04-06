@@ -843,6 +843,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Streaming endpoint for chat messages
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
+    // Set proper headers for Server-Sent Events (SSE)
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no' // Disable Nginx buffering if present
+    });
     try {
       const conversationId = parseInt(req.params.id);
       const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
@@ -1039,10 +1046,7 @@ Format your responses using markdown for better readability and organization.`;
           stream: true
         };
         
-        // Set up Server-Sent Events
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+        // Headers already set at the start of the handler
         
         // Make the API request
         const response = await fetch(modelConfig.apiUrl, {
@@ -1262,7 +1266,22 @@ Format your responses using markdown for better readability and organization.`;
       }
     } catch (error) {
       console.error('Server streaming error:', error);
-      res.status(500).json({ message: "Failed to process streaming message" });
+      // Send an SSE-formatted error response instead of standard JSON
+      // This ensures the client can process it properly
+      try {
+        const errorMessage = error instanceof Error 
+          ? error.message 
+          : "Unknown server error during streaming";
+          
+        res.write(`data: ${JSON.stringify({ 
+          type: "error",
+          message: "Failed to process streaming message: " + errorMessage
+        })}\n\n`);
+        res.end();
+      } catch (e) {
+        // Last resort if we can't even send an SSE message
+        res.end();
+      }
     }
   });
 

@@ -110,8 +110,11 @@ export const useStreamingChat = () => {
         eventSourceRef.current = null;
       }
       
-      // Always use streaming for all model types in all environments
+      // Always try streaming first for all model types in all environments
       console.log(`Sending message with selectedModel: ${selectedModel}, has image: ${!!image}`);
+      
+      // Track if this is a streaming attempt
+      const isStreamingAttempt = true;
       streamingMessageRef.current = null;
       
       // Create a new EventSource connection with a generous timeout
@@ -304,8 +307,9 @@ export const useStreamingChat = () => {
     }
   }, [activeConversationId, selectedModel, setLocation, toast]);
   
-  // Helper function to handle non-streaming requests
+  // Helper function to handle non-streaming requests when streaming fails
   const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
+    console.log("Falling back to non-streaming mode for:", {conversationId, contentLength: content.length, hasImage: !!image});
     // originalContent is the raw content before potential JSON parsing
     const messageContent = content; // Clean content is passed in directly now
     try {
