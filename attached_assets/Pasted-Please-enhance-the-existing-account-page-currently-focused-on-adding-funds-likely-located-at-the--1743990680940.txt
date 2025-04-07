@@ -1,0 +1,51 @@
+Please enhance the existing account page (currently focused on adding funds, likely located at the `/credits` route) for my application. The application is primarily built using TypeScript.
+
+The goal is to create a comprehensive, multi-section account management area that is compute-efficient and integrates well with the existing TypeScript stack. **Do not use Streamlit for this implementation.**
+
+**Key Requirements:**
+
+1.  **Structure:** Refactor the account page into a tabbed interface or distinct sections:
+    * Dashboard (Default View)
+    * Usage Details
+    * Add Funds
+    * Purchase History
+    * Settings
+
+2.  **Navigation:** Ensure there is a clear and persistent way to navigate from any part of this account section back to the main chat page/interface of the application.
+
+3.  **Dashboard Tab:**
+    * Display the current account balance prominently.
+    * Include a quick link/button to the "Add Funds" tab.
+    * Show a usage summary section with selectable periods (e.g., Last 24h, Last 7d, Last 30d) displaying: Total Cost, Total Tokens Used, Most Used Model.
+    * Implement a simple line or bar chart visualizing daily cost or token usage for the selected period (using a TypeScript-friendly library like Chart.js, Recharts, or similar).
+
+4.  **Usage Details Tab:**
+    * Implement a date range selector (predefined ranges and custom dates).
+    * Display summary metrics for the selected period (Total Cost, Total Tokens In/Out, Request Count, Avg Cost/Request).
+    * Create a "Model Usage Breakdown" table (sortable) showing: Model Name, Tokens In/Out, Total Tokens, Request Count, Total Cost per model.
+    * Create a "Detailed Request Log" table (paginated) showing: Timestamp, Model, Tokens In/Out, Cost, Status. Include basic filtering if feasible.
+    * Add a button to export the displayed table data (Model Breakdown or Detailed Log) as a CSV file.
+
+5.  **Add Funds Tab:**
+    * Integrate the existing functionality for adding funds using PayPal. Ensure the display of packages, custom amounts, fees, and totals remains clear.
+
+6.  **Purchase History Tab:**
+    * Display a chronological table of all successful PayPal funding transactions: Date/Time, Description, Amount Added, Fee Paid, Total Charged, PayPal Transaction ID.
+
+7.  **Settings Tab:**
+    * Basic profile management (display email, maybe options to change name/password if backend supports it).
+    * Notification preferences: Option to set a low balance warning threshold and enable/disable email notifications.
+    * (If applicable to your app's structure) API Key management section (Generate, List, Revoke).
+    * Account deletion option.
+
+8.  **Backend Implementation:**
+    * Implement necessary backend logic to securely log detailed usage data for each user API call: User ID, Timestamp, Model Name, Input Tokens, Output Tokens, Calculated Cost, Status.
+    * Create the required API endpoints to fetch and aggregate this data efficiently for the "Dashboard" and "Usage Details" tabs (including filtering by date range and user).
+
+9.  **Technology:**
+    * Use TypeScript throughout.
+    * Employ efficient frontend rendering techniques suitable for the existing framework (e.g., React, Vue, Svelte, Angular - specify if you know which one).
+    * Use appropriate libraries for charts and potentially data tables that integrate well with TypeScript.
+    * **Avoid Streamlit.** Focus on standard web technologies (HTML/CSS/JS/TS) and relevant frameworks/libraries.
+
+Please analyze the existing codebase structure (especially around the `/credits` route and any existing TypeScript framework) and implement these changes in a clean, maintainable, and efficient way. Ask if any part of the requirements needs clarification.
