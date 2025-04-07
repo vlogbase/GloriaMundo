@@ -10,10 +10,10 @@ import { MongoClient } from 'mongodb';
 import Pipeline from '@xenova/transformers/dist/pipeline';
 import type { FeatureExtractionPipeline } from '@xenova/transformers/dist/types';
 
-// Maximum chunk size in characters
-const MAX_CHUNK_SIZE = 1000;
-// Maximum overlap between chunks
-const CHUNK_OVERLAP = 200;
+// Maximum chunk size in characters - configurable via environment variables
+const MAX_CHUNK_SIZE = process.env.MAX_CHUNK_SIZE ? parseInt(process.env.MAX_CHUNK_SIZE, 10) : 1000;
+// Maximum overlap between chunks - configurable via environment variables
+const CHUNK_OVERLAP = process.env.CHUNK_OVERLAP ? parseInt(process.env.CHUNK_OVERLAP, 10) : 200;
 
 // Azure OpenAI configuration
 const AZURE_OPENAI_KEY = process.env.AZURE_OPENAI_KEY || '';
@@ -634,7 +634,8 @@ function createOptimizedChunks(text: string, fileName: string): string[] {
         }
       } else {
         // Otherwise, split it into smaller chunks
-        const subChunks = splitTextIntoChunks(sectionText, 1000, 150);
+        // Use environment-configurable chunk size and overlap (or fallback to defaults)
+        const subChunks = splitTextIntoChunks(sectionText, MAX_CHUNK_SIZE, CHUNK_OVERLAP);
         chunks.push(...subChunks);
       }
     }
@@ -677,8 +678,8 @@ function createOptimizedChunks(text: string, fileName: string): string[] {
     console.log(`Created ${chunks.length} intelligent chunks for large document`);
     return chunks;
   } else {
-    // For smaller documents, use the normal chunking strategy
-    return splitTextIntoChunks(text);
+    // For smaller documents, use the normal chunking strategy with environment-configurable parameters
+    return splitTextIntoChunks(text, MAX_CHUNK_SIZE, CHUNK_OVERLAP);
   }
 }
 
