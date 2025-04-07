@@ -51,54 +51,126 @@ async function generateAndSaveConversationTitle(conversationId: number): Promise
       return;
     }
     
-    let generatedTitle = "";
-    const content = firstUserMessage.content;
-    const hasImage = !!firstUserMessage.image;
+    const firstUserMessageContent = firstUserMessage.content;
     
-    if (!content || content.length === 0) {
-      // Handle empty content case
-      generatedTitle = hasImage ? "Image Analysis" : "New Conversation";
-    } else if (content.length <= 25) {
-      // If message is short, use it directly
-      generatedTitle = content;
-    } else {
-      // Try to extract an intelligent title by keeping key phrases
-      // First, try to extract a question
-      const questionMatch = content.match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
-      if (questionMatch && questionMatch[0].length < 50) {
-        generatedTitle = questionMatch[0];
-      } else {
-        // Extract first sentence or meaningful chunk
-        const sentenceEnd = content.indexOf('.');
-        const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
-          ? content.substring(0, sentenceEnd + 1) 
-          : content.substring(0, Math.min(content.length, 40));
-        
-        // Split by common stop words and take first few meaningful words
-        const words = firstChunk.split(/\s+/);
-        generatedTitle = words.slice(0, 5).join(' ');
-        
-        // Ensure title doesn't end abruptly
-        if (words.length > 5 && !generatedTitle.endsWith('.')) {
-          generatedTitle += '...';
+    // Fetch OpenRouter models
+    let openRouterModels;
+    try {
+      // Get the model list from the internal OpenRouter models endpoint
+      const modelsUrl = "https://openrouter.ai/api/v1/models";
+      const modelsResponse = await fetch(modelsUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
         }
+      });
+      
+      if (!modelsResponse.ok) {
+        console.error(`Failed to fetch models from OpenRouter: ${modelsResponse.status} ${modelsResponse.statusText}`);
+        return;
+      }
+      
+      const modelsData = await modelsResponse.json();
+      openRouterModels = modelsData.data || [];
+      
+      if (!openRouterModels || !openRouterModels.length) {
+        console.warn("No models returned from OpenRouter API");
+        return;
+      }
+    } catch (error) {
+      console.error("Error fetching OpenRouter models:", error);
+      return;
+    }
+    
+    // Filter for free models
+    const freeModels = openRouterModels.filter(model => model.isFree === true);
+    
+    if (!freeModels.length) {
+      console.warn("No free models available for title generation.");
+      return;
+    }
+    
+    // Define preferred models for title generation
+    const preferredTitleModels = [
+      'qwen/qwen-2.5-vl-3b-instruct',
+      'allenai/molmo-7b-d',
+      'meta-llama/llama-4-maverick-17b-instruct-128e',
+      'meta-llama/llama-4-scout-17b-instruct-16e',
+      'google/gemini-2.5-pro-experimental',
+    ];
+    
+    // Find the first preferred model that's available for free
+    let selectedModelId = null;
+    for (const preferredModelId of preferredTitleModels) {
+      if (freeModels.some(model => model.id === preferredModelId)) {
+        selectedModelId = preferredModelId;
+        break;
       }
     }
     
-    // Clean up title - remove quotes and excessive punctuation
-    generatedTitle = generatedTitle
-      .replace(/^["']|["']$/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    // Ensure title is not too long
-    if (generatedTitle.length > 40) {
-      generatedTitle = generatedTitle.substring(0, 37) + '...';
+    // If no preferred model is found, use the first free model as fallback
+    if (!selectedModelId && freeModels.length > 0) {
+      selectedModelId = freeModels[0].id;
     }
     
-    // Update the conversation title
-    await storage.updateConversationTitle(conversationId, generatedTitle);
-    console.log(`Generated and saved title for conversation ${conversationId}: "${generatedTitle}"`);
+    if (!selectedModelId) {
+      console.warn("Could not select a suitable model for title generation.");
+      return;
+    }
+    
+    // Call OpenRouter to generate a title
+    try {
+      const titlePromptMessages = [
+        {
+          "role": "user", 
+          "content": `Based on the following user message, suggest a concise and relevant conversation title (max 7 words):\n\nUser Message: '''${firstUserMessageContent}'''\n\nTitle:`
+        }
+      ];
+      
+      const payload = {
+        model: selectedModelId,
+        messages: titlePromptMessages,
+        temperature: 0.5,
+        max_tokens: 20
+      };
+      
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`OpenRouter API error for title generation: ${response.status} ${response.statusText}`, errorText);
+        return;
+      }
+      
+      // Process the API response
+      try {
+        const data = await response.json();
+        let generatedTitle = data.choices?.[0]?.message?.content;
+        
+        if (generatedTitle) {
+          // Clean up the title
+          generatedTitle = generatedTitle.trim().replace(/^["']|["']$/g, '');
+          
+          if (generatedTitle) {
+            // Update the conversation title in storage
+            await storage.updateConversationTitle(conversationId, generatedTitle);
+            console.log(`AI generated and saved title for conversation ${conversationId}: "${generatedTitle}"`);
+          }
+        }
+      } catch (parseError) {
+        console.error("Error parsing title generation response:", parseError);
+      }
+    } catch (apiError) {
+      console.error("Error calling OpenRouter API for title generation:", apiError);
+    }
   } catch (error) {
     console.error("Error generating conversation title:", error);
     // Don't throw - this is a non-critical operation
