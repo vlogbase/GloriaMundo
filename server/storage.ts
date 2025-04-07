@@ -10,7 +10,7 @@ import {
   imageDescriptions, type ImageDescription, type InsertImageDescription
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, inArray, isNull, sql, and } from "drizzle-orm";
+import { eq, asc, inArray, isNull, sql } from "drizzle-orm";
 
 // Define the user presets interface
 export interface UserPresets {
@@ -1157,11 +1157,9 @@ export class MemStorage implements IStorage {
     try {
       // Try database first
       const logsFromDb = await db.select().from(usageLogs)
+        .where(eq(usageLogs.userId, userId))
         .where(
-          and(
-            eq(usageLogs.userId, userId),
-            sql`${usageLogs.createdAt} >= ${startDate.toISOString()} AND ${usageLogs.createdAt} <= ${endDate.toISOString()}`
-          )
+          sql`${usageLogs.createdAt} >= ${startDate.toISOString()} AND ${usageLogs.createdAt} <= ${endDate.toISOString()}`
         );
       
       if (logsFromDb.length > 0) {
@@ -1187,11 +1185,9 @@ export class MemStorage implements IStorage {
     try {
       // Try database first - this would be a more complex query in SQL
       const logsFromDb = await db.select().from(usageLogs)
+        .where(eq(usageLogs.userId, userId))
         .where(
-          and(
-            eq(usageLogs.userId, userId),
-            sql`${usageLogs.createdAt} >= ${startDate.toISOString()} AND ${usageLogs.createdAt} <= ${endDate.toISOString()}`
-          )
+          sql`${usageLogs.createdAt} >= ${startDate.toISOString()} AND ${usageLogs.createdAt} <= ${endDate.toISOString()}`
         );
       
       if (logsFromDb.length > 0) {
