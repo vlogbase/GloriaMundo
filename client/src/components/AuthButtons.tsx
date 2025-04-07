@@ -109,12 +109,12 @@ export function AuthButtons() {
         {/* User dropdown menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/30 hover:border-primary/60 transition-colors">
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/30 hover:border-primary/60 transition-colors p-0">
               <Avatar className="h-full w-full">
                 <AvatarImage 
                   src={user.avatarUrl} 
                   alt={user.name} 
-                  className="object-cover"
+                  className="object-cover w-full h-full"
                 />
                 <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
                   {user.name.charAt(0)}
@@ -131,7 +131,7 @@ export function AuthButtons() {
                 <AvatarImage 
                   src={user.avatarUrl} 
                   alt={user.name} 
-                  className="object-cover"
+                  className="object-cover w-full h-full"
                 />
                 <AvatarFallback className="bg-primary/10 text-primary font-bold">
                   {user.name.charAt(0)}
