@@ -1,0 +1,24 @@
+The user has confirmed the Redis port was incorrect previously and has now updated the `REDIS_PORT` environment variable/secret to the correct value (likely 6380). Please modify `server/documentProcessor.ts` again to correctly implement BullMQ using the Azure Cache for Redis instance.
+
+1.  **Add TLS Configuration:** Locate the `redisConnectionOptions` object (around line 37). Modify it to include the necessary TLS option for connecting to Azure Cache for Redis over SSL (typically port 6380). Add `tls: {}` to the options object. The final object should look similar to this:
+    ```typescript
+    const redisConnectionOptions = {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6380', 10), // Default to 6380 if needed
+      password: process.env.REDIS_PASSWORD || '',
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      tls: {} // Add this line for SSL/TLS connection
+    };
+    ```
+2.  **Remove Fallback Logic:**
+    * Remove the `redisAvailable` flag variable and the initial `try...catch` block around the Redis/BullMQ initialization (lines 58-87). Let initialization errors propagate if they occur.
+    * In the `processDocument` function (around lines 471-513), remove the `if (redisAvailable && documentProcessingQueue)` check and the entire `else` block that calls `setTimeout`. The code should now *only* attempt to add the job to `documentProcessingQueue.add('process-document', ...)` directly. Remove the `try...catch` block specifically around the `.add()` call that falls back to `setTimeout`.
+    * In the `createChunksFromDocument` function (around lines 571-611), remove the check for `redisAvailable` and the logic that adds a `process-embeddings` job or falls back to `setTimeout`. This function should focus only on creating chunks.
+3.  **Simplify Worker:**
+    * Modify the BullMQ `Worker` (around line 365). It should *only* need to handle the `process-document` job name.
+    * Inside the worker's processing function, directly call `processDocumentInBackground(job.data)` when `job.name === 'process-document'`.
+    * Remove the `else if (jobName === 'process-embeddings')` block and its associated logic from the worker.
+4.  **Cleanup:** Remove the `processDocumentJob` function if it still exists (it seemed to be removed previously but good to double-check). Remove any lingering code related to the `redisAvailable` flag. Ensure the `processDocumentInBackground` function remains, as it contains the actual processing logic called by the worker.
+
+The goal is to have a clean implementation that solely relies on BullMQ/Redis for background processing, using the correct connection options including TLS.

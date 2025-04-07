@@ -10,7 +10,7 @@ import {
   imageDescriptions, type ImageDescription, type InsertImageDescription
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, asc, inArray, isNull, sql } from "drizzle-orm";
 
 // Define the user presets interface
 export interface UserPresets {
@@ -43,6 +43,7 @@ export interface IStorage {
   // Message methods
   getMessage(id: number): Promise<Message | undefined>;
   getMessagesByConversation(conversationId: number): Promise<Message[]>;
+  getFirstUserMessage(conversationId: number): Promise<Message | undefined>;
   createMessage(message: Partial<InsertMessage>): Promise<Message>;
   updateMessage(id: number, updates: Partial<InsertMessage>): Promise<Message | undefined>;
   
@@ -604,6 +605,32 @@ export class MemStorage implements IStorage {
     return Array.from(this.messages.values())
       .filter(msg => msg.conversationId === conversationId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+  
+  async getFirstUserMessage(conversationId: number): Promise<Message | undefined> {
+    // Try to get the first user message from database
+    try {
+      const userMessagesFromDb = await db.select().from(messages)
+        .where(and(
+          eq(messages.conversationId, conversationId),
+          eq(messages.role, 'user')
+        ))
+        .orderBy(asc(messages.createdAt))
+        .limit(1);
+      
+      if (userMessagesFromDb.length > 0) {
+        console.log(`Retrieved first user message for conversation ${conversationId} from database`);
+        return userMessagesFromDb[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting first user message for conversation ${conversationId}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    console.log(`Falling back to in-memory storage for first user message in conversation ${conversationId}`);
+    return Array.from(this.messages.values())
+      .filter(msg => msg.conversationId === conversationId && msg.role === 'user')
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
   }
   
   async createMessage(data: Partial<InsertMessage>): Promise<Message> {
