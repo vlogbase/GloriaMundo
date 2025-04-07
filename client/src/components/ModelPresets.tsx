@@ -23,6 +23,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { 
+  Command, 
+  CommandEmpty, 
+  CommandGroup, 
+  CommandInput, 
+  CommandItem, 
+  CommandList 
+} from '@/components/ui/command';
 import { Network, Edit, Check, Lock, Search } from 'lucide-react';
 
 // Helper function to get the preset number from the key
@@ -347,79 +357,127 @@ export const ModelPresets = () => {
           </DialogHeader>
           
           <div className="py-4">
-            {currentPresetKey !== 'preset5' && (
-              <Input
-                placeholder="Search models..."
-                value={presetSearchTerm}
-                onChange={(e) => setPresetSearchTerm(e.target.value)}
-                className="mb-4"
-              />
-            )}
-            
-            <Select
-              value={dialogSelectedModelId || undefined}
-              onValueChange={(value) => setDialogSelectedModelId(value)}
-            >
-              <SelectTrigger className="w-full h-auto py-3">
-                {dialogSelectedModelId ? (
-                  (() => {
-                    const selectedModel = models.find(m => m.id === dialogSelectedModelId);
-                    return (
-                      <div className="flex flex-col items-start">
-                        <span>{formatModelName(dialogSelectedModelId)}</span>
-                        <span className="text-xs text-muted-foreground">{dialogSelectedModelId || ""}</span>
-                        {selectedModel?.context_length && (
-                          <span className="text-xs text-muted-foreground">
-                            Context: {Math.round(selectedModel.context_length / 1000)}k tokens
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <SelectValue placeholder="Select a model" />
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(
-                  currentPresetKey === 'preset5'
-                    ? groupModelsByProvider(models.filter(model => 
-                        (model.id.toLowerCase().includes('perplexity/sonar') || 
-                         model.name.toLowerCase().includes('sonar')) &&
-                        model.id.toLowerCase().includes('perplexity')
-                      ))
-                    : groupedModels
-                ).map(([provider, providerModels]) => (
-                  <SelectGroup key={provider}>
-                    <SelectLabel>{provider}</SelectLabel>
-                    {providerModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id} className="py-3">
-                        <div className="flex flex-col">
-                          <span>{model.name}</span>
-                          <span className="text-xs text-muted-foreground">{model.id}</span>
-                          {model.context_length && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="model-search">Search models</Label>
+                <Input
+                  id="model-search"
+                  placeholder={currentPresetKey === 'preset5' ? "Search Sonar models..." : "Search models..."}
+                  value={presetSearchTerm}
+                  onChange={(e) => {
+                    setPresetSearchTerm(e.target.value);
+                    // Auto-select first matching model if search term is provided
+                    if (e.target.value) {
+                      const filteredModels = 
+                        currentPresetKey === 'preset5'
+                          ? models.filter(model => 
+                              (model.id.toLowerCase().includes('perplexity/sonar') || 
+                               model.name.toLowerCase().includes('sonar')) &&
+                              model.id.toLowerCase().includes('perplexity') &&
+                              (model.id.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                               model.name.toLowerCase().includes(e.target.value.toLowerCase()))
+                            )
+                          : models.filter(model => 
+                              model.id.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                              model.name.toLowerCase().includes(e.target.value.toLowerCase())
+                            );
+                      
+                      if (filteredModels.length > 0) {
+                        setDialogSelectedModelId(filteredModels[0].id);
+                      }
+                    }
+                  }}
+                  className="w-full"
+                />
+              </div>
+              
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="selected-model">Selected model</Label>
+                <div
+                  id="selected-model"
+                  className="flex flex-col items-start w-full h-auto py-3 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  {dialogSelectedModelId ? (
+                    (() => {
+                      const selectedModel = models.find(m => m.id === dialogSelectedModelId);
+                      return (
+                        <div className="flex flex-col items-start w-full">
+                          <span>{formatModelName(dialogSelectedModelId)}</span>
+                          <span className="text-xs text-muted-foreground">{dialogSelectedModelId || ""}</span>
+                          {selectedModel?.context_length && (
                             <span className="text-xs text-muted-foreground">
-                              Context: {Math.round(model.context_length / 1000)}k tokens
+                              Context: {Math.round(selectedModel.context_length / 1000)}k tokens
                             </span>
                           )}
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-                {(currentPresetKey === 'preset5' && 
-                  Object.keys(groupModelsByProvider(models.filter(model => 
-                    (model.id.toLowerCase().includes('perplexity/sonar') || 
-                     model.name.toLowerCase().includes('sonar')) &&
-                    model.id.toLowerCase().includes('perplexity')
-                  ))).length === 0) || 
-                 (currentPresetKey !== 'preset5' && Object.keys(groupedModels).length === 0) ? (
-                  <SelectItem value="none" disabled>
-                    No models found
-                  </SelectItem>
-                ) : null}
-              </SelectContent>
-            </Select>
+                      );
+                    })()
+                  ) : (
+                    <span className="text-muted-foreground">No model selected</span>
+                  )}
+                </div>
+              </div>
+              
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    Choose from all models
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command>
+                    <CommandInput 
+                      placeholder="Search models..." 
+                      value={presetSearchTerm}
+                      onValueChange={setPresetSearchTerm}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No models found.</CommandEmpty>
+                      {Object.entries(
+                        currentPresetKey === 'preset5'
+                          ? groupModelsByProvider(models.filter(model => 
+                              (model.id.toLowerCase().includes('perplexity/sonar') || 
+                               model.name.toLowerCase().includes('sonar')) &&
+                              model.id.toLowerCase().includes('perplexity') &&
+                              (presetSearchTerm === '' ||
+                                model.id.toLowerCase().includes(presetSearchTerm.toLowerCase()) ||
+                                model.name.toLowerCase().includes(presetSearchTerm.toLowerCase()))
+                            ))
+                          : groupModelsByProvider(models.filter(model =>
+                              presetSearchTerm === '' ||
+                              model.id.toLowerCase().includes(presetSearchTerm.toLowerCase()) ||
+                              model.name.toLowerCase().includes(presetSearchTerm.toLowerCase())
+                            ))
+                      ).map(([provider, providerModels]) => (
+                        <CommandGroup key={provider} heading={provider}>
+                          {providerModels.map((model) => (
+                            <CommandItem
+                              key={model.id}
+                              value={model.id}
+                              onSelect={() => {
+                                setDialogSelectedModelId(model.id);
+                                setPresetSearchTerm('');
+                              }}
+                              className="py-2"
+                            >
+                              <div className="flex flex-col">
+                                <span>{model.name}</span>
+                                <span className="text-xs text-muted-foreground">{model.id}</span>
+                                {model.context_length && (
+                                  <span className="text-xs text-muted-foreground">
+                                    Context: {Math.round(model.context_length / 1000)}k tokens
+                                  </span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
           
           <DialogFooter>
