@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Network, Edit, Check, Lock } from 'lucide-react';
+import { Network, Edit, Check, Lock, Search } from 'lucide-react';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -229,6 +229,8 @@ export const ModelPresets = () => {
     return Object.entries(presets).map(([key, modelId]) => {
       const isActive = activePreset === key;
       const presetKey = key as 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5';
+      const isPreset4 = presetKey === 'preset4';
+      const isPreset5 = presetKey === 'preset5';
       
       // Check if this preset model is a free model
       const isFreeTier = modelId ? freeModels.some(model => model.id === modelId) : false;
@@ -246,9 +248,13 @@ export const ModelPresets = () => {
             } ${isLocked ? 'cursor-pointer' : ''}`}
             disabled={isLoading || isPending}
           >
-            <Network size={16} className="mr-1" />
+            {isPreset4 ? (
+              <Search size={16} className="mr-1" />
+            ) : (
+              <Network size={16} className="mr-1" />
+            )}
             {modelId ? (
-              <span className="truncate max-w-[100px]">{formatModelName(modelId)}</span>
+              <span className="truncate max-w-[120px]">{formatModelName(modelId)}</span>
             ) : (
               <span className="text-muted-foreground">Preset {getPresetNumber(key)}</span>
             )}
@@ -333,17 +339,22 @@ export const ModelPresets = () => {
           <DialogHeader>
             <DialogTitle>Assign Model to Preset {getPresetNumber(currentPresetKey)}</DialogTitle>
             <DialogDescription>
-              Select a model from the list below to assign to this preset. Click the edit icon on a preset button anytime to change this assignment.
+              {currentPresetKey === 'preset5' 
+                ? "Select a search model to assign to this preset. Preset 5 is dedicated to search capabilities."
+                : "Select a model from the list below to assign to this preset. Click the edit icon on a preset button anytime to change this assignment."
+              }
             </DialogDescription>
           </DialogHeader>
           
           <div className="py-4">
-            <Input
-              placeholder="Search models..."
-              value={presetSearchTerm}
-              onChange={(e) => setPresetSearchTerm(e.target.value)}
-              className="mb-4"
-            />
+            {currentPresetKey !== 'preset5' && (
+              <Input
+                placeholder="Search models..."
+                value={presetSearchTerm}
+                onChange={(e) => setPresetSearchTerm(e.target.value)}
+                className="mb-4"
+              />
+            )}
             
             <Select
               value={dialogSelectedModelId || undefined}
@@ -353,7 +364,15 @@ export const ModelPresets = () => {
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(groupedModels).map(([provider, providerModels]) => (
+                {Object.entries(
+                  currentPresetKey === 'preset5'
+                    ? groupModelsByProvider(models.filter(model => 
+                        (model.id.toLowerCase().includes('perplexity/sonar') || 
+                         model.name.toLowerCase().includes('sonar')) &&
+                        model.id.toLowerCase().includes('perplexity')
+                      ))
+                    : groupedModels
+                ).map(([provider, providerModels]) => (
                   <SelectGroup key={provider}>
                     <SelectLabel>{provider}</SelectLabel>
                     {providerModels.map((model) => (
@@ -371,11 +390,17 @@ export const ModelPresets = () => {
                     ))}
                   </SelectGroup>
                 ))}
-                {Object.keys(groupedModels).length === 0 && (
+                {(currentPresetKey === 'preset5' && 
+                  Object.keys(groupModelsByProvider(models.filter(model => 
+                    (model.id.toLowerCase().includes('perplexity/sonar') || 
+                     model.name.toLowerCase().includes('sonar')) &&
+                    model.id.toLowerCase().includes('perplexity')
+                  ))).length === 0) || 
+                 (currentPresetKey !== 'preset5' && Object.keys(groupedModels).length === 0) ? (
                   <SelectItem value="none" disabled>
                     No models found
                   </SelectItem>
-                )}
+                ) : null}
               </SelectContent>
             </Select>
           </div>
