@@ -6,7 +6,8 @@ import {
   documentChunks, type DocumentChunk, type InsertDocumentChunk,
   paymentTransactions, type PaymentTransaction, type InsertPaymentTransaction,
   usageLogs, type UsageLog, type InsertUsageLog,
-  userSettings, type UserSettings, type InsertUserSettings
+  userSettings, type UserSettings, type InsertUserSettings,
+  imageDescriptions, type ImageDescription, type InsertImageDescription
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, asc, inArray, isNull, sql } from "drizzle-orm";
@@ -75,6 +76,13 @@ export interface IStorage {
   // User settings methods
   getUserSettings(userId: number): Promise<UserSettings | undefined>;
   createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
+  
+  // Image description methods
+  getImageDescription(id: number): Promise<ImageDescription | undefined>;
+  getImagesByConversation(conversationId: number): Promise<ImageDescription[]>;
+  createImageDescription(imageDescription: Partial<InsertImageDescription>): Promise<ImageDescription>;
+  updateImageDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined>;
+  deleteImageDescription(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -83,12 +91,14 @@ export class MemStorage implements IStorage {
   private messages: Map<number, Message>;
   private documents: Map<number, Document>;
   private documentChunks: Map<number, DocumentChunk>;
+  private imageDescriptions: Map<number, ImageDescription>;
   
   private userId: number;
   private conversationId: number;
   private messageId: number;
   private documentId: number;
   private documentChunkId: number;
+  private imageDescriptionId: number;
 
   constructor() {
     this.users = new Map();
@@ -96,12 +106,14 @@ export class MemStorage implements IStorage {
     this.messages = new Map();
     this.documents = new Map();
     this.documentChunks = new Map();
+    this.imageDescriptions = new Map();
     
     this.userId = 1;
     this.conversationId = 1;
     this.messageId = 1;
     this.documentId = 1;
     this.documentChunkId = 1;
+    this.imageDescriptionId = 1;
   }
 
   // User methods
@@ -1332,6 +1344,176 @@ export class MemStorage implements IStorage {
       console.log(`Created user settings for user ${settings.userId} in memory`);
       return newSettings;
     }
+  }
+
+  // Image description methods
+  
+  async getImageDescription(id: number): Promise<ImageDescription | undefined> {
+    // Try getting from database first
+    try {
+      const result = await db.select().from(imageDescriptions)
+        .where(eq(imageDescriptions.id, id))
+        .limit(1);
+      
+      if (result.length > 0) {
+        return result[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting image description ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return this.imageDescriptions.get(id);
+  }
+  
+  async getImagesByConversation(conversationId: number): Promise<ImageDescription[]> {
+    // Try getting from database first
+    try {
+      const result = await db.select().from(imageDescriptions)
+        .where(eq(imageDescriptions.conversationId, conversationId))
+        .orderBy(imageDescriptions.createdAt);
+      
+      if (result.length > 0) {
+        return result;
+      }
+    } catch (error) {
+      console.error(`Database error when getting images for conversation ${conversationId}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return Array.from(this.imageDescriptions.values())
+      .filter(img => img.conversationId === conversationId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+  
+  async createImageDescription(data: Partial<InsertImageDescription>): Promise<ImageDescription> {
+    const now = new Date();
+    
+    // Validate required fields
+    if (!data.conversationId) {
+      throw new Error("Conversation ID is required for image descriptions");
+    }
+    
+    if (!data.imageIdentifier) {
+      throw new Error("Image identifier is required");
+    }
+    
+    if (!data.textDescription) {
+      throw new Error("Text description is required");
+    }
+    
+    if (!data.mimeType) {
+      throw new Error("MIME type is required");
+    }
+    
+    if (data.fileSize === undefined) {
+      throw new Error("File size is required");
+    }
+    
+    // Try to create in database first
+    try {
+      const result = await db.insert(imageDescriptions)
+        .values({
+          conversationId: data.conversationId,
+          userId: data.userId ?? null,
+          imageIdentifier: data.imageIdentifier,
+          textDescription: data.textDescription,
+          mimeType: data.mimeType,
+          fileSize: data.fileSize,
+          type: data.type ?? "image_description",
+          embedding: data.embedding ?? null,
+          metadata: data.metadata ?? null,
+          expiresAt: data.expiresAt ?? null,
+          createdAt: now
+        })
+        .returning();
+      
+      if (result.length > 0) {
+        console.log('Created image description in database:', result[0].id);
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Database error when creating image description:', error);
+    }
+    
+    // Fallback to in-memory storage
+    const id = this.imageDescriptionId++;
+    
+    const imageDescription: ImageDescription = {
+      id,
+      conversationId: data.conversationId,
+      userId: data.userId ?? null,
+      imageIdentifier: data.imageIdentifier,
+      textDescription: data.textDescription,
+      mimeType: data.mimeType,
+      fileSize: data.fileSize,
+      type: data.type ?? "image_description",
+      embedding: data.embedding ?? null,
+      metadata: data.metadata ?? null,
+      expiresAt: data.expiresAt ?? null,
+      createdAt: now
+    };
+    
+    this.imageDescriptions.set(id, imageDescription);
+    console.log('Created image description in memory:', id);
+    
+    return imageDescription;
+  }
+  
+  async updateImageDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined> {
+    // Try to update in database first
+    try {
+      // Check if image description exists
+      const existing = await db.select().from(imageDescriptions).where(eq(imageDescriptions.id, id)).limit(1);
+      
+      if (existing.length > 0) {
+        const result = await db.update(imageDescriptions)
+          .set(updates)
+          .where(eq(imageDescriptions.id, id))
+          .returning();
+        
+        if (result.length > 0) {
+          console.log(`Updated image description ${id} in database`);
+          return result[0];
+        }
+      }
+    } catch (error) {
+      console.error(`Database error when updating image description ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    const imageDescription = this.imageDescriptions.get(id);
+    
+    if (!imageDescription) {
+      return undefined;
+    }
+    
+    const updated = {
+      ...imageDescription,
+      ...updates
+    };
+    
+    this.imageDescriptions.set(id, updated);
+    console.log(`Updated image description ${id} in memory`);
+    
+    return updated;
+  }
+  
+  async deleteImageDescription(id: number): Promise<void> {
+    // Try to delete from database first
+    try {
+      await db.delete(imageDescriptions)
+        .where(eq(imageDescriptions.id, id))
+        .execute();
+      
+      console.log(`Deleted image description ${id} from database`);
+    } catch (error) {
+      console.error(`Database error when deleting image description ${id}:`, error);
+    }
+    
+    // Also remove from memory storage as a fallback
+    this.imageDescriptions.delete(id);
+    console.log(`Deleted image description ${id} from memory`);
   }
 }
 

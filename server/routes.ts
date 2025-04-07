@@ -20,6 +20,7 @@ import {
   CREDIT_VALUE_USD
 } from "./paypal";
 import { registerDocumentRoutes } from "./documentRoutes";
+import { registerImageRoutes } from "./imageRoutes";
 import { findSimilarChunks, formatContextForPrompt } from "./documentProcessor";
 import { 
   ErrorCategory, 
@@ -2442,6 +2443,9 @@ Format your responses using markdown for better readability and organization.`;
 
   // Register document routes for RAG functionality
   registerDocumentRoutes(app);
+  
+  // Register image handling routes
+  registerImageRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

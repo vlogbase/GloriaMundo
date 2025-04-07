@@ -200,3 +200,36 @@ export type UsageLog = typeof usageLogs.$inferSelect;
 
 export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
 export type UserSettings = typeof userSettings.$inferSelect;
+
+// Image description schema for storing image metadata and descriptions
+export const imageDescriptions = pgTable("image_descriptions", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").references(() => conversations.id).notNull(),
+  userId: integer("user_id").references(() => users.id),
+  imageIdentifier: text("image_identifier").notNull(), // URL or path to the image
+  textDescription: text("text_description").notNull(), // AI-generated description of the image
+  mimeType: text("mime_type").notNull(), // MIME type of the image
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  type: text("type").default("image_description").notNull(), // Distinguishes from text chunks
+  embedding: text("embedding"), // Vector embedding of the description
+  metadata: jsonb("metadata"), // Additional metadata
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"), // When the image expires (if set)
+});
+
+export const insertImageDescriptionSchema = createInsertSchema(imageDescriptions).pick({
+  conversationId: true,
+  userId: true,
+  imageIdentifier: true,
+  textDescription: true,
+  mimeType: true,
+  fileSize: true,
+  type: true,
+  embedding: true,
+  metadata: true,
+  expiresAt: true,
+});
+
+// Export types for image descriptions
+export type InsertImageDescription = z.infer<typeof insertImageDescriptionSchema>;
+export type ImageDescription = typeof imageDescriptions.$inferSelect;
