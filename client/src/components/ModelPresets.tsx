@@ -243,7 +243,7 @@ export const ModelPresets = () => {
           <Button
             onClick={isLocked ? handleLockedModelClick : () => handleClick(presetKey)}
             variant={isActive ? "default" : "outline"}
-            className={`flex items-center gap-1 py-2.5 px-3 text-sm transition-all duration-200 ${
+            className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
               isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
             } ${isLocked ? 'cursor-pointer' : ''}`}
             disabled={isLoading || isPending}
@@ -292,7 +292,7 @@ export const ModelPresets = () => {
         <Button
           onClick={handleFreeTierClick}
           variant={activeFreeTierModel ? "default" : "outline"}
-          className={`flex items-center gap-1 py-2.5 px-3 text-sm transition-all duration-200 border-green-500 ${
+          className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
             activeFreeTierModel ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
           }`}
         >
@@ -376,7 +376,7 @@ export const ModelPresets = () => {
                   <SelectGroup key={provider}>
                     <SelectLabel>{provider}</SelectLabel>
                     {providerModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
+                      <SelectItem key={model.id} value={model.id} className="py-3">
                         <div className="flex flex-col">
                           <span>{model.name}</span>
                           <span className="text-xs text-muted-foreground">{model.id}</span>
@@ -444,7 +444,7 @@ export const ModelPresets = () => {
                         <Button
                           key={model.id}
                           variant="outline"
-                          className="w-full justify-start text-left h-auto py-2"
+                          className="w-full justify-start text-left h-auto py-3"
                           onClick={() => handleSelectFreeModel(model.id)}
                         >
                           <div className="flex flex-col">
