@@ -360,8 +360,25 @@ export const ModelPresets = () => {
               value={dialogSelectedModelId || undefined}
               onValueChange={(value) => setDialogSelectedModelId(value)}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a model" />
+              <SelectTrigger className="w-full h-auto py-3">
+                {dialogSelectedModelId ? (
+                  (() => {
+                    const selectedModel = models.find(m => m.id === dialogSelectedModelId);
+                    return (
+                      <div className="flex flex-col items-start">
+                        <span>{formatModelName(dialogSelectedModelId)}</span>
+                        <span className="text-xs text-muted-foreground">{dialogSelectedModelId || ""}</span>
+                        {selectedModel?.context_length && (
+                          <span className="text-xs text-muted-foreground">
+                            Context: {Math.round(selectedModel.context_length / 1000)}k tokens
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <SelectValue placeholder="Select a model" />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(
