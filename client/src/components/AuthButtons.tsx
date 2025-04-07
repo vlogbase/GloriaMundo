@@ -90,25 +90,35 @@ export function AuthButtons() {
 
     return (
       <div className="flex items-center gap-2">
-        {/* Credit balance button */}
+        {/* Account button with credit balance */}
         <Button
           variant="outline"
           size="sm"
-          className={`hidden md:flex items-center ${lowBalance ? 'text-red-600' : 'text-primary'}`}
+          className={`hidden md:flex items-center gap-1.5 ${lowBalance ? 'text-red-600 hover:text-red-700' : 'text-primary'}`}
           asChild
         >
           <Link href="/credits">
-            <span>Credit: ${displayBalance}{lowBalance ? ' Top Up' : ''}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+              <line x1="2" x2="22" y1="10" y2="10"></line>
+            </svg>
+            <span>Balance: ${displayBalance}{lowBalance ? ' (Low)' : ''}</span>
           </Link>
         </Button>
         
         {/* User dropdown menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+            <Button variant="ghost" className="relative h-8 w-8 rounded-full overflow-hidden border border-primary/20">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user.avatarUrl} alt={user.name} />
-                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                <AvatarImage 
+                  src={user.avatarUrl} 
+                  alt={user.name} 
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                  {user.name.charAt(0)}
+                </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
@@ -129,11 +139,10 @@ export function AuthButtons() {
             >
               <a href="/credits" className="cursor-pointer flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="16"></line>
-                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>Buy Credits</span>
+                <span>Account</span>
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem 

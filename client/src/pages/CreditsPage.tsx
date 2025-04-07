@@ -426,7 +426,19 @@ const handleCaptureOrder = (data: any = null) => {
   return (
     <div className="container mx-auto py-12">
       <div className="flex flex-col space-y-6 max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold">Account Balance</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Account Balance</h1>
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2"
+            onClick={() => window.location.href = '/'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            Back to Chat
+          </Button>
+        </div>
         
         <Card>
           <CardHeader>
@@ -438,11 +450,11 @@ const handleCaptureOrder = (data: any = null) => {
           <CardContent>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">${(user.creditBalance / 10000).toFixed(2)}</span>
+                <span className="text-3xl font-bold tracking-tight">${(user.creditBalance / 10000).toFixed(2)}</span>
                 <span className="text-muted-foreground">available balance</span>
               </div>
-              <div className="mt-2 text-sm p-2 bg-primary/5 rounded-md">
-                <p>This balance is used for AI model usage. Different models have different pricing based on their capabilities.</p>
+              <div className="mt-2 text-sm p-3 bg-primary/5 rounded-lg">
+                <p>This balance is used for AI model usage across all available models. Different models have different pricing based on their capabilities and token usage.</p>
               </div>
             </div>
           </CardContent>
