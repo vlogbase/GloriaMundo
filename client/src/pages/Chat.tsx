@@ -125,15 +125,7 @@ export default function Chat() {
     
     // When messages are loaded or updated
     if (messages.length > 0) {
-      // Special handling for first message to ensure it's visible
-      const firstMessage = document.querySelector('.first-message');
-      if (firstMessage) {
-        console.log('[Chat] First message element found, scrolling to it');
-        firstMessage.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
-      
-      // When loading is done, scroll to the latest message
+      // When loading is done, prioritize scrolling to the latest message
       if (!isLoadingResponse) {
         if (latestMessageRef.current) {
           console.log('[Chat] Scrolling to latest message');
@@ -144,6 +136,16 @@ export default function Chat() {
         } else if (messagesEndRef.current) {
           console.log('[Chat] No latest message ref found, scrolling to end');
           messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+      
+      // Only scroll to first message on initial load when there's no last message reference
+      // and we're not expecting more messages (not loading response)
+      else if (!latestMessageRef.current && !isLoadingResponse) {
+        const firstMessage = document.querySelector('.first-message');
+        if (firstMessage) {
+          console.log('[Chat] First message element found, scrolling to it');
+          firstMessage.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       }
     } else if (messagesEndRef.current) {
