@@ -99,59 +99,86 @@ export function AuthButtons() {
         >
           <Link href="/credits">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="20" height="14" x="2" y="5" rx="2"></rect>
-              <line x1="2" x2="22" y1="10" y2="10"></line>
+              <circle cx="12" cy="8" r="5" />
+              <path d="M20 21v-2a7 7 0 0 0-14 0v2" />
             </svg>
-            <span>Balance: ${displayBalance}{lowBalance ? ' (Low)' : ''}</span>
+            <span>Account: ${displayBalance}{lowBalance ? ' (Low)' : ''}</span>
           </Link>
         </Button>
         
         {/* User dropdown menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full overflow-hidden border border-primary/20">
-              <Avatar className="h-8 w-8">
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/30 hover:border-primary/60 transition-colors">
+              <Avatar className="h-full w-full">
                 <AvatarImage 
                   src={user.avatarUrl} 
                   alt={user.name} 
                   className="object-cover"
                 />
-                <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
                   {user.name.charAt(0)}
                 </AvatarFallback>
               </Avatar>
+              {lowBalance && (
+                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border border-background"></span>
+              )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <div className="flex items-center justify-start gap-2 p-2">
+          <DropdownMenuContent align="end" className="w-64">
+            <div className="flex items-center justify-start gap-3 p-3 border-b border-border/60">
+              <Avatar className="h-10 w-10">
+                <AvatarImage 
+                  src={user.avatarUrl} 
+                  alt={user.name} 
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                  {user.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
               <div className="flex flex-col space-y-1 leading-none">
-                <p className="font-medium">{user.name}</p>
+                <p className="font-medium text-base">{user.name}</p>
                 <p className="text-sm text-muted-foreground">{user.email}</p>
-                <div className="flex items-center gap-1 mt-1">
-                  <div className={`text-sm font-medium bg-primary/10 px-2 py-0.5 rounded-full ${lowBalance ? 'text-red-600' : 'text-primary'}`}>
-                    ${displayBalance} ({user.creditBalance.toLocaleString()} credits)
-                  </div>
+              </div>
+            </div>
+            
+            <div className="p-3 border-b border-border/60">
+              <div className="flex flex-col gap-1">
+                <div className="text-sm text-muted-foreground">Current Balance</div>
+                <div className={`text-base font-semibold ${lowBalance ? 'text-red-600' : 'text-primary'}`}>
+                  ${displayBalance}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {user.creditBalance.toLocaleString()} credits available
                 </div>
               </div>
             </div>
-            <DropdownMenuItem 
-              asChild
-            >
-              <a href="/credits" className="cursor-pointer flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>Account</span>
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              className="text-red-500 cursor-pointer flex items-center gap-2"
-              onClick={handleLogout}
-            >
-              <FaSignOutAlt className="h-4 w-4" />
-              <span>Logout</span>
-            </DropdownMenuItem>
+            
+            <div className="p-2">
+              <DropdownMenuItem 
+                asChild
+                className="h-10 cursor-pointer"
+              >
+                <a href="/credits" className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <div className="flex flex-col">
+                    <span className="font-medium">Account Management</span>
+                    <span className="text-xs text-muted-foreground">View usage and add funds</span>
+                  </div>
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="text-red-500 h-9 cursor-pointer flex items-center gap-2"
+                onClick={handleLogout}
+              >
+                <FaSignOutAlt className="h-4 w-4" />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

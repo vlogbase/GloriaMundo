@@ -26,6 +26,11 @@ import {
   ChartTooltip,
   ChartTooltipContent
 } from "@/components/ui/chart";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
 interface CreditPackage {
   id: string;
@@ -426,11 +431,14 @@ const handleCaptureOrder = (data: any = null) => {
   return (
     <div className="container mx-auto py-12">
       <div className="flex flex-col space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Account Balance</h1>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0">
+          <div className="flex flex-col space-y-2">
+            <h1 className="text-3xl font-bold">Account Management</h1>
+            <p className="text-muted-foreground">Manage your account, add funds, and view your usage history</p>
+          </div>
           <Button 
-            variant="outline" 
-            className="flex items-center gap-2"
+            variant="default" 
+            className="flex items-center gap-2 w-full md:w-auto"
             onClick={() => window.location.href = '/'}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -440,21 +448,29 @@ const handleCaptureOrder = (data: any = null) => {
           </Button>
         </div>
         
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Balance</CardTitle>
-            <CardDescription>
-              Your account balance for AI model usage
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold tracking-tight">${(user.creditBalance / 10000).toFixed(2)}</span>
-                <span className="text-muted-foreground">available balance</span>
+        <Card className="overflow-hidden">
+          <div className="bg-gradient-to-r from-primary/20 to-primary/5 p-6 md:p-8 border-b">
+            <div className="flex flex-col gap-1 max-w-xs">
+              <h2 className="text-lg font-medium text-foreground/80">Available Balance</h2>
+              <div className="flex items-end gap-2">
+                <span className="text-4xl font-bold tracking-tight text-primary">${(user.creditBalance / 10000).toFixed(2)}</span>
+                <span className="text-muted-foreground pb-1">USD</span>
               </div>
-              <div className="mt-2 text-sm p-3 bg-primary/5 rounded-lg">
-                <p>This balance is used for AI model usage across all available models. Different models have different pricing based on their capabilities and token usage.</p>
+              <span className="text-sm text-muted-foreground">{user.creditBalance.toLocaleString()} credits</span>
+            </div>
+          </div>
+          <CardContent className="p-4">
+            <div className="mt-1 text-sm">
+              <div className="flex items-start gap-2 text-foreground/80">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 16v-4"></path>
+                  <path d="M12 8h.01"></path>
+                </svg>
+                <div>
+                  <p>Credits are used for AI model access. Different models have different pricing based on their capabilities and token usage.</p>
+                  <p className="mt-1">1 credit = $0.0001 USD</p>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -741,20 +757,40 @@ const handleCaptureOrder = (data: any = null) => {
           
           <TabsContent value="history" className="mt-6">
             <Card>
-              <CardHeader>
-                <CardTitle>Purchase History</CardTitle>
-                <CardDescription>
-                  Your payment transaction history
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle>Purchase History</CardTitle>
+                  <CardDescription>
+                    Track your payment transactions and credits purchased
+                  </CardDescription>
+                </div>
+                <div className="bg-primary/10 px-3 py-1 rounded-full text-xs font-medium text-primary">
+                  Showing {transactions?.length || 0} transactions
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoadingTransactions ? (
-                  <div className="flex justify-center py-8">
+                  <div className="flex justify-center py-12">
                     <Spinner />
                   </div>
                 ) : !transactions || transactions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No purchase history available
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                        <rect width="20" height="14" x="2" y="5" rx="2" />
+                        <line x1="2" x2="22" y1="10" y2="10" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium">No Transactions Yet</h3>
+                    <p className="text-muted-foreground max-w-sm mt-1">
+                      You haven't made any purchases yet. Add funds to your account to get started with our AI services.
+                    </p>
+                    <Button 
+                      className="mt-6"
+                      onClick={() => setActiveTab('purchase')}
+                    >
+                      Add Funds Now
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -766,7 +802,7 @@ const handleCaptureOrder = (data: any = null) => {
                             <th className="h-12 px-4 text-left align-middle font-medium">Amount</th>
                             <th className="h-12 px-4 text-left align-middle font-medium">Credits</th>
                             <th className="h-12 px-4 text-left align-middle font-medium">Status</th>
-                            <th className="h-12 px-4 text-left align-middle font-medium">Reference</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">Package</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -776,13 +812,26 @@ const handleCaptureOrder = (data: any = null) => {
                               className="border-b transition-colors hover:bg-muted/50"
                             >
                               <td className="p-4 align-middle">
-                                {new Date(transaction.createdAt).toLocaleDateString()} {new Date(transaction.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{new Date(transaction.createdAt).toLocaleDateString()}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(transaction.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
                               </td>
                               <td className="p-4 align-middle font-medium">
-                                ${(transaction.amount / 100).toFixed(2)}
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-primary">${(transaction.amount / 100).toFixed(2)}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    +${(transaction.fee / 100).toFixed(2)} fee
+                                  </span>
+                                </div>
                               </td>
                               <td className="p-4 align-middle">
-                                {transaction.credits.toLocaleString()}
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-2 h-2 rounded-full bg-primary/60"></div>
+                                  <span>{transaction.credits.toLocaleString()}</span>
+                                </div>
                               </td>
                               <td className="p-4 align-middle">
                                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -795,13 +844,26 @@ const handleCaptureOrder = (data: any = null) => {
                                   {transaction.status}
                                 </span>
                               </td>
-                              <td className="p-4 align-middle text-xs text-muted-foreground">
-                                {transaction.paypalOrderId || 'N/A'}
+                              <td className="p-4 align-middle">
+                                <div className="flex flex-col">
+                                  <span>{transaction.packageId || 'Custom'}</span>
+                                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                                    ID: {transaction.paypalOrderId ? transaction.paypalOrderId.substring(0, 12) + '...' : 'N/A'}
+                                  </span>
+                                </div>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 16v-4"></path>
+                        <path d="M12 8h.01"></path>
+                      </svg>
+                      <span>Transactions are processed via PayPal and recorded instantly</span>
                     </div>
                   </div>
                 )}
@@ -872,8 +934,23 @@ const handleCaptureOrder = (data: any = null) => {
                       <Spinner />
                     </div>
                   ) : !usageStats || usageStats.stats.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      No usage data available for the selected time period
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                      <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                          <path d="M3 3v18h18"></path>
+                          <path d="m19 9-5 5-4-4-3 3"></path>
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium">No Usage Data</h3>
+                      <p className="text-muted-foreground max-w-sm mt-1">
+                        No usage data available for the selected time period. Try a different date range or start using the AI models to generate usage data.
+                      </p>
+                      <Button 
+                        className="mt-6"
+                        onClick={() => window.location.href = '/'}
+                      >
+                        Start Using Models
+                      </Button>
                     </div>
                   ) : (
                     <>
@@ -1021,27 +1098,63 @@ const handleCaptureOrder = (data: any = null) => {
               </CardHeader>
               <CardContent>
                 {isLoadingUserSettings ? (
-                  <div className="flex justify-center py-8">
+                  <div className="flex justify-center py-12">
                     <Spinner />
                   </div>
                 ) : !userSettings ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No user settings available
+                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium">No Settings Found</h3>
+                    <p className="text-muted-foreground max-w-sm mt-1">
+                      We couldn't find your account settings. Please try refreshing the page or contact support if the issue persists.
+                    </p>
+                    <Button 
+                      className="mt-6"
+                      onClick={() => window.location.reload()}
+                    >
+                      Refresh Page
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {/* Account Information */}
                     <div>
                       <h3 className="text-lg font-medium">Account Information</h3>
-                      <div className="mt-4 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="name">Name</Label>
-                            <Input id="name" value={user?.name || ''} disabled />
+                      <div className="mt-4">
+                        <div className="p-4 bg-muted/30 rounded-lg flex flex-col space-y-4">
+                          <div className="space-y-2 border-b pb-4">
+                            <Label htmlFor="name" className="text-muted-foreground text-sm">User Profile</Label>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                                {user?.name?.charAt(0) || '?'}
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-base">{user?.name || 'User'}</div>
+                                <div className="text-sm text-muted-foreground">{user?.email || ''}</div>
+                              </div>
+                              <div className="text-xs text-green-600 flex items-center gap-1 bg-green-50 dark:bg-green-950/30 px-2 py-1 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
+                                  <path d="m9 12 2 2 4-4"></path>
+                                </svg>
+                                <span>Verified</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input id="email" value={user?.email || ''} disabled />
+                          
+                          <div className="grid grid-cols-1 gap-4">
+                            <div className="space-y-1">
+                              <Label htmlFor="account-type" className="text-muted-foreground text-sm">Account Type</Label>
+                              <div className="font-medium text-base flex items-center gap-2">
+                                <span>Standard Account</span>
+                                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Paid</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1112,29 +1225,64 @@ const handleCaptureOrder = (data: any = null) => {
                     {/* Account Usage Summary */}
                     <div>
                       <h3 className="text-lg font-medium">Account Summary</h3>
-                      <div className="mt-4 space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Current Balance:</span>
-                          <span className="font-medium">${(user.creditBalance / 10000).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Account Created:</span>
-                          <span className="font-medium">{new Date(user.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Last Updated:</span>
-                          <span className="font-medium">{new Date(user.updatedAt).toLocaleDateString()}</span>
+                      <div className="mt-4">
+                        <div className="bg-muted/30 rounded-lg overflow-hidden border">
+                          <div className="px-4 py-3 bg-primary/5 border-b">
+                            <div className="font-medium">Account Details</div>
+                          </div>
+                          <div className="px-4 py-3">
+                            <dl className="divide-y">
+                              <div className="grid grid-cols-2 py-3 first:pt-0 last:pb-0">
+                                <dt className="text-sm font-medium text-muted-foreground">Current Balance</dt>
+                                <dd className="text-sm font-semibold text-right">
+                                  <span className="text-primary">${(user.creditBalance / 10000).toFixed(2)}</span>
+                                  <span className="text-xs text-muted-foreground ml-1">USD</span>
+                                </dd>
+                              </div>
+                              <div className="grid grid-cols-2 py-3">
+                                <dt className="text-sm font-medium text-muted-foreground">Credits Available</dt>
+                                <dd className="text-sm font-semibold text-right">{user.creditBalance.toLocaleString()}</dd>
+                              </div>
+                              <div className="grid grid-cols-2 py-3">
+                                <dt className="text-sm font-medium text-muted-foreground">Account Created</dt>
+                                <dd className="text-sm font-medium text-right">{new Date(user.createdAt).toLocaleDateString()}</dd>
+                              </div>
+                              <div className="grid grid-cols-2 py-3">
+                                <dt className="text-sm font-medium text-muted-foreground">Last Updated</dt>
+                                <dd className="text-sm font-medium text-right">{new Date(user.updatedAt).toLocaleDateString()}</dd>
+                              </div>
+                            </dl>
+                          </div>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="flex justify-end mt-6">
-                      <Button variant="outline" className="mr-2" disabled>
-                        Cancel
-                      </Button>
-                      <Button disabled>
-                        Save Changes
-                      </Button>
+                    <div className="mt-6 border rounded-lg p-4 bg-muted/30">
+                      <div className="flex flex-col space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium">Account Management Options</h4>
+                            <p className="text-sm text-muted-foreground">Additional settings and account actions</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" className="flex items-center gap-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9"></path>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                              </svg>
+                              <span>Contact Support</span>
+                            </Button>
+                            <Button variant="default" size="sm" disabled className="flex items-center gap-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20V10"></path>
+                                <path d="M18 20V4"></path>
+                                <path d="M6 20v-4"></path>
+                              </svg>
+                              <span>Save Preferences</span>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

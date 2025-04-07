@@ -1007,7 +1007,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue without RAG context if there's an error
       }
       
-      // Create model-specific system message
+      // COMMENTED OUT: Original, detailed system prompt
+      /* 
       let systemContent = `You are GloriaMundo, an AI assistant powered by ${modelConfig.apiProvider}'s ${modelConfig.modelName} model. Your purpose is to provide accurate, thorough, and helpful information in response to user queries.
 
 Core Values:
@@ -1033,11 +1034,6 @@ Response Guidelines:
 - Identify underlying assumptions and logical implications
 - Clarify ambiguities and potential misunderstandings`;
 
-      // Add RAG context to system message if available
-      if (ragContext) {
-        systemContent += `\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to enhance your response when relevant.`;
-      }
-
       systemContent += `\n\nTone:
 Your communication style should be:
 - Clear and concise
@@ -1050,14 +1046,21 @@ Your communication style should be:
 Remember that your purpose is to provide accurate, helpful information that addresses the user's query directly.
 
 Format your responses using markdown for better readability and organization.`;
-
+      */
+      
       // Initialize the messages array
-      const messages: ApiMessage[] = [
-        {
+      const messages: ApiMessage[] = [];
+      
+      // Only include system message if RAG context is available
+      let systemContent = "";
+      if (ragContext) {
+        systemContent = `You are an AI assistant responding to a user query. Use the following document context provided below to answer the query. Prioritize information found in the context. If the context does not contain the answer, state that.\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to answer the query.`;
+        
+        messages.push({
           role: "system",
           content: systemContent,
-        }
-      ];
+        });
+      }
       
       // Ensure proper alternation of user and assistant messages
       let lastRole = "assistant"; // Start with assistant so first user message can be added
@@ -1452,7 +1455,8 @@ Format your responses using markdown for better readability and organization.`;
         console.log("Using document context provided by client");
       }
 
-      // Create model-specific system message
+      // COMMENTED OUT: Original, detailed system prompt
+      /*
       let systemContent = `You are GloriaMundo, an AI assistant powered by ${modelConfig.apiProvider}'s ${modelConfig.modelName} model. Your purpose is to provide accurate, thorough, and helpful information in response to user queries.
 
 Core Values:
@@ -1505,22 +1509,25 @@ Your communication style should be:
 Remember that your purpose is to provide accurate, helpful information that addresses the user's query directly.
 
 Format your responses using markdown for better readability and organization.`;
-
-      // Add RAG context to system message if available
-      if (ragContext) {
-        systemContent += `\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to enhance your response when relevant.`;
-      }
+      */
 
       // Initialize the messages array with proper typing for both text and multimodal messages
       const messages: ApiMessage[] = [];
       
-      // Only add system message if we're not using images with multimodal model
-      // Groq's llama-3.2-90b-vision-preview doesn't support system messages with images
-      if (!(modelType === "multimodal" && image)) {
-        messages.push({
-          role: "system",
-          content: systemContent,
-        });
+      // Only include system message if RAG context is available
+      let systemContent = "";
+      if (ragContext) {
+        // Use minimal system prompt to focus on RAG context
+        systemContent = `You are an AI assistant responding to a user query. Use the following document context provided below to answer the query. Prioritize information found in the context. If the context does not contain the answer, state that.\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to answer the query.`;
+        
+        // Only add system message if we're not using images with multimodal model
+        // Groq's llama-3.2-90b-vision-preview doesn't support system messages with images
+        if (!(modelType === "multimodal" && image)) {
+          messages.push({
+            role: "system",
+            content: systemContent,
+          });
+        }
       }
       
       // Special handling for Perplexity's search model which requires strict user/assistant alternation
