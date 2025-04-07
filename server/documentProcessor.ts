@@ -33,13 +33,73 @@ const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379;
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
 
-// Redis is not required in this environment, so we'll use a simple in-memory processing approach
-// This is a simplified version that doesn't depend on Redis/BullMQ
-console.log('Using in-memory document processing (Redis not available)');
+// Initialize Redis connection to Azure Cache for Redis
+const redisConnectionOptions = {
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  password: process.env.REDIS_PASSWORD || '',
+  maxRetriesPerRequest: null, // Required for BullMQ
+  enableReadyCheck: false, // Recommended for some cloud Redis providers
+};
 
-// Simple implementation of UUID for job IDs
+// Helper function to generate job IDs for backward compatibility
 function generateJobId(): string {
   return 'job-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+// Flags and variables to track Redis availability and BullMQ components
+let redisAvailable = false;
+let redisClient: IORedis | null = null;
+let documentProcessingQueue: Queue | null = null;
+let documentQueueEvents: QueueEvents | null = null;
+
+// Initialize worker variable separately to avoid redeclaration issues
+let documentProcessingWorker: Worker | null = null;
+
+// Try to connect to Redis and set up BullMQ
+try {
+  // Create Redis client
+  redisClient = new IORedis(redisConnectionOptions);
+  
+  // Set up error handling for Redis connection
+  redisClient.on('error', (err) => {
+    console.error('Redis connection error:', err);
+    redisAvailable = false;
+  });
+  
+  redisClient.on('connect', () => {
+    console.log('Successfully connected to Redis');
+    redisAvailable = true;
+  });
+  
+  // Initialize BullMQ queue for document processing
+  documentProcessingQueue = new Queue('document-processing', {
+    connection: redisConnectionOptions,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+      removeOnComplete: true, // Remove jobs after completion
+      removeOnFail: 100, // Keep the last 100 failed jobs
+    }
+  });
+  
+  // Set up queue events for logging
+  documentQueueEvents = new QueueEvents('document-processing', { connection: redisConnectionOptions });
+  documentQueueEvents.on('completed', ({ jobId }) => {
+    console.log(`Job ${jobId} completed successfully`);
+  });
+  documentQueueEvents.on('failed', ({ jobId, failedReason }) => {
+    console.error(`Job ${jobId} failed with reason: ${failedReason}`);
+  });
+  
+  console.log('BullMQ queue and events initialized');
+} catch (redisError) {
+  console.error('Failed to initialize Redis/BullMQ:', redisError);
+  console.log('Falling back to setTimeout for background processing');
+  redisAvailable = false;
 }
 
 /**
@@ -316,7 +376,131 @@ const azureOpenAI = new AzureOpenAI({
 let mongoClient: MongoClient | null = null;
 let isMongoConnected = false;
 
-// No Redis/BullMQ worker or event handling needed for the background processing approach
+// Initialize BullMQ worker for processing document jobs only if Redis is available
+try {
+  if (redisClient) {
+    documentProcessingWorker = new Worker('document-processing', async (job) => {
+      if (!job) return;
+      
+      try {
+        // Handle different job types
+        const jobName = job.name;
+        
+        if (jobName === 'process-document') {
+          // Process a full document
+          const { documentId, text, fileName, fileType, conversationId, userId } = job.data;
+          await processDocumentInBackground({
+            documentId,
+            text,
+            fileName,
+            fileType,
+            conversationId,
+            userId
+          });
+          console.log(`Worker completed job ${job.id} for document ${documentId}`);
+          return { success: true, documentId, jobType: 'document' };
+        } 
+        else if (jobName === 'process-embeddings') {
+          // Process embeddings for chunks
+          const { documentId, chunks, isLargeDocument, totalChunks } = job.data;
+          
+          if (!chunks || !chunks.length) {
+            throw new Error('No chunks provided for embedding generation');
+          }
+          
+          console.log(`Worker job ${job.id}: Generating embeddings for ${chunks.length} chunks (out of ${totalChunks} total) for document ${documentId}`);
+          
+          // Get MongoDB connection if available
+          let mongoChunksCollection = null;
+          if (MONGODB_URI) {
+            try {
+              const mongoClient = await getMongoClient();
+              const mongoDb = mongoClient.db(MONGODB_DB_NAME);
+              mongoChunksCollection = mongoDb.collection(MONGODB_CHUNKS_COLLECTION);
+            } catch (mongoError) {
+              console.error(`Job ${job.id}: Error connecting to MongoDB:`, mongoError);
+            }
+          }
+          
+          // Use larger batch size for embedding processing
+          const batchSize = 10;
+          for (let i = 0; i < chunks.length; i += batchSize) {
+            const batch = chunks.slice(i, i + batchSize);
+            
+            // Process embeddings in parallel for this batch
+            await Promise.all(batch.map(async (chunk: { id: number; content: string }) => {
+              try {
+                const embedding = await generateEmbedding(chunk.content);
+                
+                // Update embedding in primary storage
+                await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+                
+                // Update embedding in MongoDB if available
+                if (mongoChunksCollection) {
+                  try {
+                    await mongoChunksCollection.updateOne(
+                      { id: chunk.id.toString() },
+                      { $set: { embedding } }
+                    );
+                  } catch (mongoUpdateError) {
+                    console.error(`Job ${job.id}: Error updating MongoDB embedding for chunk ${chunk.id}:`, mongoUpdateError);
+                  }
+                }
+              } catch (error) {
+                console.error(`Job ${job.id}: Error generating embedding for chunk ${chunk.id}:`, error);
+              }
+            }));
+            
+            // Log progress less frequently
+            if (i % (batchSize * 2) === 0 || i + batchSize >= chunks.length) {
+              console.log(`Job ${job.id}: Embeddings for ${Math.min(i + batchSize, chunks.length)}/${chunks.length} chunks`);
+            }
+          }
+          
+          console.log(`Worker job ${job.id}: Embedding generation complete for document ${documentId}`);
+          return { success: true, documentId, jobType: 'embeddings' };
+        }
+        else {
+          throw new Error(`Unknown job name: ${jobName}`);
+        }
+      } catch (error) {
+        console.error(`Worker failed job ${job?.id}:`, error);
+        throw error; // Rethrow to mark the job as failed
+      }
+    }, { 
+      connection: redisConnectionOptions,
+      // Optional: Add concurrency for processing multiple documents simultaneously
+      concurrency: 2
+    });
+
+    // Add event handlers for worker
+    documentProcessingWorker.on('completed', (job) => {
+      if (job) {
+        console.log(`Worker: Job ${job.id} completed successfully`);
+      } else {
+        console.log('Worker: Job completed successfully (no job ID)');
+      }
+    });
+
+    documentProcessingWorker.on('failed', (job, err) => {
+      if (job) {
+        console.error(`Worker: Job ${job.id} failed with error:`, err);
+      } else {
+        console.error('Worker: Job failed with error (no job ID):', err);
+      }
+    });
+
+    documentProcessingWorker.on('error', (err) => {
+      console.error('Worker error:', err);
+    });
+    
+    console.log('BullMQ worker initialized successfully');
+  } else {
+    console.log('Redis client not available, BullMQ worker not initialized');
+  }
+} catch (workerError) {
+  console.error('Error initializing BullMQ worker:', workerError);
+}
 
 async function getMongoClient(): Promise<MongoClient> {
   if (!mongoClient) {
@@ -369,29 +553,83 @@ export async function processDocument(params: {
     }
   });
   
-  // Process the document in the background using setTimeout
-  // This allows the HTTP request to return immediately while processing continues
-  setTimeout(() => {
-    processDocumentInBackground({
-      documentId: document.id,
-      text,
-      fileName,
-      fileType,
-      conversationId,
-      userId
-    }).catch(error => {
-      console.error(`Background processing failed for document ${document.id}:`, error);
-      // Update document with error status
-      storage.updateDocument(document.id, {
-        metadata: {
-          processingStatus: 'error',
-          errorMessage: String(error).substring(0, 255) // Truncate to avoid too long strings
+  // Use BullMQ if Redis is available, otherwise fall back to setTimeout
+  if (redisAvailable && documentProcessingQueue) {
+    // Process the document in the background using BullMQ
+    try {
+      // Add job to the queue
+      await documentProcessingQueue.add('process-document', {
+        documentId: document.id,
+        text,
+        fileName,
+        fileType,
+        conversationId,
+        userId
+      }, {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000
         }
-      }).catch(updateError => {
-        console.error(`Failed to update error status for document ${document.id}:`, updateError);
       });
-    });
-  }, 100); // Small delay to ensure the response has been sent
+      
+      console.log(`Document ${document.id} (${fileName}) added to BullMQ queue for background processing`);
+    } catch (queueError) {
+      console.error(`Failed to add document ${document.id} to processing queue, falling back to setTimeout:`, queueError);
+      
+      // Fall back to setTimeout if queue fails
+      setTimeout(() => {
+        processDocumentInBackground({
+          documentId: document.id,
+          text,
+          fileName,
+          fileType,
+          conversationId,
+          userId
+        }).catch(error => {
+          console.error(`Background processing failed for document ${document.id}:`, error);
+          // Update document with error status
+          storage.updateDocument(document.id, {
+            metadata: {
+              processingStatus: 'error',
+              errorMessage: String(error).substring(0, 255) // Truncate to avoid too long strings
+            }
+          }).catch(updateError => {
+            console.error(`Failed to update error status for document ${document.id}:`, updateError);
+          });
+        });
+      }, 100); // Small delay to ensure the response has been sent
+      
+      console.log(`Document ${document.id} (${fileName}) scheduled for background processing with setTimeout (Redis unavailable)`);
+    }
+  } else {
+    // Redis is not available, use setTimeout as fallback
+    console.log(`Redis not available for document ${document.id}, using setTimeout fallback`);
+    
+    setTimeout(() => {
+      processDocumentInBackground({
+        documentId: document.id,
+        text,
+        fileName,
+        fileType,
+        conversationId,
+        userId
+      }).catch(error => {
+        console.error(`Background processing failed for document ${document.id}:`, error);
+        // Update document with error status
+        storage.updateDocument(document.id, {
+          metadata: {
+            processingStatus: 'error',
+            errorMessage: String(error).substring(0, 255) // Truncate to avoid too long strings
+          }
+        }).catch(updateError => {
+          console.error(`Failed to update error status for document ${document.id}:`, updateError);
+        });
+      });
+    }, 100); // Small delay to ensure the response has been sent
+    
+    console.log(`Document ${document.id} (${fileName}) scheduled for background processing with setTimeout`);
+  }
   
   console.log(`Document ${document.id} (${fileName}) queued for background processing`);
   console.timeEnd('document-processing');
@@ -510,57 +748,109 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
   if (documentChunks.length > 20 || isLargeDocument) {
     console.log(`Document has ${documentChunks.length} chunks - processing embeddings in background`);
     
-    // Start background processing with a small delay to allow request to return
-    setTimeout(() => {
-      (async () => {
-        try {
-          // Only process a subset of chunks for large documents to reduce processing time
-          const maxEmbeddingChunks = isLargeDocument ? 30 : Math.min(100, documentChunks.length);
-          const chunksToEmbed = documentChunks.slice(0, maxEmbeddingChunks);
-          
-          console.log(`Background process: generating embeddings for ${chunksToEmbed.length} chunks (out of ${documentChunks.length} total)`);
-          
-          // Use larger batch size for background processing
-          const batchSize = 10;
-          for (let i = 0; i < chunksToEmbed.length; i += batchSize) {
-            const batch = chunksToEmbed.slice(i, i + batchSize);
+    // For background processing, use BullMQ if Redis is available, otherwise use setTimeout
+    try {
+      // Only process a subset of chunks for large documents to reduce processing time
+      const maxEmbeddingChunks = isLargeDocument ? 30 : Math.min(100, documentChunks.length);
+      const chunksToEmbed = documentChunks.slice(0, maxEmbeddingChunks);
+      
+      console.log(`Adding embedding generation job for ${chunksToEmbed.length} chunks (out of ${documentChunks.length} total)`);
+      
+      // Prepare job data
+      const jobData = {
+        documentId: document.id,
+        chunks: chunksToEmbed.map(chunk => ({
+          id: chunk.id,
+          content: chunk.content
+        })),
+        isLargeDocument,
+        totalChunks: documentChunks.length
+      };
+      
+      if (redisAvailable && documentProcessingQueue) {
+        // Add job to BullMQ queue for background processing
+        await documentProcessingQueue.add('process-embeddings', jobData, {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000
+          },
+          // Lower priority than document processing jobs (higher number = lower priority)
+          priority: 5 
+        });
+        
+        console.log(`Embedding generation for document ${document.id} queued in BullMQ`);
+      } else {
+        // Redis not available, use setTimeout as fallback
+        console.log(`Redis not available, using setTimeout for embedding generation for document ${document.id}`);
+        
+        setTimeout(async () => {
+          try {
+            // Process embeddings manually since we can't use the worker
+            const { documentId, chunks } = jobData;
+            console.log(`Processing embeddings via setTimeout for document ${documentId}`);
             
-            // Process embeddings in parallel for this batch
-            await Promise.all(batch.map(async (chunk) => {
+            // Get MongoDB connection if available
+            let mongoChunksCollection = null;
+            if (MONGODB_URI) {
               try {
-                const embedding = await generateEmbedding(chunk.content);
-                
-                // Update embedding in primary storage
-                await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
-                
-                // Update embedding in MongoDB if available
-                if (mongoChunksCollection) {
-                  try {
-                    await mongoChunksCollection.updateOne(
-                      { id: chunk.id.toString() },
-                      { $set: { embedding } }
-                    );
-                  } catch (mongoUpdateError) {
-                    console.error(`Error updating MongoDB embedding for chunk ${chunk.id}:`, mongoUpdateError);
-                  }
-                }
-              } catch (error) {
-                console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
+                const mongoClient = await getMongoClient();
+                const mongoDb = mongoClient.db(MONGODB_DB_NAME);
+                mongoChunksCollection = mongoDb.collection(MONGODB_CHUNKS_COLLECTION);
+              } catch (mongoError) {
+                console.error(`Error connecting to MongoDB:`, mongoError);
               }
-            }));
-            
-            // Log progress less frequently
-            if (i % (batchSize * 2) === 0 || i + batchSize >= chunksToEmbed.length) {
-              console.log(`Background process: embeddings for ${Math.min(i + batchSize, chunksToEmbed.length)}/${chunksToEmbed.length} chunks`);
             }
+            
+            // Use larger batch size for embedding processing
+            const batchSize = 10;
+            for (let i = 0; i < chunks.length; i += batchSize) {
+              const batch = chunks.slice(i, i + batchSize);
+              
+              // Process embeddings in parallel for this batch
+              await Promise.all(batch.map(async (chunk: { id: number; content: string }) => {
+                try {
+                  const embedding = await generateEmbedding(chunk.content);
+                  
+                  // Update embedding in primary storage
+                  await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
+                  
+                  // Update embedding in MongoDB if available
+                  if (mongoChunksCollection) {
+                    try {
+                      await mongoChunksCollection.updateOne(
+                        { id: chunk.id.toString() },
+                        { $set: { embedding } }
+                      );
+                    } catch (mongoUpdateError) {
+                      console.error(`Error updating MongoDB embedding for chunk ${chunk.id}:`, mongoUpdateError);
+                    }
+                  }
+                } catch (error) {
+                  console.error(`Error generating embedding for chunk ${chunk.id}:`, error);
+                }
+              }));
+              
+              // Log progress less frequently
+              if (i % (batchSize * 2) === 0 || i + batchSize >= chunks.length) {
+                console.log(`Embeddings for ${Math.min(i + batchSize, chunks.length)}/${chunks.length} chunks`);
+              }
+            }
+            
+            console.log(`Embedding generation complete for document ${documentId}`);
+          } catch (error) {
+            console.error(`Error in setTimeout embedding generation:`, error);
           }
-          
-          console.log(`Background embedding generation complete for document ${document.id}`);
-        } catch (bgError) {
-          console.error(`Background embedding generation failed:`, bgError);
-        }
-      })();
-    }, 100);
+        }, 500); // Give it a small delay after the current task
+        
+        console.log(`Embedding generation for document ${document.id} scheduled with setTimeout`);
+      }
+    } catch (error) {
+      console.error(`Failed to schedule embedding generation for document ${document.id}:`, error);
+      
+      // If we can't queue it, log the error but don't fail the entire process
+      console.log("Embedding generation will be limited for this document");
+    }
   } else {
     // For smaller documents, process embeddings immediately
     console.log(`Document has ${documentChunks.length} chunks - processing embeddings immediately`);
