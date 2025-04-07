@@ -381,14 +381,7 @@ const getModelPricing = (modelId: string) => {
   };
 };
 
-/**
- * Generate a conversation title using OpenRouter
- * This uses the smallest/cheapest available model to minimize token costs
- * @param userMessage First user message in the conversation
- * @param aiResponse First AI response in the conversation
- * @param conversationId ID of the conversation to update
- * @returns Generated title
- */
+/* Model pricing configuration */
 // Default model pricing for our standard models
 const DEFAULT_MODEL_PRICING = {
   reasoning: {
