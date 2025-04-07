@@ -3,10 +3,13 @@ import {
   conversations, type Conversation, type InsertConversation,
   messages, type Message, type InsertMessage,
   documents, type Document, type InsertDocument,
-  documentChunks, type DocumentChunk, type InsertDocumentChunk
+  documentChunks, type DocumentChunk, type InsertDocumentChunk,
+  paymentTransactions, type PaymentTransaction, type InsertPaymentTransaction,
+  usageLogs, type UsageLog, type InsertUsageLog,
+  userSettings, type UserSettings, type InsertUserSettings
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, inArray, isNull } from "drizzle-orm";
+import { eq, asc, inArray, isNull, sql } from "drizzle-orm";
 
 // Define the user presets interface
 export interface UserPresets {
@@ -56,6 +59,22 @@ export interface IStorage {
   createDocumentChunk(chunk: Partial<InsertDocumentChunk>): Promise<DocumentChunk>;
   updateDocumentChunkEmbedding(id: number, embedding: string): Promise<DocumentChunk | undefined>;
   searchSimilarChunks(embedding: string, limit?: number): Promise<DocumentChunk[]>;
+  
+  // Payment transaction methods
+  createPaymentTransaction(transaction: Partial<InsertPaymentTransaction>): Promise<PaymentTransaction>;
+  getPaymentTransactionsByUserId(userId: number): Promise<PaymentTransaction[]>;
+  getPaymentTransactionById(id: number): Promise<PaymentTransaction | undefined>;
+  updatePaymentTransactionStatus(id: number, status: string): Promise<PaymentTransaction | undefined>;
+  
+  // Usage log methods
+  createUsageLog(log: Partial<InsertUsageLog>): Promise<UsageLog>;
+  getUsageLogsByUserId(userId: number): Promise<UsageLog[]>;
+  getUsageLogsByTimeRange(userId: number, startDate: Date, endDate: Date): Promise<UsageLog[]>;
+  getUsageStatsByModel(userId: number, startDate: Date, endDate: Date): Promise<{modelId: string, totalCredits: number, totalTokens: number}[]>;
+  
+  // User settings methods
+  getUserSettings(userId: number): Promise<UserSettings | undefined>;
+  createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
 }
 
 export class MemStorage implements IStorage {
@@ -920,6 +939,398 @@ export class MemStorage implements IStorage {
     } catch (error) {
       console.error('Error searching similar chunks:', error);
       return [];
+    }
+  }
+  
+  // Payment transaction methods
+  private paymentTransactions: Map<number, PaymentTransaction> = new Map();
+  private paymentTransactionId: number = 1;
+  
+  async createPaymentTransaction(transaction: Partial<InsertPaymentTransaction>): Promise<PaymentTransaction> {
+    const now = new Date();
+    const id = this.paymentTransactionId++;
+    
+    try {
+      // Try to create in database first
+      const result = await db.insert(paymentTransactions)
+        .values({
+          userId: transaction.userId!,
+          paypalOrderId: transaction.paypalOrderId ?? null,
+          paypalCaptureId: transaction.paypalCaptureId ?? null,
+          packageId: transaction.packageId ?? null,
+          amount: transaction.amount!,
+          fee: transaction.fee!,
+          credits: transaction.credits!,
+          status: transaction.status!,
+          metadata: transaction.metadata ?? null,
+          createdAt: now
+        })
+        .returning();
+      
+      if (result.length > 0) {
+        console.log('Created payment transaction in database:', result[0]);
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Database error when creating payment transaction:', error);
+    }
+    
+    // Fallback to in-memory storage
+    const newTransaction: PaymentTransaction = {
+      id,
+      userId: transaction.userId!,
+      paypalOrderId: transaction.paypalOrderId ?? null,
+      paypalCaptureId: transaction.paypalCaptureId ?? null,
+      packageId: transaction.packageId ?? null,
+      amount: transaction.amount!,
+      fee: transaction.fee!,
+      credits: transaction.credits!,
+      status: transaction.status!,
+      metadata: transaction.metadata ?? null,
+      createdAt: now
+    };
+    
+    this.paymentTransactions.set(id, newTransaction);
+    return newTransaction;
+  }
+  
+  async getPaymentTransactionsByUserId(userId: number): Promise<PaymentTransaction[]> {
+    try {
+      // Try database first
+      const transactionsFromDb = await db.select().from(paymentTransactions)
+        .where(eq(paymentTransactions.userId, userId))
+        .orderBy(paymentTransactions.createdAt);
+      
+      if (transactionsFromDb.length > 0) {
+        // Sort by created date in descending order
+        return transactionsFromDb.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      }
+    } catch (error) {
+      console.error(`Database error when getting payment transactions for user ${userId}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return Array.from(this.paymentTransactions.values())
+      .filter(transaction => transaction.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async getPaymentTransactionById(id: number): Promise<PaymentTransaction | undefined> {
+    try {
+      // Try database first
+      const transactionFromDb = await db.select().from(paymentTransactions)
+        .where(eq(paymentTransactions.id, id))
+        .limit(1);
+      
+      if (transactionFromDb.length > 0) {
+        return transactionFromDb[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting payment transaction ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return this.paymentTransactions.get(id);
+  }
+  
+  async updatePaymentTransactionStatus(id: number, status: string): Promise<PaymentTransaction | undefined> {
+    try {
+      // Try to update in database first
+      const result = await db.update(paymentTransactions)
+        .set({ status })
+        .where(eq(paymentTransactions.id, id))
+        .returning();
+      
+      if (result.length > 0) {
+        console.log(`Updated payment transaction ${id} status to "${status}" in database`);
+        return result[0];
+      }
+    } catch (error) {
+      console.error(`Database error when updating payment transaction ${id} status:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    const transaction = this.paymentTransactions.get(id);
+    
+    if (!transaction) {
+      return undefined;
+    }
+    
+    const updated = {
+      ...transaction,
+      status
+    };
+    
+    this.paymentTransactions.set(id, updated);
+    console.log(`Updated payment transaction ${id} status to "${status}" in memory`);
+    return updated;
+  }
+  
+  // Usage log methods
+  private usageLogs: Map<number, UsageLog> = new Map();
+  private usageLogId: number = 1;
+  
+  async createUsageLog(log: Partial<InsertUsageLog>): Promise<UsageLog> {
+    const now = new Date();
+    const id = this.usageLogId++;
+    
+    try {
+      // Try to create in database first
+      const result = await db.insert(usageLogs)
+        .values({
+          userId: log.userId!,
+          messageId: log.messageId ?? null,
+          modelId: log.modelId!,
+          promptTokens: log.promptTokens!,
+          completionTokens: log.completionTokens!,
+          imageCount: log.imageCount ?? 0,
+          creditsUsed: log.creditsUsed!,
+          metadata: log.metadata ?? null,
+          createdAt: now
+        })
+        .returning();
+      
+      if (result.length > 0) {
+        console.log('Created usage log in database:', result[0]);
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Database error when creating usage log:', error);
+    }
+    
+    // Fallback to in-memory storage
+    const newLog: UsageLog = {
+      id,
+      userId: log.userId!,
+      messageId: log.messageId ?? null,
+      modelId: log.modelId!,
+      promptTokens: log.promptTokens!,
+      completionTokens: log.completionTokens!,
+      imageCount: log.imageCount ?? 0,
+      creditsUsed: log.creditsUsed!,
+      metadata: log.metadata ?? null,
+      createdAt: now
+    };
+    
+    this.usageLogs.set(id, newLog);
+    return newLog;
+  }
+  
+  async getUsageLogsByUserId(userId: number): Promise<UsageLog[]> {
+    try {
+      // Try database first
+      const logsFromDb = await db.select().from(usageLogs)
+        .where(eq(usageLogs.userId, userId))
+        .orderBy(usageLogs.createdAt);
+      
+      if (logsFromDb.length > 0) {
+        // Sort by created date in descending order
+        return logsFromDb.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      }
+    } catch (error) {
+      console.error(`Database error when getting usage logs for user ${userId}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return Array.from(this.usageLogs.values())
+      .filter(log => log.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async getUsageLogsByTimeRange(userId: number, startDate: Date, endDate: Date): Promise<UsageLog[]> {
+    try {
+      // Try database first
+      const logsFromDb = await db.select().from(usageLogs)
+        .where(eq(usageLogs.userId, userId))
+        .where(
+          sql`${usageLogs.createdAt} >= ${startDate.toISOString()} AND ${usageLogs.createdAt} <= ${endDate.toISOString()}`
+        );
+      
+      if (logsFromDb.length > 0) {
+        return logsFromDb.sort((a, b) => 
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      }
+    } catch (error) {
+      console.error(`Database error when getting usage logs for user ${userId} in time range:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return Array.from(this.usageLogs.values())
+      .filter(log => 
+        log.userId === userId && 
+        new Date(log.createdAt) >= startDate && 
+        new Date(log.createdAt) <= endDate
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+  
+  async getUsageStatsByModel(userId: number, startDate: Date, endDate: Date): Promise<{modelId: string, totalCredits: number, totalTokens: number}[]> {
+    try {
+      // Try database first - this would be a more complex query in SQL
+      const logsFromDb = await db.select().from(usageLogs)
+        .where(eq(usageLogs.userId, userId))
+        .where(
+          sql`${usageLogs.createdAt} >= ${startDate.toISOString()} AND ${usageLogs.createdAt} <= ${endDate.toISOString()}`
+        );
+      
+      if (logsFromDb.length > 0) {
+        // Group and aggregate the logs by model ID
+        const modelStats = new Map<string, {totalCredits: number, totalTokens: number}>();
+        
+        logsFromDb.forEach(log => {
+          const stats = modelStats.get(log.modelId) || {totalCredits: 0, totalTokens: 0};
+          stats.totalCredits += log.creditsUsed;
+          stats.totalTokens += (log.promptTokens + log.completionTokens);
+          modelStats.set(log.modelId, stats);
+        });
+        
+        // Convert to array of objects
+        return Array.from(modelStats.entries()).map(([modelId, stats]) => ({
+          modelId,
+          totalCredits: stats.totalCredits,
+          totalTokens: stats.totalTokens
+        }));
+      }
+    } catch (error) {
+      console.error(`Database error when getting usage stats for user ${userId}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    const logs = Array.from(this.usageLogs.values())
+      .filter(log => 
+        log.userId === userId && 
+        new Date(log.createdAt) >= startDate && 
+        new Date(log.createdAt) <= endDate
+      );
+    
+    // Group and aggregate the logs by model ID
+    const modelStats = new Map<string, {totalCredits: number, totalTokens: number}>();
+    
+    logs.forEach(log => {
+      const stats = modelStats.get(log.modelId) || {totalCredits: 0, totalTokens: 0};
+      stats.totalCredits += log.creditsUsed;
+      stats.totalTokens += (log.promptTokens + log.completionTokens);
+      modelStats.set(log.modelId, stats);
+    });
+    
+    // Convert to array of objects
+    return Array.from(modelStats.entries()).map(([modelId, stats]) => ({
+      modelId,
+      totalCredits: stats.totalCredits,
+      totalTokens: stats.totalTokens
+    }));
+  }
+  
+  // User settings methods
+  private userSettings: Map<number, UserSettings> = new Map();
+  private userSettingsId: number = 1;
+  
+  async getUserSettings(userId: number): Promise<UserSettings | undefined> {
+    try {
+      // Try database first
+      const settingsFromDb = await db.select().from(userSettings)
+        .where(eq(userSettings.userId, userId))
+        .limit(1);
+      
+      if (settingsFromDb.length > 0) {
+        return settingsFromDb[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting user settings for user ${userId}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    return Array.from(this.userSettings.values())
+      .find(setting => setting.userId === userId);
+  }
+  
+  async createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings> {
+    const now = new Date();
+    
+    if (!settings.userId) {
+      throw new Error("User ID is required for user settings");
+    }
+    
+    try {
+      // Check if settings exist for this user
+      const existingSettings = await db.select().from(userSettings)
+        .where(eq(userSettings.userId, settings.userId))
+        .limit(1);
+      
+      if (existingSettings.length > 0) {
+        // Update existing settings
+        const result = await db.update(userSettings)
+          .set({
+            lowBalanceThreshold: settings.lowBalanceThreshold ?? existingSettings[0].lowBalanceThreshold,
+            emailNotificationsEnabled: settings.emailNotificationsEnabled ?? existingSettings[0].emailNotificationsEnabled,
+            updatedAt: now
+          })
+          .where(eq(userSettings.userId, settings.userId))
+          .returning();
+        
+        if (result.length > 0) {
+          console.log(`Updated user settings for user ${settings.userId} in database`);
+          return result[0];
+        }
+      } else {
+        // Create new settings
+        const result = await db.insert(userSettings)
+          .values({
+            userId: settings.userId,
+            lowBalanceThreshold: settings.lowBalanceThreshold ?? 5000,
+            emailNotificationsEnabled: settings.emailNotificationsEnabled ?? true,
+            createdAt: now,
+            updatedAt: now
+          })
+          .returning();
+        
+        if (result.length > 0) {
+          console.log(`Created user settings for user ${settings.userId} in database`);
+          return result[0];
+        }
+      }
+    } catch (error) {
+      console.error(`Database error when creating/updating user settings for user ${settings.userId}:`, error);
+    }
+    
+    // Fallback to in-memory storage
+    // Check if settings exist for this user
+    const existingSettings = Array.from(this.userSettings.values())
+      .find(setting => setting.userId === settings.userId);
+    
+    if (existingSettings) {
+      // Update existing settings
+      const updated: UserSettings = {
+        ...existingSettings,
+        lowBalanceThreshold: settings.lowBalanceThreshold ?? existingSettings.lowBalanceThreshold,
+        emailNotificationsEnabled: settings.emailNotificationsEnabled ?? existingSettings.emailNotificationsEnabled,
+        updatedAt: now
+      };
+      
+      this.userSettings.set(existingSettings.id, updated);
+      console.log(`Updated user settings for user ${settings.userId} in memory`);
+      return updated;
+    } else {
+      // Create new settings
+      const id = this.userSettingsId++;
+      
+      const newSettings: UserSettings = {
+        id,
+        userId: settings.userId,
+        lowBalanceThreshold: settings.lowBalanceThreshold ?? 5000,
+        emailNotificationsEnabled: settings.emailNotificationsEnabled ?? true,
+        createdAt: now,
+        updatedAt: now
+      };
+      
+      this.userSettings.set(id, newSettings);
+      console.log(`Created user settings for user ${settings.userId} in memory`);
+      return newSettings;
     }
   }
 }

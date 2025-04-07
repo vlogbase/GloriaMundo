@@ -2308,6 +2308,130 @@ Format your responses using markdown for better readability and organization.`;
       res.status(500).json({ message: "Failed to clear conversations" });
     }
   });
+  
+  // Account Management Routes
+  
+  // Get payment transaction history
+  app.get("/api/account/transactions", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const transactions = await storage.getPaymentTransactionsByUserId(userId);
+      
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching payment transactions:", error);
+      res.status(500).json({ message: "Failed to fetch payment transactions" });
+    }
+  });
+  
+  // Get usage history
+  app.get("/api/account/usage", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const usageLogs = await storage.getUsageLogsByUserId(userId);
+      
+      res.json(usageLogs);
+    } catch (error) {
+      console.error("Error fetching usage logs:", error);
+      res.status(500).json({ message: "Failed to fetch usage logs" });
+    }
+  });
+  
+  // Get usage statistics for a time period
+  app.get("/api/account/usage/stats", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      // Default to last 30 days if no dates provided
+      const endDate = new Date();
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 30);
+      
+      // Parse date range from query params if provided
+      if (req.query.startDate && req.query.endDate) {
+        const queryStartDate = new Date(req.query.startDate as string);
+        const queryEndDate = new Date(req.query.endDate as string);
+        
+        // Validate dates
+        if (!isNaN(queryStartDate.getTime()) && !isNaN(queryEndDate.getTime())) {
+          startDate.setTime(queryStartDate.getTime());
+          endDate.setTime(queryEndDate.getTime());
+        }
+      }
+      
+      const stats = await storage.getUsageStatsByModel(userId, startDate, endDate);
+      
+      // Extend with cost in dollars for easier display
+      const statsWithDollars = stats.map(stat => ({
+        ...stat,
+        totalCreditsDollars: (stat.totalCredits / 10000).toFixed(4) // Convert 10000 credits = $1
+      }));
+      
+      res.json({
+        stats: statsWithDollars,
+        period: {
+          startDate,
+          endDate
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching usage statistics:", error);
+      res.status(500).json({ message: "Failed to fetch usage statistics" });
+    }
+  });
+  
+  // Get or create user settings
+  app.get("/api/account/settings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      let settings = await storage.getUserSettings(userId);
+      
+      // If settings don't exist, create default settings
+      if (!settings) {
+        settings = await storage.createOrUpdateUserSettings({
+          userId,
+          lowBalanceThreshold: 5000, // Default 5000 credits ($0.50)
+          emailNotificationsEnabled: true
+        });
+      }
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching user settings:", error);
+      res.status(500).json({ message: "Failed to fetch user settings" });
+    }
+  });
+  
+  // Update user settings
+  app.put("/api/account/settings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Define schema for settings validation
+      const settingsSchema = z.object({
+        lowBalanceThreshold: z.number().min(0).optional(),
+        emailNotificationsEnabled: z.boolean().optional()
+      });
+      
+      const validationResult = settingsSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid settings data", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const updatedSettings = await storage.createOrUpdateUserSettings({
+        userId,
+        ...validationResult.data
+      });
+      
+      res.json(updatedSettings);
+    } catch (error) {
+      console.error("Error updating user settings:", error);
+      res.status(500).json({ message: "Failed to update user settings" });
+    }
+  });
 
   // Register document routes for RAG functionality
   registerDocumentRoutes(app);

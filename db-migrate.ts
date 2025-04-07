@@ -70,10 +70,72 @@ async function main() {
         "content" text NOT NULL,
         "image" text,
         "citations" jsonb,
+        "model_id" text,
+        "prompt_tokens" integer,
+        "completion_tokens" integer,
         "created_at" timestamp DEFAULT now() NOT NULL
       );
     `);
     console.log("Messages table created");
+    
+    // Create payment transactions table
+    await migrationClient.unsafe(`
+      CREATE TABLE IF NOT EXISTS "payment_transactions" (
+        "id" serial PRIMARY KEY,
+        "user_id" integer REFERENCES "users"("id") NOT NULL,
+        "paypal_order_id" text,
+        "paypal_capture_id" text,
+        "package_id" text,
+        "amount" integer NOT NULL,
+        "fee" integer NOT NULL,
+        "credits" integer NOT NULL,
+        "status" text NOT NULL,
+        "metadata" jsonb,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    console.log("Payment transactions table created");
+    
+    // Create usage logs table
+    await migrationClient.unsafe(`
+      CREATE TABLE IF NOT EXISTS "usage_logs" (
+        "id" serial PRIMARY KEY,
+        "user_id" integer REFERENCES "users"("id") NOT NULL,
+        "message_id" integer REFERENCES "messages"("id"),
+        "model_id" text NOT NULL,
+        "prompt_tokens" integer NOT NULL,
+        "completion_tokens" integer NOT NULL,
+        "image_count" integer DEFAULT 0 NOT NULL,
+        "credits_used" integer NOT NULL,
+        "metadata" jsonb,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    console.log("Usage logs table created");
+    
+    // Create user settings table
+    await migrationClient.unsafe(`
+      CREATE TABLE IF NOT EXISTS "user_settings" (
+        "id" serial PRIMARY KEY,
+        "user_id" integer REFERENCES "users"("id") UNIQUE NOT NULL,
+        "low_balance_threshold" integer DEFAULT 5000,
+        "email_notifications_enabled" boolean DEFAULT true,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    console.log("User settings table created");
+    
+    // Update users table to include model presets
+    await migrationClient.unsafe(`
+      ALTER TABLE "users" 
+      ADD COLUMN IF NOT EXISTS "preset1_model_id" text,
+      ADD COLUMN IF NOT EXISTS "preset2_model_id" text,
+      ADD COLUMN IF NOT EXISTS "preset3_model_id" text,
+      ADD COLUMN IF NOT EXISTS "preset4_model_id" text,
+      ADD COLUMN IF NOT EXISTS "preset5_model_id" text;
+    `);
+    console.log("Users table updated with model presets");
     
     console.log("Schema push completed successfully!");
   } catch (error) {

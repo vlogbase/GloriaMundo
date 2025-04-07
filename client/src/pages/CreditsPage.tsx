@@ -20,6 +20,12 @@ import {
   PayPalButtons,
   usePayPalScriptReducer
 } from "@paypal/react-paypal-js";
+import * as RechartsPrimitive from "recharts";
+import { 
+  ChartContainer, 
+  ChartTooltip,
+  ChartTooltipContent
+} from "@/components/ui/chart";
 
 interface CreditPackage {
   id: string;
@@ -36,6 +42,51 @@ interface User {
   email: string;
   avatarUrl: string;
   creditBalance: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface PaymentTransaction {
+  id: number;
+  userId: number;
+  paypalOrderId: string | null;
+  paypalCaptureId: string | null;
+  packageId: string | null;
+  amount: number;
+  fee: number;
+  credits: number;
+  status: string;
+  metadata: any | null;
+  createdAt: Date;
+}
+
+interface UsageLog {
+  id: number;
+  userId: number;
+  messageId: number | null;
+  modelId: string;
+  promptTokens: number;
+  completionTokens: number;
+  imageCount: number;
+  creditsUsed: number;
+  metadata: any | null;
+  createdAt: Date;
+}
+
+interface UsageStats {
+  modelId: string;
+  totalCredits: number;
+  totalTokens: number;
+  totalCreditsDollars: string;
+}
+
+interface UserSettings {
+  id: number;
+  userId: number;
+  lowBalanceThreshold: number;
+  emailNotificationsEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const Spinner = () => (
@@ -55,6 +106,17 @@ export function CreditsPage() {
   const [customAmount, setCustomAmount] = useState<string>("");
   const [customAmountError, setCustomAmountError] = useState<string>("");
   const [isCustomAmount, setIsCustomAmount] = useState<boolean>(false);
+  
+  // Date range for usage statistics
+  const [dateRange, setDateRange] = useState<{
+    startDate: Date;
+    endDate: Date;
+  }>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30); // Default to last 30 days
+    return { startDate: start, endDate: end };
+  });
   
   // Fetch PayPal client ID from server as fallback
   const fetchPaypalClientId = async () => {
@@ -108,6 +170,61 @@ export function CreditsPage() {
       }
       return response.json();
     }
+  });
+  
+  // Query for payment transactions
+  const { data: transactions, isLoading: isLoadingTransactions } = useQuery<PaymentTransaction[]>({
+    queryKey: ['/api/account/transactions'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/transactions');
+      if (!response.ok) {
+        throw new Error('Failed to fetch transaction history');
+      }
+      return response.json();
+    },
+    enabled: !!user && activeTab === 'history'
+  });
+  
+  // Query for usage logs
+  const { data: usageLogs, isLoading: isLoadingUsageLogs } = useQuery<UsageLog[]>({
+    queryKey: ['/api/account/usage'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/usage');
+      if (!response.ok) {
+        throw new Error('Failed to fetch usage logs');
+      }
+      return response.json();
+    },
+    enabled: !!user && activeTab === 'usage'
+  });
+  
+  // Query for usage statistics by model
+  const { data: usageStats, isLoading: isLoadingUsageStats } = useQuery<{
+    stats: UsageStats[];
+    period: { startDate: string; endDate: string };
+  }>({
+    queryKey: ['/api/account/usage/stats', dateRange.startDate.toISOString(), dateRange.endDate.toISOString()],
+    queryFn: async () => {
+      const response = await fetch(`/api/account/usage/stats?startDate=${dateRange.startDate.toISOString()}&endDate=${dateRange.endDate.toISOString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch usage statistics');
+      }
+      return response.json();
+    },
+    enabled: !!user && (activeTab === 'usage' || activeTab === 'analytics')
+  });
+  
+  // Query for user settings
+  const { data: userSettings, isLoading: isLoadingUserSettings } = useQuery<UserSettings>({
+    queryKey: ['/api/account/settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/account/settings');
+      if (!response.ok) {
+        throw new Error('Failed to fetch user settings');
+      }
+      return response.json();
+    },
+    enabled: !!user && activeTab === 'settings'
   });
 
   // Mutation for creating a PayPal order
@@ -332,9 +449,11 @@ const handleCaptureOrder = (data: any = null) => {
         </Card>
         
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-2 w-full max-w-md">
+          <TabsList className="grid grid-cols-4 w-full">
             <TabsTrigger value="purchase">Add Funds</TabsTrigger>
             <TabsTrigger value="history">Purchase History</TabsTrigger>
+            <TabsTrigger value="usage">Usage Analytics</TabsTrigger>
+            <TabsTrigger value="settings">Account Settings</TabsTrigger>
           </TabsList>
           
           <TabsContent value="purchase" className="mt-6">
@@ -613,13 +732,400 @@ const handleCaptureOrder = (data: any = null) => {
               <CardHeader>
                 <CardTitle>Purchase History</CardTitle>
                 <CardDescription>
-                  Your recent payments
+                  Your payment transaction history
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  No purchase history available
+                {isLoadingTransactions ? (
+                  <div className="flex justify-center py-8">
+                    <Spinner />
+                  </div>
+                ) : !transactions || transactions.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No purchase history available
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="rounded-md border">
+                      <table className="w-full caption-bottom text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="h-12 px-4 text-left align-middle font-medium">Date</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">Amount</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">Credits</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">Status</th>
+                            <th className="h-12 px-4 text-left align-middle font-medium">Reference</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {transactions.map((transaction) => (
+                            <tr 
+                              key={transaction.id} 
+                              className="border-b transition-colors hover:bg-muted/50"
+                            >
+                              <td className="p-4 align-middle">
+                                {new Date(transaction.createdAt).toLocaleDateString()} {new Date(transaction.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className="p-4 align-middle font-medium">
+                                ${(transaction.amount / 100).toFixed(2)}
+                              </td>
+                              <td className="p-4 align-middle">
+                                {transaction.credits.toLocaleString()}
+                              </td>
+                              <td className="p-4 align-middle">
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                  transaction.status === 'completed' 
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400' 
+                                    : transaction.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-400'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400'
+                                }`}>
+                                  {transaction.status}
+                                </span>
+                              </td>
+                              <td className="p-4 align-middle text-xs text-muted-foreground">
+                                {transaction.paypalOrderId || 'N/A'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="usage" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Usage Analytics</CardTitle>
+                <CardDescription>
+                  Track your AI model usage and spending patterns
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Date Range Selector */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 border rounded-md bg-muted/20">
+                    <div>
+                      <h3 className="text-sm font-medium">Date Range</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Select a time period to analyze
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          const end = new Date();
+                          const start = new Date();
+                          start.setDate(start.getDate() - 30);
+                          setDateRange({ startDate: start, endDate: end });
+                        }}
+                      >
+                        Last 30 Days
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const end = new Date();
+                          const start = new Date();
+                          start.setDate(start.getDate() - 7);
+                          setDateRange({ startDate: start, endDate: end });
+                        }}
+                      >
+                        Last 7 Days
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const end = new Date();
+                          const start = new Date();
+                          start.setDate(1); // First day of current month
+                          setDateRange({ startDate: start, endDate: end });
+                        }}
+                      >
+                        This Month
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {isLoadingUsageStats ? (
+                    <div className="flex justify-center py-12">
+                      <Spinner />
+                    </div>
+                  ) : !usageStats || usageStats.stats.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      No usage data available for the selected time period
+                    </div>
+                  ) : (
+                    <>
+                      {/* Usage Summary */}
+                      <div className="grid gap-6 md:grid-cols-3">
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">
+                              Total Spending
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">
+                              ${usageStats.stats.reduce((sum, stat) => sum + parseFloat(stat.totalCreditsDollars), 0).toFixed(2)}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(usageStats.period.startDate).toLocaleDateString()} - {new Date(usageStats.period.endDate).toLocaleDateString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">
+                              Total Tokens Used
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">
+                              {usageStats.stats.reduce((sum, stat) => sum + stat.totalTokens, 0).toLocaleString()}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Across all models
+                            </p>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">
+                              Most Used Model
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {usageStats.stats.length > 0 ? (
+                              <>
+                                <div className="text-xl font-bold truncate max-w-full">
+                                  {usageStats.stats.sort((a, b) => b.totalTokens - a.totalTokens)[0].modelId}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {usageStats.stats.sort((a, b) => b.totalTokens - a.totalTokens)[0].totalTokens.toLocaleString()} tokens
+                                </p>
+                              </>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">No data available</div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                      
+                      {/* Usage By Model Chart */}
+                      <Card className="mt-6">
+                        <CardHeader>
+                          <CardTitle>Usage By Model</CardTitle>
+                          <CardDescription>
+                            Credit consumption across different AI models
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                          <div className="h-80">
+                            {usageStats.stats.length > 0 && (
+                              <ChartContainer
+                                config={{
+                                  credits: {
+                                    label: "Credits Used",
+                                    theme: {
+                                      light: "#0ea5e9",
+                                      dark: "#0ea5e9",
+                                    },
+                                  },
+                                }}
+                              >
+                                <RechartsPrimitive.BarChart 
+                                  data={usageStats.stats.map((stat) => ({
+                                    name: stat.modelId,
+                                    credits: stat.totalCredits,
+                                    dollars: parseFloat(stat.totalCreditsDollars)
+                                  }))}
+                                  margin={{ top: 20, right: 20, bottom: 70, left: 40 }}
+                                >
+                                  <RechartsPrimitive.CartesianGrid strokeDasharray="3 3" />
+                                  <RechartsPrimitive.XAxis 
+                                    dataKey="name" 
+                                    angle={-45}
+                                    textAnchor="end"
+                                    height={70}
+                                    tick={{ fontSize: 12 }}
+                                  />
+                                  <RechartsPrimitive.YAxis yAxisId="left" orientation="left" label={{ value: 'Credits', angle: -90, position: 'insideLeft' }} />
+                                  <RechartsPrimitive.YAxis yAxisId="right" orientation="right" label={{ value: 'USD', angle: 90, position: 'insideRight' }} />
+                                  <RechartsPrimitive.Tooltip
+                                    content={({ active, payload }) => {
+                                      if (active && payload && payload.length) {
+                                        return (
+                                          <div className="custom-tooltip bg-background border rounded p-3 shadow-md">
+                                            <p className="font-medium text-sm">{payload[0].payload.name}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                              Credits: <span className="font-medium">{payload[0].value?.toLocaleString()}</span>
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                              Cost: <span className="font-medium">${payload[0].payload.dollars.toFixed(4)}</span>
+                                            </p>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    }}
+                                  />
+                                  <RechartsPrimitive.Bar
+                                    dataKey="credits"
+                                    fill="var(--color-credits)"
+                                    yAxisId="left"
+                                    radius={[4, 4, 0, 0]}
+                                  />
+                                </RechartsPrimitive.BarChart>
+                              </ChartContainer>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="settings" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Settings</CardTitle>
+                <CardDescription>
+                  Manage your account preferences and notification settings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingUserSettings ? (
+                  <div className="flex justify-center py-8">
+                    <Spinner />
+                  </div>
+                ) : !userSettings ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No user settings available
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Account Information */}
+                    <div>
+                      <h3 className="text-lg font-medium">Account Information</h3>
+                      <div className="mt-4 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="name">Name</Label>
+                            <Input id="name" value={user?.name || ''} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input id="email" value={user?.email || ''} disabled />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    {/* Notification Preferences */}
+                    <div>
+                      <h3 className="text-lg font-medium">Notification Preferences</h3>
+                      <div className="mt-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="low-balance-notifications" className="text-base">Low Balance Notifications</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Get notified when your balance gets low
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input 
+                              id="low-balance-threshold" 
+                              type="number" 
+                              className="w-24"
+                              min={1}
+                              value={userSettings.lowBalanceThreshold / 100} // Convert from cents to dollars
+                              onChange={(e) => {
+                                // TODO: Add mutation to update user settings
+                              }}
+                              disabled
+                            />
+                            <span className="text-sm text-muted-foreground">USD</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="email-notifications" className="text-base">Email Notifications</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Receive updates and notifications via email
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="sr-only" htmlFor="email-notifications-toggle">
+                              Toggle email notifications
+                            </Label>
+                            <div>
+                              <input 
+                                id="email-notifications-toggle"
+                                type="checkbox" 
+                                className="peer hidden" 
+                                checked={userSettings.emailNotificationsEnabled}
+                                onChange={() => {
+                                  // TODO: Add mutation to update user settings
+                                }}
+                                disabled
+                              />
+                              <div className="relative w-11 h-6 flex items-center flex-shrink-0 cursor-pointer rounded-full bg-muted p-1 transition-colors duration-200 ease-in-out peer-checked:bg-primary">
+                                <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out data-[state=checked]:translate-x-5" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    {/* Account Usage Summary */}
+                    <div>
+                      <h3 className="text-lg font-medium">Account Summary</h3>
+                      <div className="mt-4 space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Current Balance:</span>
+                          <span className="font-medium">${(user.creditBalance / 10000).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Account Created:</span>
+                          <span className="font-medium">{new Date(user.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Last Updated:</span>
+                          <span className="font-medium">{new Date(user.updatedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end mt-6">
+                      <Button variant="outline" className="mr-2" disabled>
+                        Cancel
+                      </Button>
+                      <Button disabled>
+                        Save Changes
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
