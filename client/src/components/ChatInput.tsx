@@ -2,7 +2,7 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Send, Lightbulb, Search, Image, X, Upload, Camera, Network, Paperclip, File } from "lucide-react";
+import { Send, Lightbulb, Search, Image, X, Camera, Network, Paperclip, File } from "lucide-react";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +28,10 @@ import {
 import { Document } from "@/hooks/useDocuments";
 import { DocumentItem } from "./DocumentItem";
 
+// Define constants for file types
+const documentAcceptTypes = ".pdf,.docx,.txt,.html,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/html,text/markdown";
+const multimodalAcceptTypes = ".jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.svg,image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,.pdf,.docx,.txt,.rtf,.csv,video/*,audio/*," + documentAcceptTypes;
+
 interface ChatInputProps {
   onSendMessage: (message: string, image?: string) => void;
   isLoading: boolean;
@@ -49,7 +53,6 @@ export const ChatInput = ({
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -183,8 +186,8 @@ export const ChatInput = ({
   const removeImage = () => {
     setSelectedImage(null);
     setImagePreviewUrl(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    if (documentInputRef.current) {
+      documentInputRef.current.value = '';
     }
   };
   
@@ -247,26 +250,42 @@ export const ChatInput = ({
     if (!e.target.files || !e.target.files[0] || !onUploadDocument) return;
     
     const file = e.target.files[0];
-    const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'text/html',
-      'text/markdown'
-    ];
     
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid file type",
-        description: "Please upload a PDF, DOCX, TXT, HTML, or MD file."
-      });
+    // Different validation based on model type
+    if (selectedModel !== 'multimodal') {
+      // For standard models, only allow document types
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'text/html',
+        'text/markdown'
+      ];
       
-      // Reset the file input
-      if (documentInputRef.current) {
-        documentInputRef.current.value = '';
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          variant: "destructive",
+          title: "Invalid file type",
+          description: "Please upload a PDF, DOCX, TXT, HTML, or MD file."
+        });
+        
+        // Reset the file input
+        if (documentInputRef.current) {
+          documentInputRef.current.value = '';
+        }
+        return;
       }
-      return;
+    } else {
+      // For multimodal models - check if file is image, video, audio or document
+      // If it's an image, process it with handleContentUpload
+      if (file.type.startsWith('image/')) {
+        return handleContentUpload(e);
+      }
+      
+      // If it's an audio or video file, process it as content
+      if (file.type.startsWith('audio/') || file.type.startsWith('video/')) {
+        return handleContentUpload(e);
+      }
     }
     
     // Maximum file size (50MB)
@@ -526,72 +545,43 @@ export const ChatInput = ({
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message GloriaMundo..."
-            className={`w-full p-3 ${selectedModel === 'multimodal' && !selectedImage ? 'pr-20' : onUploadDocument ? 'pr-[100px]' : 'pr-12'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
+            className={`w-full p-3 ${selectedModel === 'multimodal' ? 'pr-[124px]' : 'pr-[84px]'} min-h-[44px] max-h-[200px] resize-none border-border rounded-lg focus:ring-2 focus:ring-primary/50`}
             disabled={isLoading || uploadingDocument}
           />
           
-          {/* Document upload input (hidden) */}
+          {/* Single file input with dynamic accept attribute based on model type */}
           {onUploadDocument && (
             <input
               type="file"
               ref={documentInputRef}
-              onChange={handleDocumentUpload}
-              accept=".pdf,.docx,.txt,.html,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/html,text/markdown"
+              onChange={selectedModel === 'multimodal' ? handleContentUpload : handleDocumentUpload}
+              accept={selectedModel === 'multimodal' ? multimodalAcceptTypes : documentAcceptTypes}
               className="hidden"
               id="document-upload"
             />
           )}
           
-          {/* Image upload controls for multimodal model */}
+          {/* Camera button for multimodal model */}
           {selectedModel === 'multimodal' && !selectedImage && (
-            <>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleContentUpload}
-                accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.svg,image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,.pdf,.docx,.txt,.rtf,.csv,video/*,audio/*"
-                className="hidden"
-                id="image-upload"
-              />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="absolute right-20 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                      disabled={isLoading || uploadingDocument}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Upload size={18} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Upload content (JPG, PNG, GIF, PDF, DOCX, audio, video)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                      disabled={isLoading || uploadingDocument}
-                      onClick={startCamera}
-                    >
-                      <Camera size={18} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Take a photo with your camera</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                    disabled={isLoading || uploadingDocument}
+                    onClick={startCamera}
+                  >
+                    <Camera size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Take a photo with your camera</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           
           {/* Document upload button (paperclip) - always visible */}
@@ -603,7 +593,7 @@ export const ChatInput = ({
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="absolute right-[84px] bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                    className={`absolute ${selectedModel === 'multimodal' ? 'right-[84px]' : 'right-[42px]'} bottom-3 text-muted-foreground hover:text-primary transition-colors`}
                     disabled={isLoading || uploadingDocument}
                     onClick={() => documentInputRef.current?.click()}
                   >
@@ -615,7 +605,10 @@ export const ChatInput = ({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Upload document (PDF, DOCX, TXT) - Max 50MB</p>
+                  <p>{selectedModel === 'multimodal' 
+                    ? 'Upload content (images, documents, audio, video) - Max 50MB' 
+                    : 'Upload document (PDF, DOCX, TXT) - Max 50MB'}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

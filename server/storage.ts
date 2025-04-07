@@ -159,10 +159,10 @@ export class MemStorage implements IStorage {
     
     const user: User = {
       id,
-      googleId: insertUser.googleId || null,
-      email: insertUser.email || null,
-      name: insertUser.name || null,
-      avatarUrl: insertUser.avatarUrl || null,
+      googleId: insertUser.googleId || "",
+      email: insertUser.email || "",
+      name: insertUser.name || "",
+      avatarUrl: insertUser.avatarUrl || "",
       creditBalance: 0,
       preset1ModelId: null,
       preset2ModelId: null,
@@ -1163,7 +1163,7 @@ export class MemStorage implements IStorage {
         );
       
       if (logsFromDb.length > 0) {
-        return logsFromDb.sort((a, b) => 
+        return logsFromDb.sort((a: any, b: any) => 
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
       }
@@ -1194,7 +1194,7 @@ export class MemStorage implements IStorage {
         // Group and aggregate the logs by model ID
         const modelStats = new Map<string, {totalCredits: number, totalTokens: number}>();
         
-        logsFromDb.forEach(log => {
+        logsFromDb.forEach((log: any) => {
           const stats = modelStats.get(log.modelId) || {totalCredits: 0, totalTokens: 0};
           stats.totalCredits += log.creditsUsed;
           stats.totalTokens += (log.promptTokens + log.completionTokens);

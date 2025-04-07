@@ -36,6 +36,7 @@ const upload = multer({
 async function generateContentDescription(
   fileUrl: string,
   userId: number,
+  mimeType?: string,
   modelId: string = 'anthropic/claude-3-opus-20240229'
 ): Promise<string> {
   try {
@@ -43,9 +44,24 @@ async function generateContentDescription(
     const userPresets = await storage.getUserPresets(userId);
     const preferredModelId = userPresets.preset4ModelId || modelId;
     
+    // Customize prompt based on content type
+    let promptText = 'Analyze this content and provide a detailed description in 2-3 sentences.';
+    
+    if (mimeType) {
+      if (mimeType.startsWith('image/')) {
+        promptText = 'Describe what you see in this image in 2-3 detailed sentences. Include important visual elements, subjects, and the overall scene.';
+      } else if (mimeType.startsWith('video/')) {
+        promptText = 'Describe what you see in this video in 2-3 detailed sentences. Include the main subjects, actions, and visual qualities.';
+      } else if (mimeType.startsWith('audio/')) {
+        promptText = 'Describe what you hear in this audio in 2-3 detailed sentences. Include sounds, speech content if any, and audio qualities.';
+      } else if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('text')) {
+        promptText = 'Summarize the key points of this document in 2-3 detailed sentences. Include the main topic and important information.';
+      }
+    }
+    
     // Prepare multimodal content
     const content = [
-      { type: 'text', text: 'Analyze this content and provide a detailed description in 2-3 sentences. Describe what you see, hear, or read depending on the content type.' },
+      { type: 'text', text: promptText },
       { type: 'image_url', image_url: { url: fileUrl } }
     ];
     
@@ -171,7 +187,7 @@ export function registerContentRoutes(app: Express) {
       const fileUrl = await contentStorage.uploadFile(fileBuffer, mimeType, userId);
       
       // Generate file description using multimodal model
-      const textDescription = await generateContentDescription(fileUrl, userId);
+      const textDescription = await generateContentDescription(fileUrl, userId, mimeType);
       
       // Save file metadata in database
       const contentDescription = await storage.createContentDescription({

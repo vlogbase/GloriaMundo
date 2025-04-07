@@ -1,0 +1,15 @@
+Context: In `client/src/components/ChatInput.tsx`, we need to change how file uploads are handled. Currently, there are two separate inputs/buttons ("Paperclip" for docs, "Upload" for multimodal content).
+
+Requirement: Use a *single* file input mechanism, triggered by the "Paperclip" icon button. This input should dynamically change the types of files it accepts based on the `selectedModel` state.
+- If `selectedModel !== 'multimodal'`, accept only document types (.pdf, .docx, .txt, .md, .html, related MIME types).
+- If `selectedModel === 'multimodal'`, accept document types AND common image/video/audio types (image/*, video/*, audio/*, .jpg, .png etc.).
+
+Task (<1000 chars):
+Modify `ChatInput.tsx`:
+1. Remove the "Upload" icon button (currently renders when `selectedModel === 'multimodal'`) and its associated file input element (`id="image-upload"`, linked to `fileInputRef`). Also remove the unused `fileInputRef`.
+2. Keep the "Paperclip" icon button and ensure its `onClick` handler correctly triggers the remaining file input (`documentInputRef`, `id="document-upload"`). This input should now handle all uploads.
+3. Define two constant strings for the `accept` attribute:
+    - `documentAcceptTypes`: Containing `.pdf,.docx,.txt,.html,.md` and relevant MIME types (`application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `text/plain`, `text/html`, `text/markdown`).
+    - `multimodalAcceptTypes`: Containing all `documentAcceptTypes` PLUS common image, video, and audio types (e.g., `image/*,video/*,audio/*`).
+4. Modify the remaining file input (`id="document-upload"`) so its `accept` attribute is dynamically set based on the `selectedModel` state: `accept={selectedModel === 'multimodal' ? multimodalAcceptTypes : documentAcceptTypes}`.
+5. Review the `handleDocumentUpload` function (linked to this input's `onChange`) to ensure it can appropriately handle the possibility of receiving image/video/audio files if `selectedModel === 'multimodal'`. The existing client-side type check might need adjustment or removal if relying solely on the `accept` attribute and backend validation.
