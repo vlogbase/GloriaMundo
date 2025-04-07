@@ -243,12 +243,12 @@ export const ModelPresets = () => {
           <Button
             onClick={isLocked ? handleLockedModelClick : () => handleClick(presetKey)}
             variant={isActive ? "default" : "outline"}
-            className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
+            className={`flex items-center gap-1 py-2.5 px-3 text-sm transition-all duration-200 ${
               isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
             } ${isLocked ? 'cursor-pointer' : ''}`}
             disabled={isLoading || isPending}
           >
-            {isPreset4 ? (
+            {isPreset5 ? (
               <Search size={16} className="mr-1" />
             ) : (
               <Network size={16} className="mr-1" />
@@ -292,14 +292,14 @@ export const ModelPresets = () => {
         <Button
           onClick={handleFreeTierClick}
           variant={activeFreeTierModel ? "default" : "outline"}
-          className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
+          className={`flex items-center gap-1 py-2.5 px-3 text-sm transition-all duration-200 border-green-500 ${
             activeFreeTierModel ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
           }`}
         >
           {activeFreeTierModel ? (
             <>
               <Check size={16} className="mr-1" />
-              <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
+              <span className="truncate max-w-[120px]">Free: {formatModelName(activeFreeTierModel)}</span>
             </>
           ) : (
             <>
