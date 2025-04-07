@@ -3,14 +3,14 @@ import * as crypto from 'crypto';
 import { URL } from 'url';
 
 /**
- * Service for handling image storage using Google Cloud Storage-compatible APIs
+ * Service for handling file storage using Google Cloud Storage-compatible APIs
  * (works with Replit object storage)
  */
-class ImageStorageService {
+class ContentStorageService {
   private storage: Storage;
   private bucket!: Bucket; // Using definite assignment assertion
   private initialized: boolean = false;
-  private bucketName: string = 'gloriamundo-images';
+  private bucketName: string = 'gloriamundo-content';
 
   constructor() {
     // Configure Storage - use environment variables if available
@@ -99,13 +99,13 @@ class ImageStorageService {
   }
 
   /**
-   * Upload an image to object storage
-   * @param imageBuffer - The image buffer to upload
-   * @param mimeType - The MIME type of the image
+   * Upload a file to object storage
+   * @param fileBuffer - The file buffer to upload
+   * @param mimeType - The MIME type of the file
    * @param userId - The user ID for organization/permissions
-   * @returns The URL of the uploaded image
+   * @returns The URL of the uploaded file
    */
-  async uploadImage(imageBuffer: Buffer, mimeType: string, userId?: number): Promise<string> {
+  async uploadFile(fileBuffer: Buffer, mimeType: string, userId?: number): Promise<string> {
     // Ensure bucket is initialized
     if (!this.initialized) {
       await this.init();
@@ -114,7 +114,7 @@ class ImageStorageService {
     try {
       // Generate unique file name to prevent collisions
       const fileExtension = this.getFileExtensionFromMimeType(mimeType);
-      const hashPrefix = crypto.createHash('md5').update(imageBuffer).digest('hex').substring(0, 8);
+      const hashPrefix = crypto.createHash('md5').update(fileBuffer).digest('hex').substring(0, 8);
       const timestamp = Date.now();
       const userPrefix = userId ? `user_${userId}` : 'anonymous';
       const fileName = `${userPrefix}/${timestamp}_${hashPrefix}.${fileExtension}`;
@@ -123,7 +123,7 @@ class ImageStorageService {
       const file = this.bucket.file(fileName);
       
       // Upload with proper content type
-      await file.save(imageBuffer, {
+      await file.save(fileBuffer, {
         metadata: {
           contentType: mimeType
         }
@@ -135,19 +135,19 @@ class ImageStorageService {
       // Get the public URL
       const publicUrl = file.publicUrl();
       
-      console.log(`Uploaded image to ${publicUrl}`);
+      console.log(`Uploaded file to ${publicUrl}`);
       return publicUrl;
     } catch (error) {
-      console.error("Error uploading image:", error);
-      throw new Error(`Failed to upload image: ${error}`);
+      console.error("Error uploading file:", error);
+      throw new Error(`Failed to upload file: ${error}`);
     }
   }
 
   /**
-   * Delete an image from object storage
-   * @param imageUrl - The URL of the image to delete
+   * Delete a file from object storage
+   * @param fileUrl - The URL of the file to delete
    */
-  async deleteImage(imageUrl: string): Promise<void> {
+  async deleteFile(fileUrl: string): Promise<void> {
     // Ensure bucket is initialized
     if (!this.initialized) {
       await this.init();
@@ -155,7 +155,7 @@ class ImageStorageService {
 
     try {
       // Extract file path from URL
-      const url = new URL(imageUrl);
+      const url = new URL(fileUrl);
       
       // The pathname will include the bucket name in the URL
       // Format: /BUCKET_NAME/user_X/TIMESTAMP_HASH.ext
@@ -181,15 +181,15 @@ class ImageStorageService {
         }
       }
       
-      console.log(`Attempting to delete image at path: ${filePath}`);
+      console.log(`Attempting to delete file at path: ${filePath}`);
       
       // Delete the file using the complete path
       await this.bucket.file(filePath).delete();
       
-      console.log(`Successfully deleted image at path: ${filePath}`);
+      console.log(`Successfully deleted file at path: ${filePath}`);
     } catch (error) {
-      console.error("Error deleting image:", error);
-      throw new Error(`Failed to delete image: ${error}`);
+      console.error("Error deleting file:", error);
+      throw new Error(`Failed to delete file: ${error}`);
     }
   }
 
@@ -198,6 +198,7 @@ class ImageStorageService {
    */
   private getFileExtensionFromMimeType(mimeType: string): string {
     const mimeToExt: Record<string, string> = {
+      // Images
       'image/jpeg': 'jpg',
       'image/jpg': 'jpg',
       'image/png': 'png',
@@ -207,10 +208,37 @@ class ImageStorageService {
       'image/bmp': 'bmp',
       'image/tiff': 'tiff',
       'image/x-icon': 'ico',
+      
+      // Videos
+      'video/mp4': 'mp4',
+      'video/mpeg': 'mpg',
+      'video/quicktime': 'mov',
+      'video/x-msvideo': 'avi',
+      'video/webm': 'webm',
+      
+      // Audio
+      'audio/mpeg': 'mp3',
+      'audio/wav': 'wav',
+      'audio/midi': 'midi',
+      'audio/ogg': 'ogg',
+      'audio/x-m4a': 'm4a',
+      
+      // Documents
+      'application/pdf': 'pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/vnd.ms-excel': 'xls',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+      'application/vnd.ms-powerpoint': 'ppt',
+      'text/plain': 'txt',
+      'text/csv': 'csv',
+      'application/rtf': 'rtf',
+      'text/html': 'html'
     };
     
     return mimeToExt[mimeType] || 'bin';
   }
 }
 
-export const imageStorage = new ImageStorageService();
+export const contentStorage = new ContentStorageService();

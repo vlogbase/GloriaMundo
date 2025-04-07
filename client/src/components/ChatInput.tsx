@@ -522,32 +522,48 @@ export const ChatInput = ({
                 type="file"
                 ref={fileInputRef}
                 onChange={handleImageUpload}
-                accept="image/*"
+                accept="image/*,.pdf,.docx,.txt,.rtf,.csv,video/*,audio/*"
                 className="hidden"
                 id="image-upload"
               />
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="absolute right-20 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                disabled={isLoading || uploadingDocument}
-                onClick={() => fileInputRef.current?.click()}
-                title="Upload image"
-              >
-                <Upload size={18} />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                disabled={isLoading || uploadingDocument}
-                onClick={startCamera}
-                title="Take photo"
-              >
-                <Camera size={18} />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="absolute right-20 bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                      disabled={isLoading || uploadingDocument}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Upload file for multimodal model (images, documents, audio, video)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
+                      disabled={isLoading || uploadingDocument}
+                      onClick={startCamera}
+                    >
+                      <Camera size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Take a photo with your camera</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </>
           )}
           
