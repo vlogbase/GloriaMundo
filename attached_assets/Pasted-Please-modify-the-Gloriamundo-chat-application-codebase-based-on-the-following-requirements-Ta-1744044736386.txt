@@ -1,0 +1,56 @@
+Please modify the Gloriamundo chat application codebase based on the following requirements:
+
+**Target Files:**
+* `documentprocessor.ts` (or `documentprocessor.ts.bak` if that's the current working file)
+* `server/routes.ts`
+
+**Required Changes:**
+
+1.  **Make Chunking Parameters Configurable (`documentprocessor.ts`):**
+    * Locate the constants `MAX_CHUNK_SIZE` and `CHUNK_OVERLAP` (currently defined likely near the top or within `splitTextIntoChunks`).
+    * Modify the code so that these values are read from environment variables (e.g., `process.env.MAX_CHUNK_SIZE`, `process.env.CHUNK_OVERLAP`).
+    * Provide sensible default values in the code in case the environment variables are not set (e.g., default to the current values of 1000 and 200 respectively).
+    * Ensure the `splitTextIntoChunks` function (and potentially `createOptimizedChunks` if it uses these constants) correctly uses these configured or default values.
+
+2.  **Implement Background Job Queue for Document Processing (`documentprocessor.ts`):**
+    * Replace the current use of `setTimeout` within the `processDocument` function (which wraps the chunking, embedding, and storage updates).
+    * Integrate a robust background job queue library suitable for Node.js/TypeScript (e.g., BullMQ, Kue).
+    * Define a job queue (e.g., "document-processing").
+    * When `processDocument` is called, after extracting text and creating the initial document record, enqueue a job onto the "document-processing" queue. Pass necessary data to the job (e.g., `document.id`, the extracted `text`, `fileName`).
+    * Create a separate worker process or function that listens to the "document-processing" queue.
+    * Move the logic currently inside the `setTimeout` callback (chunk creation, embedding generation, chunk storage/updates) into this job queue worker.
+    * Ensure the worker handles potential errors during processing gracefully (e.g., logging errors, potentially implementing retry logic if the queue library supports it).
+
+3.  **Use Config Flag for Vector DB Capability Check (`documentprocessor.ts`):**
+    * Modify the `checkVectorSearchCapability` function. Instead of running a test aggregation query, it should check for a specific environment variable (e.g., `process.env.MONGODB_HAS_VECTOR_SEARCH`).
+    * If `process.env.MONGODB_HAS_VECTOR_SEARCH` is set to `'true'`, the function should return `true` (and cache it as before). Otherwise, it should return `false` (and cache it).
+    * Update the `findSimilarChunks` function (and any other relevant places) to rely on this configuration-based check instead of the active query check.
+
+4.  **Implement LLM-Based Conversation Title Generation (`server/routes.ts`):**
+    * **Location:** Add this logic within the POST `/api/conversations/:id/messages` route and the GET `/api/conversations/:id/messages/stream` route. It should run *after* the first assistant message has been successfully generated (or the stream has completed) and *only if* the current conversation title is still the default (e.g., "New Conversation").
+    * **Logic:**
+        a.  Check if `conversation.title === "New Conversation"`.
+        b.  If true, fetch the list of available models from OpenRouter using the existing logic (calling `/api/openrouter/models` endpoint handler or its underlying function).
+        c.  Filter the fetched models to identify only those that are currently free (where `isFree` is true based on pricing).
+        d.  Define an ordered list of preferred model IDs for title generation:
+            ```typescript
+            const preferredTitleModels = [
+              'qwen/qwen-2.5-vl-3b-instruct', // Qwen 3B
+              'allenai/molmo-7b-d',         // Molmo 7B
+              'meta-llama/llama-4-maverick-17b-instruct-128e', // Llama 4 Maverick
+              'meta-llama/llama-4-scout-17b-instruct-16e',    // Llama 4 Scout
+              'google/gemini-2.5-pro-experimental', // Gemini 2.5 Pro
+              // Add more preferred models here if desired
+            ];
+            ```
+        e.  Find the first model ID in `preferredTitleModels` that is also present in the list of currently free models identified in step (c).
+        f.  If a preferred model is found, select that `modelId`.
+        g.  If *none* of the preferred models are found in the free list, select *any* model ID from the free list (e.g., the first one found). If no free models are available at all, use the first words of the first prompt in the conversation as the title.
+        h.  If a suitable free `modelId` was selected:
+            i.  Construct a simple prompt asking the model to generate a concise title (max ~5-7 words) based on the *first user message* of the conversation. (You might need to fetch the first user message if it's not readily available). Example prompt structure: `{"role": "user", "content": "Based on the following user message, suggest a concise and relevant conversation title (max 7 words):\n\nUser Message: '''{first_user_message_content}'''\n\nTitle:"}`
+            ii. Make an API call to the OpenRouter completions endpoint (`https://openrouter.ai/api/v1/chat/completions`) using the selected free `modelId` and the title generation prompt. Use appropriate parameters (e.g., low `temperature`, `max_tokens` suitable for a short title). *Ensure this call also checks for sufficient user credits and deducts the (likely minimal) cost, similar to the main message flow.*
+            iii. Parse the response to get the generated title. Perform basic cleanup (e.g., remove quotes, trim whitespace).
+            iv. If a valid title is generated, call `await storage.updateConversationTitle(conversationId, generatedTitle);` to update the conversation. Handle potential errors during the API call or title update gracefully.
+
+
+
