@@ -389,83 +389,6 @@ const getModelPricing = (modelId: string) => {
  * @param conversationId ID of the conversation to update
  * @returns Generated title
  */
-async function generateConversationTitle(
-  userMessage: string, 
-  aiResponse: string,
-  conversationId: number
-): Promise<void> {
-  // First, check if conversation already has a title other than "New Conversation"
-  const conversation = await storage.getConversation(conversationId);
-  if (!conversation || conversation.title !== "New Conversation") {
-    return; // Skip title generation if conversation has a custom title
-  }
-  
-  if (!isOpenRouterKeyValid) {
-    console.log("OpenRouter API key not valid, skipping title generation");
-    return;
-  }
-  
-  try {
-    console.log(`Generating title for conversation ${conversationId}`);
-    
-    // Get available models from OpenRouter - prefer using a cached list if available
-    let availableModels: any[] = [];
-    try {
-      const cachedModels = await storage.getOpenRouterModels();
-      if (cachedModels && cachedModels.length > 0) {
-        availableModels = cachedModels;
-      } else {
-        // Fetch models if not cached
-        const modelsResponse = await fetch(OPENROUTER_MODELS_URL, {
-          headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "HTTP-Referer": process.env.APP_URL || "https://gloriamundo.com",
-            "X-Title": "GloriaMundo"
-          }
-        });
-        
-        if (modelsResponse.ok) {
-          const modelsData = await modelsResponse.json();
-          availableModels = modelsData.data;
-          // Cache the models for future use
-          await storage.cacheOpenRouterModels(availableModels);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching models for title generation:", error);
-    }
-    
-    // Use a preference list of lightweight models for title generation
-    // From lowest to highest cost/complexity
-    const preferredTitleModels = [
-      "openai/gpt-3.5-turbo-0125",
-      "anthropic/claude-instant-1.2",
-      "google/gemini-pro",
-      "mistralai/mistral-small",
-      "anthropic/claude-3-haiku"
-    ];
-    
-    // Find the first available preferred model
-    let modelId = "";
-    for (const preferredModel of preferredTitleModels) {
-      if (availableModels.some(m => m.id === preferredModel)) {
-        modelId = preferredModel;
-        break;
-      }
-    }
-    
-    // If no preferred model found, use the default title generation model or fallback
-    if (!modelId) {
-      modelId = process.env.TITLE_GENERATION_MODEL || "openai/gpt-3.5-turbo-0125";
-      console.log(`No preferred model found, using default: ${modelId}`);
-    }
-    
-    // Prepare the title generation prompt
-    // Use the first 250 chars of user message and first 250 chars of AI response
-    const prompt = `Based on this short conversation, generate a concise, engaging title that captures the essence of the discussion. Keep it under 40 characters, avoid phrases like "conversation about" or "discussion of", just make a direct, descriptive title:
-
-User: ${userMessage?.substring(0, 250)}
-
 // Default model pricing for our standard models
 const DEFAULT_MODEL_PRICING = {
   reasoning: {
@@ -627,7 +550,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('User presets updated successfully');
       } catch (dbError) {
         console.error('Database error while updating presets:', dbError);
-        throw new Error(`Database update failed: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+        const errorMsg = dbError instanceof Error ? dbError.message : String(dbError);
+        throw new Error(`Database update failed: ${errorMsg}`);
       }
       
       // Return the data in the format expected by the frontend
@@ -1567,56 +1491,66 @@ Format your responses using markdown for better readability and organization.`;
           assistantMessage
         })}\n\n`);
         
-        // Update the conversation title if needed
-        const conversation = await storage.getConversation(conversationId);
-        if (conversation && conversation.title === "New Conversation") {
-          // Generate an intelligent title based on the content
-          let generatedTitle = "";
+        // Update the conversation title if needed using the AI model
+        try {
+          // Generate a title based on the conversation content using the AI model
+          // This will only run if the conversation title is still "New Conversation"
+          if (content) {
+            await generateConversationTitle(content, assistantContent, conversationId);
+          }
+        } catch (titleError) {
+          console.error("Error generating conversation title:", titleError);
           
-          // Extract main topic from first user message
-          if (!content || content.length === 0) {
-            // Handle empty content case
-            generatedTitle = image ? "Image Analysis" : "New Conversation";
-          } else if (content.length <= 25) {
-            // If message is short, use it directly
-            generatedTitle = content as string;
-          } else {
-            // Try to extract an intelligent title by keeping key phrases
-            // First, try to extract a question
-            const questionMatch = (content as string).match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
-            if (questionMatch && questionMatch[0].length < 50) {
-              generatedTitle = questionMatch[0];
+          // Fallback to basic title generation if AI-based title generation fails
+          const conversation = await storage.getConversation(conversationId);
+          if (conversation && conversation.title === "New Conversation") {
+            // Generate a simple title based on the content
+            let generatedTitle = "";
+            
+            // Extract main topic from first user message
+            if (!content || content.length === 0) {
+              // Handle empty content case
+              generatedTitle = image ? "Image Analysis" : "New Conversation";
+            } else if (content.length <= 25) {
+              // If message is short, use it directly
+              generatedTitle = content as string;
             } else {
-              // Extract first sentence or meaningful chunk
-              const sentenceEnd = (content as string).indexOf('.');
-              const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
-                ? (content as string).substring(0, sentenceEnd + 1) 
-                : (content as string).substring(0, Math.min((content as string).length, 40));
-              
-              // Split by common stop words and take first few meaningful words
-              const words = firstChunk.split(/\s+/);
-              generatedTitle = words.slice(0, 5).join(' ');
-              
-              // Ensure title doesn't end abruptly
-              if (words.length > 5 && !generatedTitle.endsWith('.')) {
-                generatedTitle += '...';
+              // Try to extract a question
+              const questionMatch = (content as string).match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
+              if (questionMatch && questionMatch[0].length < 50) {
+                generatedTitle = questionMatch[0];
+              } else {
+                // Extract first sentence or meaningful chunk
+                const sentenceEnd = (content as string).indexOf('.');
+                const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
+                  ? (content as string).substring(0, sentenceEnd + 1) 
+                  : (content as string).substring(0, Math.min((content as string).length, 40));
+                
+                // Take first few meaningful words
+                const words = firstChunk.split(/\s+/);
+                generatedTitle = words.slice(0, 5).join(' ');
+                
+                // Ensure title doesn't end abruptly
+                if (words.length > 5 && !generatedTitle.endsWith('.')) {
+                  generatedTitle += '...';
+                }
               }
             }
+            
+            // Clean up title - remove quotes and excessive punctuation
+            generatedTitle = generatedTitle
+              .replace(/^["']|["']$/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            // Ensure title is not too long
+            if (generatedTitle.length > 40) {
+              generatedTitle = generatedTitle.substring(0, 37) + '...';
+            }
+            
+            // Update the conversation title
+            await storage.updateConversationTitle(conversationId, generatedTitle);
           }
-          
-          // Clean up title - remove quotes and excessive punctuation
-          generatedTitle = generatedTitle
-            .replace(/^["']|["']$/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-          
-          // Ensure title is not too long
-          if (generatedTitle.length > 40) {
-            generatedTitle = generatedTitle.substring(0, 37) + '...';
-          }
-          
-          // Update the conversation title
-          await storage.updateConversationTitle(conversationId, generatedTitle);
         }
         
         res.end();
@@ -2429,56 +2363,66 @@ Format your responses using markdown for better readability and organization.`;
           }
         }
 
-        // If this is the first message in the conversation, generate a better title without extra API calls
-        const conversation = await storage.getConversation(conversationId);
-        if (conversation && conversation.title === "New Conversation") {
-          // Generate an intelligent title based on the content
-          let generatedTitle = "";
+        // If this is the first message in the conversation, generate a better title using the AI model
+        try {
+          // Generate a title based on the conversation content using the AI model
+          // This will only run if the conversation title is still "New Conversation"
+          if (content) {
+            await generateConversationTitle(content, assistantMessage.content, conversationId);
+          }
+        } catch (titleError) {
+          console.error("Error generating conversation title:", titleError);
           
-          // Extract main topic from first user message
-          if (!content || content.length === 0) {
-            // Handle empty content case
-            generatedTitle = image ? "Image Analysis" : "New Conversation";
-          } else if (content.length <= 25) {
-            // If message is short, use it directly
-            generatedTitle = content;
-          } else {
-            // Try to extract an intelligent title by keeping key phrases
-            // First, try to extract a question
-            const questionMatch = content.match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
-            if (questionMatch && questionMatch[0].length < 50) {
-              generatedTitle = questionMatch[0];
+          // Fallback to basic title generation if AI-based title generation fails
+          const conversation = await storage.getConversation(conversationId);
+          if (conversation && conversation.title === "New Conversation") {
+            // Generate a simple title based on the content
+            let generatedTitle = "";
+            
+            // Extract main topic from first user message
+            if (!content || content.length === 0) {
+              // Handle empty content case
+              generatedTitle = image ? "Image Analysis" : "New Conversation";
+            } else if (content.length <= 25) {
+              // If message is short, use it directly
+              generatedTitle = content;
             } else {
-              // Extract first sentence or meaningful chunk
-              const sentenceEnd = content.indexOf('.');
-              const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
-                ? content.substring(0, sentenceEnd + 1) 
-                : content.substring(0, Math.min(content.length, 40));
-              
-              // Split by common stop words and take first few meaningful words
-              const words = firstChunk.split(/\s+/);
-              generatedTitle = words.slice(0, 5).join(' ');
-              
-              // Ensure title doesn't end abruptly
-              if (words.length > 5 && !generatedTitle.endsWith('.')) {
-                generatedTitle += '...';
+              // Try to extract a question
+              const questionMatch = content.match(/^(What|How|Why|When|Where|Which|Who|Can|Could|Should|Is|Are).+?\?/i);
+              if (questionMatch && questionMatch[0].length < 50) {
+                generatedTitle = questionMatch[0];
+              } else {
+                // Extract first sentence or meaningful chunk
+                const sentenceEnd = content.indexOf('.');
+                const firstChunk = sentenceEnd > 0 && sentenceEnd < 40 
+                  ? content.substring(0, sentenceEnd + 1) 
+                  : content.substring(0, Math.min(content.length, 40));
+                
+                // Take first few meaningful words
+                const words = firstChunk.split(/\s+/);
+                generatedTitle = words.slice(0, 5).join(' ');
+                
+                // Ensure title doesn't end abruptly
+                if (words.length > 5 && !generatedTitle.endsWith('.')) {
+                  generatedTitle += '...';
+                }
               }
             }
+            
+            // Clean up title - remove quotes and excessive punctuation
+            generatedTitle = generatedTitle
+              .replace(/^["']|["']$/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            // Ensure title is not too long
+            if (generatedTitle.length > 40) {
+              generatedTitle = generatedTitle.substring(0, 37) + '...';
+            }
+            
+            // Update the conversation title
+            await storage.updateConversationTitle(conversationId, generatedTitle);
           }
-          
-          // Clean up title - remove quotes and excessive punctuation
-          generatedTitle = generatedTitle
-            .replace(/^["']|["']$/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-          
-          // Ensure title is not too long
-          if (generatedTitle.length > 40) {
-            generatedTitle = generatedTitle.substring(0, 37) + '...';
-          }
-          
-          // Update the conversation title
-          await storage.updateConversationTitle(conversationId, generatedTitle);
         }
 
         // Log the response structure we're about to send to the client

@@ -9,6 +9,7 @@ import { AzureOpenAI } from 'openai';
 import { MongoClient } from 'mongodb';
 import Pipeline from '@xenova/transformers/dist/pipeline';
 import type { FeatureExtractionPipeline } from '@xenova/transformers/dist/types';
+import { Queue, Worker, Job } from 'bullmq';
 
 // Maximum chunk size in characters - configurable via environment variables
 const MAX_CHUNK_SIZE = process.env.MAX_CHUNK_SIZE ? parseInt(process.env.MAX_CHUNK_SIZE) : 1000;
