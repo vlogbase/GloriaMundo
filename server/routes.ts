@@ -119,6 +119,238 @@ function isValidApiKey(key: string | undefined | null): boolean {
   return isLongEnough;
 }
 
+/**
+ * Generate a conversation title using OpenRouter
+ * This uses the smallest/cheapest available model to minimize token costs
+ * @param userMessage First user message in the conversation
+ * @param aiResponse First AI response in the conversation
+ * @param conversationId ID of the conversation to update
+ * @returns Generated title or null if generation failed
+ */
+async function generateConversationTitle(
+  userMessage: string, 
+  aiResponse: string,
+  conversationId: number
+): Promise<string | null> {
+  // First, check if conversation already has a title other than "New Conversation"
+  const conversation = await storage.getConversation(conversationId);
+  if (!conversation || conversation.title !== "New Conversation") {
+    console.log(`Skipping title generation for conversation ${conversationId} with title "${conversation?.title}"`);
+    return null; // Skip title generation if conversation has a custom title
+  }
+  
+  if (!isOpenRouterKeyValid) {
+    console.log("OpenRouter API key not valid, skipping title generation");
+    return null;
+  }
+  
+  try {
+    console.log(`Generating title for conversation ${conversationId}`);
+    
+    // Get available models from OpenRouter - prefer using a cached list if available
+    let availableModels: any[] = [];
+    try {
+      const cachedModels = await storage.getOpenRouterModels();
+      if (cachedModels && cachedModels.length > 0) {
+        availableModels = cachedModels;
+      } else {
+        // Fetch models if not cached
+        const modelsResponse = await fetch(OPENROUTER_MODELS_URL, {
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "HTTP-Referer": process.env.APP_URL || "https://gloriamundo.com",
+            "X-Title": "GloriaMundo"
+          }
+        });
+        
+        if (modelsResponse.ok) {
+          const modelsData = await modelsResponse.json();
+          availableModels = modelsData.data;
+          // Cache the models for future use
+          await storage.cacheOpenRouterModels(availableModels);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching models for title generation:", error);
+    }
+    
+    // Use a preference list of lightweight models for title generation (from lowest to highest cost/complexity)
+    const preferredTitleModels = [
+      "openai/gpt-3.5-turbo-0125",
+      "anthropic/claude-instant-1.2",
+      "google/gemini-pro",
+      "mistralai/mistral-small",
+      "anthropic/claude-3-haiku"
+    ];
+    
+    // Find the first available preferred model
+    let modelId = "";
+    for (const preferredModel of preferredTitleModels) {
+      if (availableModels.some(m => m.id === preferredModel)) {
+        modelId = preferredModel;
+        break;
+      }
+    }
+    
+    // If no preferred model found, use the default title generation model or fallback
+    if (!modelId) {
+      modelId = process.env.TITLE_GENERATION_MODEL || "openai/gpt-3.5-turbo-0125";
+      console.log(`No preferred model found, using default: ${modelId}`);
+    }
+    
+    // Prepare the title generation prompt - use the first 250 chars of user message and first 250 chars of AI response
+    const prompt = `Based on this short conversation, generate a concise, engaging title that captures the essence of the discussion. Keep it under 40 characters, avoid phrases like "conversation about" or "discussion of", just make a direct, descriptive title:
+
+User: ${userMessage?.substring(0, 250)}
+Assistant: ${aiResponse?.substring(0, 250)}
+
+Title:`;
+    
+    // Call OpenRouter to generate the title
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "HTTP-Referer": process.env.APP_URL || "https://gloriamundo.com",
+        "X-Title": "GloriaMundo"
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 30, // Limit token usage for title generation
+      })
+    });
+    
+    if (!response.ok) {
+      console.error(`Error generating title: ${response.status} ${response.statusText}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    let generatedTitle = data.choices[0]?.message?.content?.trim() || "";
+    
+    // Clean up the title - remove quotes, colons, and other unwanted characters
+    generatedTitle = generatedTitle
+      .replace(/^["']|["']$/g, "") // Remove quotes at beginning/end
+      .replace(/^Title:?\s*/i, "") // Remove "Title:" prefix
+      .replace(/^[:-]\s*/, "")     // Remove leading colons or dashes
+      .trim();
+    
+    // Ensure the title isn't too long
+    if (generatedTitle.length > 40) {
+      generatedTitle = generatedTitle.substring(0, 37) + "...";
+    }
+    
+    console.log(`Generated title for conversation ${conversationId}: "${generatedTitle}"`);
+    
+    // Update the conversation title in the database
+    await storage.updateConversationTitle(conversationId, generatedTitle);
+    
+    return generatedTitle;
+  } catch (error) {
+    console.error("Error generating conversation title:", error);
+    return null;
+  }
+}
+
+/**
+ * Generate a conversation title using OpenRouter AI models
+ * Only runs if the conversation title is still "New Conversation"
+ * @param conversationId The ID of the conversation
+ * @param userMessage The first user message
+ * @param assistantMessage The first assistant response
+ */
+async function generateTitleForConversation(
+  conversationId: number,
+  userMessage: string,
+  assistantMessage: string
+): Promise<void> {
+  try {
+    // Skip if OpenRouter API key is invalid
+    if (!isOpenRouterKeyValid) {
+      console.log("OpenRouter API key not valid, skipping title generation");
+      return;
+    }
+    
+    // Get the conversation to check if title is still default
+    const conversation = await storage.getConversation(conversationId);
+    if (!conversation || conversation.title !== "New Conversation") {
+      console.log(`Skipping title generation for conversation ${conversationId} - already has custom title "${conversation?.title}"`);
+      return;
+    }
+    
+    console.log(`Generating title for conversation ${conversationId}`);
+    
+    // Use a lightweight model for title generation
+    // Pick either a free model or the cheapest available model
+    const modelId = process.env.TITLE_GENERATION_MODEL || "openai/gpt-3.5-turbo-0125";
+    
+    // Create title generation prompt
+    const prompt = `Based on this conversation, generate a concise, engaging title that captures the essence of the discussion. Keep it under 40 characters, avoid phrases like "conversation about" or "discussion of", just make a direct, descriptive title:
+
+User: ${userMessage?.substring(0, 250)}
+Assistant: ${assistantMessage?.substring(0, 250)}
+
+Title:`;
+    
+    // Call OpenRouter API
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "HTTP-Referer": process.env.APP_URL || "https://gloriamundo.com",
+        "X-Title": "GloriaMundo"
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 30
+      })
+    });
+    
+    if (!response.ok) {
+      console.error(`Error generating title: ${response.status} ${response.statusText}`);
+      return;
+    }
+    
+    const data = await response.json();
+    let generatedTitle = data.choices[0]?.message?.content?.trim() || "";
+    
+    // Clean up the title
+    generatedTitle = generatedTitle
+      .replace(/^["']|["']$/g, "") // Remove quotes at beginning/end
+      .replace(/^Title:?\s*/i, "") // Remove "Title:" prefix
+      .replace(/^[:-]\s*/, "")     // Remove leading colons or dashes
+      .trim();
+    
+    // Ensure the title isn't too long
+    if (generatedTitle.length > 40) {
+      generatedTitle = generatedTitle.substring(0, 37) + "...";
+    }
+    
+    console.log(`Generated title for conversation ${conversationId}: "${generatedTitle}"`);
+    
+    // Update the conversation title
+    await storage.updateConversationTitle(conversationId, generatedTitle);
+  } catch (error) {
+    console.error("Error generating conversation title:", error);
+  }
+}
+
 // Load model pricing data from models.json
 const loadModelPricing = () => {
   try {
@@ -148,6 +380,91 @@ const getModelPricing = (modelId: string) => {
     completionPrice: 0.000002 // Default to $0.000002 per token if unknown
   };
 };
+
+/**
+ * Generate a conversation title using OpenRouter
+ * This uses the smallest/cheapest available model to minimize token costs
+ * @param userMessage First user message in the conversation
+ * @param aiResponse First AI response in the conversation
+ * @param conversationId ID of the conversation to update
+ * @returns Generated title
+ */
+async function generateConversationTitle(
+  userMessage: string, 
+  aiResponse: string,
+  conversationId: number
+): Promise<void> {
+  // First, check if conversation already has a title other than "New Conversation"
+  const conversation = await storage.getConversation(conversationId);
+  if (!conversation || conversation.title !== "New Conversation") {
+    return; // Skip title generation if conversation has a custom title
+  }
+  
+  if (!isOpenRouterKeyValid) {
+    console.log("OpenRouter API key not valid, skipping title generation");
+    return;
+  }
+  
+  try {
+    console.log(`Generating title for conversation ${conversationId}`);
+    
+    // Get available models from OpenRouter - prefer using a cached list if available
+    let availableModels: any[] = [];
+    try {
+      const cachedModels = await storage.getOpenRouterModels();
+      if (cachedModels && cachedModels.length > 0) {
+        availableModels = cachedModels;
+      } else {
+        // Fetch models if not cached
+        const modelsResponse = await fetch(OPENROUTER_MODELS_URL, {
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "HTTP-Referer": process.env.APP_URL || "https://gloriamundo.com",
+            "X-Title": "GloriaMundo"
+          }
+        });
+        
+        if (modelsResponse.ok) {
+          const modelsData = await modelsResponse.json();
+          availableModels = modelsData.data;
+          // Cache the models for future use
+          await storage.cacheOpenRouterModels(availableModels);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching models for title generation:", error);
+    }
+    
+    // Use a preference list of lightweight models for title generation
+    // From lowest to highest cost/complexity
+    const preferredTitleModels = [
+      "openai/gpt-3.5-turbo-0125",
+      "anthropic/claude-instant-1.2",
+      "google/gemini-pro",
+      "mistralai/mistral-small",
+      "anthropic/claude-3-haiku"
+    ];
+    
+    // Find the first available preferred model
+    let modelId = "";
+    for (const preferredModel of preferredTitleModels) {
+      if (availableModels.some(m => m.id === preferredModel)) {
+        modelId = preferredModel;
+        break;
+      }
+    }
+    
+    // If no preferred model found, use the default title generation model or fallback
+    if (!modelId) {
+      modelId = process.env.TITLE_GENERATION_MODEL || "openai/gpt-3.5-turbo-0125";
+      console.log(`No preferred model found, using default: ${modelId}`);
+    }
+    
+    // Prepare the title generation prompt
+    // Use the first 250 chars of user message and first 250 chars of AI response
+    const prompt = `Based on this short conversation, generate a concise, engaging title that captures the essence of the discussion. Keep it under 40 characters, avoid phrases like "conversation about" or "discussion of", just make a direct, descriptive title:
+
+User: ${userMessage?.substring(0, 250)}
 
 // Default model pricing for our standard models
 const DEFAULT_MODEL_PRICING = {
