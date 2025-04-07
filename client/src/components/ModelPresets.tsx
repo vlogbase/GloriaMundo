@@ -154,12 +154,18 @@ export const ModelPresets = () => {
     
     // If a valid model ID was returned from the preset
     if (modelId) {
-      // Important: We must set the selected model type to 'openrouter' first
-      // so the chat component knows to use the custom model ID
-      console.log(`Setting selected model to 'openrouter'`);
-      setSelectedModel('openrouter');
+      // Special handling for preset4 (multimodal preset)
+      if (presetKey === 'preset4') {
+        // For preset4, we need to set the model type to 'multimodal' to enable image upload buttons
+        console.log(`Setting selected model to 'multimodal' for preset4`);
+        setSelectedModel('multimodal');
+      } else {
+        // For all other presets, use the standard 'openrouter' type
+        console.log(`Setting selected model to 'openrouter'`);
+        setSelectedModel('openrouter');
+      }
       
-      // Now set the specific model ID to use with OpenRouter
+      // Set the specific model ID to use with OpenRouter (this is needed for all presets)
       console.log(`Setting custom OpenRouter model ID to: ${modelId}`);
       setCustomOpenRouterModelId(modelId);
       
@@ -219,6 +225,12 @@ export const ModelPresets = () => {
       
       // This will call the mutate function in useModelPresets which formats the data for the API
       assignModelToPreset(currentPresetKey, dialogSelectedModelId);
+      
+      // If we're assigning a model to preset4, make sure we use multimodal type
+      // when the user activates this preset in the future
+      if (currentPresetKey === 'preset4') {
+        console.log('Note: Saved multimodal model to preset4, multimodal mode will be enabled when activated');
+      }
       
       console.log('Closing dialog after saving preset');
       setIsDialogOpen(false);

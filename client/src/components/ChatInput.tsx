@@ -346,6 +346,58 @@ export const ChatInput = ({
     return () => textarea.removeEventListener("input", adjustHeight);
   }, []);
   
+  // Handle clipboard paste for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      // Skip if we're already loading
+      if (isLoading || uploadingDocument) return;
+      
+      // Only process if we have clipboard items
+      if (!e.clipboardData || !e.clipboardData.items) return;
+      
+      const items = e.clipboardData.items;
+      let imageItem = null;
+      
+      // Find the first image item in the clipboard
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          imageItem = items[i];
+          break;
+        }
+      }
+      
+      // If we found an image, process it
+      if (imageItem) {
+        // Prevent default paste behavior for images
+        e.preventDefault();
+        
+        // Get the file from the clipboard
+        const file = imageItem.getAsFile();
+        if (!file) return;
+        
+        // Switch to multimodal model automatically
+        if (selectedModel !== 'multimodal') {
+          setSelectedModel('multimodal');
+        }
+        
+        // Process the image as if it was uploaded
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = document.createElement('img');
+          img.onload = () => {
+            processImage(img);
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    
+    // Add paste event listener to the document
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isLoading, uploadingDocument, selectedModel, setSelectedModel]);
+  
   // Handle keyboard shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Submit on Enter (without Shift)
