@@ -399,6 +399,7 @@ export const ModelPresets = () => {
                                model.id.toLowerCase().includes('gemini') ||
                                model.id.toLowerCase().includes('claude-3') ||
                                model.id.toLowerCase().includes('gpt-4-vision') ||
+                               model.id.toLowerCase().includes('gpt-4o') ||
                                model.id.toLowerCase().includes('llava')) &&
                               (model.id.toLowerCase().includes(e.target.value.toLowerCase()) ||
                                model.name.toLowerCase().includes(e.target.value.toLowerCase()))
@@ -457,7 +458,7 @@ export const ModelPresets = () => {
                       value={presetSearchTerm}
                       onValueChange={setPresetSearchTerm}
                     />
-                    <CommandList>
+                    <CommandList className="max-h-[300px] overflow-y-auto touch-auto">
                       <CommandEmpty>No models found.</CommandEmpty>
                       {Object.entries(
                         currentPresetKey === 'preset5'
@@ -481,6 +482,7 @@ export const ModelPresets = () => {
                                model.id.toLowerCase().includes('gemini') ||
                                model.id.toLowerCase().includes('claude-3') ||
                                model.id.toLowerCase().includes('gpt-4-vision') ||
+                               model.id.toLowerCase().includes('gpt-4o') ||
                                model.id.toLowerCase().includes('llava')) &&
                               (presetSearchTerm === '' ||
                                model.id.toLowerCase().includes(presetSearchTerm.toLowerCase()) ||
@@ -552,7 +554,7 @@ export const ModelPresets = () => {
               className="mb-4"
             />
             
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[300px] overflow-y-auto touch-auto">
               {freeModels.length > 0 ? (
                 Object.entries(groupedFreeModels).map(([provider, providerModels]) => (
                   <div key={provider} className="space-y-2">
