@@ -1,0 +1,47 @@
+Implement an enhanced image handling system. This involves enabling image uploads (button/paste), using Replit Object Storage with expiry, integrating with OpenRouter multimodal models conditional on "preset 4", and enabling conversational follow-ups about images using a hybrid RAG approach.
+
+Context:
+
+Existing RAG system uses MongoDB Atlas Vector Search (vector_index on gloriamundo.document.chunks collection, fields: embedding, userId).
+Embedding uses Azure OpenAI text-embedding-3-large (3072 dims).
+OpenRouter is used for model access.
+Assume the application knows which models belong to the user-defined "preset 4" (multimodal models) and which single model is the designated choice within "preset 4" for auto-switching.
+Requirements:
+
+Part 1: Client-Side Logic
+
+Conditional Upload Button: Enable the image upload file input (accept="image/*") only if the application's currently selected model belongs to "preset 4".
+Paste Handling:
+Listen for paste events.
+If pasted data contains an image file:
+Automatically switch the application's currently selected model to the user's designated model from "preset 4".
+Proceed to send the image data (e.g., via FormData) and associated userId to the backend upload endpoint (/upload-image).
+If not an image, handle as regular text paste.
+Part 2: Backend - Image Upload Endpoint (Create New, e.g., /upload-image)
+
+Receive image data and userId.
+Upload image to Replit Object Storage. Use the Replit library or GCS API.
+Configure a 1-month lifecycle/expiry rule for objects in this Replit Object Storage bucket.
+Get the unique URL or identifier (image_identifier) for the stored image.
+Call OpenRouter using the application's currently selected model (which must be a "preset 4" multimodal model) to generate an initial text_description from the image (image_identifier).
+Save a new document to gloriamundo.document.chunks MongoDB collection. Include fields like: { userId: userId, image_identifier: image_identifier, text_description: text_description, type: 'image_description', embedding: null }. (The type field helps distinguish image descriptions from text chunks).
+Generate a vector embedding for the text_description using Azure OpenAI text-embedding-3-large.
+Update the new MongoDB document, setting its embedding field with the vector.
+Part 3: Backend - Handling User Chat Queries (Hybrid Approach - Modify Existing Logic)
+
+Initial Retrieval (RAG): When a user sends a query, first perform the standard $vectorSearch on the embedding field in gloriamundo.document.chunks using the query's embedding. Retrieve the top N relevant results (these can be text chunks or image descriptions).
+Context Analysis & State Tracking:
+Examine the retrieved results from Step 1 and the recent conversation history.
+Implement logic to determine if the user's current query is likely a follow-up question specifically about an image whose description (type: 'image_description') was retrieved or recently discussed. (This might involve checking if a retrieved chunk has an image_identifier and if the query uses pronouns like "it", "that picture", or asks specific visual questions). Track the relevant image_identifier if a follow-up is detected.
+Conditional Response Generation:
+Scenario A (Default - Not an Image Follow-up): If the query is not determined to be an image follow-up:
+Gather the context from the retrieved text chunks and image descriptions.
+Formulate a prompt using this context for the currently selected LLM (can be text-only or multimodal).
+Get the response from the LLM via OpenRouter and return it to the user.
+Scenario B (Image Follow-up Detected): If the query is determined to be a follow-up about a specific image:
+Retrieve the image_identifier (URL/ID) for that image.
+Make a direct call to OpenRouter using the currently selected multimodal model ("preset 4"). Provide this model with the image_identifier and the user's current follow-up question (potentially including relevant chat history for context).
+Return this direct response from the multimodal model to the user. (Bypass the standard LLM prompt/response generation for this turn).
+Outcome:
+
+This creates a system where images can be uploaded and described, their descriptions are searchable via RAG, and users can then have more natural, stateful conversations about specific images using the power of the multimodal model directly for follow-up questions, while respecting the "preset 4" model constraints.
