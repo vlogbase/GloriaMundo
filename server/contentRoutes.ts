@@ -174,14 +174,14 @@ export function registerContentRoutes(app: Express) {
       const textDescription = await generateContentDescription(fileUrl, userId);
       
       // Save file metadata in database
-      const imageDescription = await storage.createImageDescription({
+      const contentDescription = await storage.createContentDescription({
         conversationId,
         userId,
         imageIdentifier: fileUrl,
         textDescription,
         mimeType,
         fileSize: fileBuffer.length,
-        type: 'image_description',
+        type: 'content_description',
         metadata: { 
           width: req.body.width || null,
           height: req.body.height || null
@@ -194,7 +194,7 @@ export function registerContentRoutes(app: Express) {
       res.status(201).json({
         success: true,
         fileUrl,
-        imageDescription
+        contentDescription
       });
     } catch (error) {
       console.error('Error uploading file for multimodal processing:', error);
@@ -205,7 +205,7 @@ export function registerContentRoutes(app: Express) {
     }
   });
   
-  // Get a specific content description by ID
+  // Get a specific content description by ID (images, audio, video, etc.)
   app.get('/api/content/:id', isAuthenticated, async (req: Request, res: Response) => {
     try {
       const contentId = parseInt(req.params.id);
@@ -215,7 +215,7 @@ export function registerContentRoutes(app: Express) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      const contentDescription = await storage.getImageDescription(contentId);
+      const contentDescription = await storage.getContentDescription(contentId);
       
       if (!contentDescription) {
         return res.status(404).json({ error: 'Content not found' });
@@ -254,7 +254,7 @@ export function registerContentRoutes(app: Express) {
         return res.status(403).json({ error: 'Access denied' });
       }
       
-      const contentItems = await storage.getImagesByConversation(conversationId);
+      const contentItems = await storage.getContentByConversation(conversationId);
       
       res.status(200).json(contentItems);
     } catch (error) {

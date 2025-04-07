@@ -77,12 +77,12 @@ export interface IStorage {
   getUserSettings(userId: number): Promise<UserSettings | undefined>;
   createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
   
-  // Image description methods
-  getImageDescription(id: number): Promise<ImageDescription | undefined>;
-  getImagesByConversation(conversationId: number): Promise<ImageDescription[]>;
-  createImageDescription(imageDescription: Partial<InsertImageDescription>): Promise<ImageDescription>;
-  updateImageDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined>;
-  deleteImageDescription(id: number): Promise<void>;
+  // Content description methods (handles images, video, audio, and other media)
+  getContentDescription(id: number): Promise<ImageDescription | undefined>;
+  getContentByConversation(conversationId: number): Promise<ImageDescription[]>;
+  createContentDescription(contentDescription: Partial<InsertImageDescription>): Promise<ImageDescription>;
+  updateContentDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined>;
+  deleteContentDescription(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -91,14 +91,14 @@ export class MemStorage implements IStorage {
   private messages: Map<number, Message>;
   private documents: Map<number, Document>;
   private documentChunks: Map<number, DocumentChunk>;
-  private imageDescriptions: Map<number, ImageDescription>;
+  private imageDescriptions: Map<number, ImageDescription>; // Kept name for backwards compatibility
   
   private userId: number;
   private conversationId: number;
   private messageId: number;
   private documentId: number;
   private documentChunkId: number;
-  private imageDescriptionId: number;
+  private imageDescriptionId: number; // ID for content descriptions (kept for compatibility)
 
   constructor() {
     this.users = new Map();
@@ -1346,9 +1346,9 @@ export class MemStorage implements IStorage {
     }
   }
 
-  // Image description methods
+  // Content description methods (images, audio, video, etc.)
   
-  async getImageDescription(id: number): Promise<ImageDescription | undefined> {
+  async getContentDescription(id: number): Promise<ImageDescription | undefined> {
     // Try getting from database first
     try {
       const result = await db.select().from(imageDescriptions)
@@ -1359,14 +1359,14 @@ export class MemStorage implements IStorage {
         return result[0];
       }
     } catch (error) {
-      console.error(`Database error when getting image description ${id}:`, error);
+      console.error(`Database error when getting content description ${id}:`, error);
     }
     
     // Fallback to in-memory storage
     return this.imageDescriptions.get(id);
   }
   
-  async getImagesByConversation(conversationId: number): Promise<ImageDescription[]> {
+  async getContentByConversation(conversationId: number): Promise<ImageDescription[]> {
     // Try getting from database first
     try {
       const result = await db.select().from(imageDescriptions)
@@ -1377,25 +1377,25 @@ export class MemStorage implements IStorage {
         return result;
       }
     } catch (error) {
-      console.error(`Database error when getting images for conversation ${conversationId}:`, error);
+      console.error(`Database error when getting content for conversation ${conversationId}:`, error);
     }
     
     // Fallback to in-memory storage
     return Array.from(this.imageDescriptions.values())
-      .filter(img => img.conversationId === conversationId)
+      .filter(content => content.conversationId === conversationId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
   
-  async createImageDescription(data: Partial<InsertImageDescription>): Promise<ImageDescription> {
+  async createContentDescription(data: Partial<InsertImageDescription>): Promise<ImageDescription> {
     const now = new Date();
     
     // Validate required fields
     if (!data.conversationId) {
-      throw new Error("Conversation ID is required for image descriptions");
+      throw new Error("Conversation ID is required for content descriptions");
     }
     
     if (!data.imageIdentifier) {
-      throw new Error("Image identifier is required");
+      throw new Error("Content identifier is required");
     }
     
     if (!data.textDescription) {
@@ -1420,7 +1420,7 @@ export class MemStorage implements IStorage {
           textDescription: data.textDescription,
           mimeType: data.mimeType,
           fileSize: data.fileSize,
-          type: data.type ?? "image_description",
+          type: data.type ?? "content_description",
           embedding: data.embedding ?? null,
           metadata: data.metadata ?? null,
           expiresAt: data.expiresAt ?? null,
@@ -1429,17 +1429,17 @@ export class MemStorage implements IStorage {
         .returning();
       
       if (result.length > 0) {
-        console.log('Created image description in database:', result[0].id);
+        console.log('Created content description in database:', result[0].id);
         return result[0];
       }
     } catch (error) {
-      console.error('Database error when creating image description:', error);
+      console.error('Database error when creating content description:', error);
     }
     
     // Fallback to in-memory storage
     const id = this.imageDescriptionId++;
     
-    const imageDescription: ImageDescription = {
+    const contentDescription: ImageDescription = {
       id,
       conversationId: data.conversationId,
       userId: data.userId ?? null,
@@ -1447,23 +1447,23 @@ export class MemStorage implements IStorage {
       textDescription: data.textDescription,
       mimeType: data.mimeType,
       fileSize: data.fileSize,
-      type: data.type ?? "image_description",
+      type: data.type ?? "content_description",
       embedding: data.embedding ?? null,
       metadata: data.metadata ?? null,
       expiresAt: data.expiresAt ?? null,
       createdAt: now
     };
     
-    this.imageDescriptions.set(id, imageDescription);
-    console.log('Created image description in memory:', id);
+    this.imageDescriptions.set(id, contentDescription);
+    console.log('Created content description in memory:', id);
     
-    return imageDescription;
+    return contentDescription;
   }
   
-  async updateImageDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined> {
+  async updateContentDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined> {
     // Try to update in database first
     try {
-      // Check if image description exists
+      // Check if content description exists
       const existing = await db.select().from(imageDescriptions).where(eq(imageDescriptions.id, id)).limit(1);
       
       if (existing.length > 0) {
@@ -1473,47 +1473,68 @@ export class MemStorage implements IStorage {
           .returning();
         
         if (result.length > 0) {
-          console.log(`Updated image description ${id} in database`);
+          console.log(`Updated content description ${id} in database`);
           return result[0];
         }
       }
     } catch (error) {
-      console.error(`Database error when updating image description ${id}:`, error);
+      console.error(`Database error when updating content description ${id}:`, error);
     }
     
     // Fallback to in-memory storage
-    const imageDescription = this.imageDescriptions.get(id);
+    const contentDescription = this.imageDescriptions.get(id);
     
-    if (!imageDescription) {
+    if (!contentDescription) {
       return undefined;
     }
     
     const updated = {
-      ...imageDescription,
+      ...contentDescription,
       ...updates
     };
     
     this.imageDescriptions.set(id, updated);
-    console.log(`Updated image description ${id} in memory`);
+    console.log(`Updated content description ${id} in memory`);
     
     return updated;
   }
   
-  async deleteImageDescription(id: number): Promise<void> {
+  async deleteContentDescription(id: number): Promise<void> {
     // Try to delete from database first
     try {
       await db.delete(imageDescriptions)
         .where(eq(imageDescriptions.id, id))
         .execute();
       
-      console.log(`Deleted image description ${id} from database`);
+      console.log(`Deleted content description ${id} from database`);
     } catch (error) {
-      console.error(`Database error when deleting image description ${id}:`, error);
+      console.error(`Database error when deleting content description ${id}:`, error);
     }
     
     // Also remove from memory storage as a fallback
     this.imageDescriptions.delete(id);
-    console.log(`Deleted image description ${id} from memory`);
+    console.log(`Deleted content description ${id} from memory`);
+  }
+  
+  // Alias methods for backward compatibility
+  async getImageDescription(id: number): Promise<ImageDescription | undefined> {
+    return this.getContentDescription(id);
+  }
+  
+  async getImagesByConversation(conversationId: number): Promise<ImageDescription[]> {
+    return this.getContentByConversation(conversationId);
+  }
+  
+  async createImageDescription(data: Partial<InsertImageDescription>): Promise<ImageDescription> {
+    return this.createContentDescription(data);
+  }
+  
+  async updateImageDescription(id: number, updates: Partial<InsertImageDescription>): Promise<ImageDescription | undefined> {
+    return this.updateContentDescription(id, updates);
+  }
+  
+  async deleteImageDescription(id: number): Promise<void> {
+    return this.deleteContentDescription(id);
   }
 }
 

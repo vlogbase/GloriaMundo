@@ -76,21 +76,48 @@ export const ChatInput = ({
     }
   };
   
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleContentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
       
-      reader.onload = (event) => {
-        const img = document.createElement('img');
-        img.onload = () => {
-          processImage(img);
+      // Check file type to determine processing method
+      if (file.type.startsWith('image/')) {
+        // For images, process with image-specific handling
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+          const img = document.createElement('img');
+          img.onload = () => {
+            processImage(img);
+          };
+          
+          img.src = event.target?.result as string;
         };
         
-        img.src = event.target?.result as string;
-      };
-      
-      reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+      } else {
+        // For other file types (audio, video, documents, etc.), just show a preview
+        toast({
+          title: "File selected",
+          description: `${file.name} (${(file.size / 1024).toFixed(1)} KB) will be sent with your message.`,
+          duration: 3000
+        });
+        
+        // Create a data URL for the file
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          // Ensure the model is switched to multimodal when any file is added
+          if (selectedModel !== 'multimodal') {
+            setSelectedModel('multimodal');
+          }
+          setSelectedImage(event.target?.result as string);
+          // Use a generic preview for non-image files
+          setImagePreviewUrl('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWZpbGUiPjxwYXRoIGQ9Ik0xNC41IDJINmEyIDIgMCAwIDAtMiAydjE2YTIgMiAwIDAgMCAyIDJoMTJhMiAyIDAgMCAwIDItMlY3LjVMI'+
+          'DE0LjUgMnoiLz48cG9seWxpbmUgcG9pbnRzPSIxNCAyIDE0IDggMjAgOCIvPjwvc3ZnPg==');
+        };
+        
+        reader.readAsDataURL(file);
+      }
     }
   };
   
@@ -521,7 +548,7 @@ export const ChatInput = ({
               <input
                 type="file"
                 ref={fileInputRef}
-                onChange={handleImageUpload}
+                onChange={handleContentUpload}
                 accept="image/*,.pdf,.docx,.txt,.rtf,.csv,video/*,audio/*"
                 className="hidden"
                 id="image-upload"
