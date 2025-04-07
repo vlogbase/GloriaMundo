@@ -549,7 +549,7 @@ export const ChatInput = ({
                 type="file"
                 ref={fileInputRef}
                 onChange={handleContentUpload}
-                accept="image/*,.pdf,.docx,.txt,.rtf,.csv,video/*,audio/*"
+                accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.svg,image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,.pdf,.docx,.txt,.rtf,.csv,video/*,audio/*"
                 className="hidden"
                 id="image-upload"
               />
@@ -568,7 +568,7 @@ export const ChatInput = ({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Upload file for multimodal model (images, documents, audio, video)</p>
+                    <p>Upload content (JPG, PNG, GIF, PDF, DOCX, audio, video)</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
