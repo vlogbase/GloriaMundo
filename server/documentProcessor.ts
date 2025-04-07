@@ -861,9 +861,10 @@ export async function generateEmbedding(text: string): Promise<string> {
 /**
  * Find similar chunks for a query
  */
-export async function findSimilarChunks(query: string, conversationId: number, limit = 5, userId?: number): Promise<{
+export async function findSimilarChunks(query: string, conversationId: number, limit = 5, userId?: number, includeImages = true): Promise<{
   chunks: DocumentChunk[];
   documents: Record<number, Document>;
+  imageDescriptions?: any[]; // MongoDB results for image descriptions
 }> {
   try {
     console.time('similar-chunks-search');
@@ -1094,9 +1095,82 @@ export async function findSimilarChunks(query: string, conversationId: number, l
             documentMap[doc.id] = doc;
           });
           
+          // If images should be included, query for relevant image descriptions
+          let imageResults: any[] = [];
+          if (includeImages) {
+            try {
+              // Query the rag_vectors collection for image descriptions from this conversation
+              const ragVectorsCollection = db.collection('rag_vectors');
+              
+              // Parse the embedding from JSON string to array
+              const embeddingVector = JSON.parse(queryEmbedding);
+              
+              // Check if vectorSearch is available on rag_vectors
+              const hasRagVectorSearch = await checkVectorSearchCapability(ragVectorsCollection);
+              
+              if (hasRagVectorSearch) {
+                console.log('Using MongoDB Atlas vectorSearch for image similarity search');
+                
+                try {
+                  // Build vectorSearch for images
+                  const imageVectorSearchStage = {
+                    $vectorSearch: {
+                      index: "image_vector_index",
+                      path: "embedding",
+                      queryVector: embeddingVector,
+                      numCandidates: 20,
+                      limit: 3,
+                      filter: {
+                        conversationId: conversationId.toString(),
+                        type: "image"
+                      }
+                    }
+                  };
+                  
+                  // Add userId filter for security
+                  if (userId) {
+                    imageVectorSearchStage.$vectorSearch.filter.userId = userId.toString();
+                  }
+                  
+                  imageResults = await ragVectorsCollection.aggregate([
+                    imageVectorSearchStage,
+                    { $addFields: { similarity: { $meta: "vectorSearchScore" } } },
+                    { $sort: { similarity: -1 } },
+                    { $limit: 3 }
+                  ]).toArray();
+                  
+                  console.log(`Found ${imageResults.length} relevant images using vector search`);
+                } catch (vectorSearchError) {
+                  console.error("Error using vectorSearch for images:", vectorSearchError);
+                  console.log("Falling back to basic image query");
+                  
+                  // Fallback to basic query if vector search fails
+                  imageResults = await ragVectorsCollection.find({
+                    conversationId: conversationId.toString(),
+                    type: "image",
+                    ...(userId ? { userId: userId.toString() } : {})
+                  }).limit(3).toArray();
+                }
+              } else {
+                // Basic query without vector similarity
+                imageResults = await ragVectorsCollection.find({
+                  conversationId: conversationId.toString(),
+                  type: "image",
+                  ...(userId ? { userId: userId.toString() } : {})
+                }).limit(3).toArray();
+                
+                console.log(`Found ${imageResults.length} images in conversation (without vector search)`);
+              }
+            } catch (imageError) {
+              console.error("Error searching for relevant images:", imageError);
+              // Continue without images
+            }
+          }
+          
           return {
             chunks: documentChunks,
-            documents: documentMap
+            documents: documentMap,
+            imageDescriptions: imageResults
           };
         }
         
@@ -1131,11 +1205,12 @@ export async function findSimilarChunks(query: string, conversationId: number, l
     
     return {
       chunks: similarChunks,
-      documents: documentMap
+      documents: documentMap,
+      imageDescriptions: [] // No images in fallback mode
     };
   } catch (error) {
     console.error('Error finding similar chunks:', error);
-    return { chunks: [], documents: {} };
+    return { chunks: [], documents: {}, imageDescriptions: [] };
   }
 }
 
@@ -1164,22 +1239,46 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 }
 
 /**
- * Format context for AI prompt from similar chunks
+ * Format context for AI prompt from similar chunks and image descriptions
  */
-export function formatContextForPrompt(chunks: DocumentChunk[], documents: Record<number, Document>): string {
-  if (chunks.length === 0) {
-    return '';
+export function formatContextForPrompt(
+  chunks: DocumentChunk[], 
+  documents: Record<number, Document>, 
+  imageDescriptions?: any[]
+): string {
+  let context = '';
+  
+  // Add document chunks if available
+  if (chunks.length > 0) {
+    context += '### Context from your documents:\n\n';
+    
+    chunks.forEach((chunk, index) => {
+      const document = documents[chunk.documentId];
+      const documentName = document ? document.fileName : 'Unknown document';
+      
+      context += `[Document: ${documentName}, Chunk ${chunk.chunkIndex + 1}]\n${chunk.content}\n\n`;
+    });
+    
+    context += '### End of document context\n\n';
   }
   
-  let context = '### Context from your documents:\n\n';
-  
-  chunks.forEach((chunk, index) => {
-    const document = documents[chunk.documentId];
-    const documentName = document ? document.fileName : 'Unknown document';
+  // Add image descriptions if available
+  if (imageDescriptions && imageDescriptions.length > 0) {
+    context += '### Context from conversation images:\n\n';
     
-    context += `[Document: ${documentName}, Chunk ${chunk.chunkIndex + 1}]\n${chunk.content}\n\n`;
-  });
+    imageDescriptions.forEach((image, index) => {
+      if (image && image.description) {
+        const imageId = image.imageId || `img${index + 1}`;
+        const similarityNote = image.similarity 
+          ? ` (Relevance: ${(image.similarity * 100).toFixed(1)}%)`
+          : '';
+        
+        context += `[Image: ${imageId}${similarityNote}]\n${image.description}\n\n`;
+      }
+    });
+    
+    context += '### End of image context\n\n';
+  }
   
-  context += '### End of context\n\n';
   return context;
 }

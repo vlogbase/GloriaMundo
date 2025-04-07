@@ -4,6 +4,8 @@ import { isAuthenticated } from './routes';
 import { storage } from './storage';
 import { imageStorage } from './imageStorage';
 import { mongoDb } from './mongodb';
+import { generateEmbedding } from './documentProcessor';
+import crypto from 'crypto';
 
 // Configure multer for memory storage
 const upload = multer({
@@ -90,44 +92,39 @@ async function addImageToMongoDb(
       return;
     }
     
-    // Create embedding from image description
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: textDescription
-      })
-    });
+    console.log(`Generating embedding for image description (${textDescription.length} chars)`);
     
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
+    // Generate a unique ID for the image that can be referenced in RAG queries
+    const imageId = crypto.createHash('md5').update(imageIdentifier).digest('hex').substring(0, 8);
     
-    const data = await response.json();
-    const embedding = data.data[0].embedding;
+    // Create embedding from image description using our service
+    const embeddingString = await generateEmbedding(textDescription);
+    
+    // Parse embedding string back to an array for MongoDB
+    const embedding = JSON.parse(embeddingString);
     
     // Store in MongoDB vector collection
     const db = mongoDb.getDb();
     const collection = db.collection('rag_vectors');
     
     await collection.insertOne({
-      userId,
-      conversationId,
-      type: 'image',
-      text: textDescription,
-      identifier: imageIdentifier,
-      embedding,
+      userId: userId.toString(), // Store as string for consistency with document chunks
+      conversationId: conversationId.toString(),
+      type: 'image', // Indicates this is an image record
+      content: textDescription, // Matching the field name used in document chunks
+      description: textDescription, // Alternative field for compatibility
+      imageId, // Unique ID for this image
+      imageUrl: imageIdentifier, // Original URL
+      embedding, // Vector representation
       metadata: {
-        type: 'image_description'
+        type: 'image_description',
+        mimeType: imageIdentifier.split('.').pop()?.toLowerCase() || 'unknown'
       },
       createdAt: new Date()
     });
     
-    console.log('Image description added to MongoDB vector collection');
+    console.log(`Image description added to MongoDB vector collection with ID ${imageId}`);
+    return;
   } catch (error) {
     console.error('Error adding image to MongoDB:', error);
   }

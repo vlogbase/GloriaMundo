@@ -45,8 +45,14 @@ class ImageStorageService {
       if (!bucketExists) {
         console.log(`Creating bucket ${this.bucketName}`);
         [this.bucket] = await this.storage.createBucket(this.bucketName);
+        
+        // Set up lifecycle rules for image expiration (1 month)
+        await this.configureBucketLifecycle();
       } else {
         this.bucket = this.storage.bucket(this.bucketName);
+        
+        // Update lifecycle rules if they don't exist
+        await this.configureBucketLifecycle();
       }
       
       // Make all files in the bucket publicly readable
@@ -56,6 +62,39 @@ class ImageStorageService {
     } catch (error) {
       console.error("Failed to initialize storage bucket:", error);
       throw new Error("Failed to initialize storage bucket");
+    }
+  }
+  
+  /**
+   * Configure lifecycle rules for automatic file expiration
+   */
+  private async configureBucketLifecycle() {
+    try {
+      console.log(`Configuring lifecycle rules for bucket ${this.bucketName}`);
+      
+      // Define lifecycle rule for 30-day expiration with proper type
+      const lifecycleObject = {
+        lifecycle: {
+          rule: [
+            {
+              action: {
+                type: "Delete" as "Delete" // Type assertion to match required string literal
+              },
+              condition: {
+                age: 30 // Delete objects after 30 days
+              }
+            }
+          ]
+        }
+      };
+      
+      // Using the setMetadata method instead of direct setLifecycleRules
+      await this.bucket.setMetadata(lifecycleObject);
+      console.log('Bucket lifecycle rules configured successfully: 30-day expiration');
+    } catch (error) {
+      console.error('Error configuring bucket lifecycle rules:', error);
+      // Don't throw here - this shouldn't block initialization
+      console.log('Continuing without lifecycle rules (manual cleanup may be needed)');
     }
   }
 
@@ -115,15 +154,39 @@ class ImageStorageService {
     }
 
     try {
-      // Extract file name from URL
+      // Extract file path from URL
       const url = new URL(imageUrl);
+      
+      // The pathname will include the bucket name in the URL
+      // Format: /BUCKET_NAME/user_X/TIMESTAMP_HASH.ext
       const pathParts = url.pathname.split('/');
-      const fileName = pathParts[pathParts.length - 1];
       
-      // Delete the file
-      await this.bucket.file(fileName).delete();
+      // To get the full file path within the bucket, we need to remove the bucket name
+      // and reconstruct the path (user_id/timestamp_hash.ext)
+      const bucketIndex = pathParts.findIndex(part => part === this.bucketName);
       
-      console.log(`Deleted image ${fileName}`);
+      // Get all parts after the bucket name
+      let filePath = '';
+      
+      if (bucketIndex >= 0 && bucketIndex < pathParts.length - 1) {
+        // Use parts after bucket name for the file path
+        filePath = pathParts.slice(bucketIndex + 1).join('/');
+      } else {
+        // Fallback: use the last two parts (user_id/filename.ext)
+        if (pathParts.length >= 2) {
+          filePath = `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
+        } else {
+          // Last resort: just use the filename
+          filePath = pathParts[pathParts.length - 1];
+        }
+      }
+      
+      console.log(`Attempting to delete image at path: ${filePath}`);
+      
+      // Delete the file using the complete path
+      await this.bucket.file(filePath).delete();
+      
+      console.log(`Successfully deleted image at path: ${filePath}`);
     } catch (error) {
       console.error("Error deleting image:", error);
       throw new Error(`Failed to delete image: ${error}`);
