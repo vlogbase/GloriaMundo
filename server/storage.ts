@@ -52,6 +52,7 @@ export interface IStorage {
   getDocumentsByConversation(conversationId: number): Promise<Document[]>;
   createDocument(document: Partial<InsertDocument>): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
+  updateDocument(id: number, data: Partial<Document>): Promise<Document | undefined>;
   updateDocumentMetadata(id: number, metadata: any): Promise<Document | undefined>;
   
   // Document chunk methods
@@ -756,6 +757,49 @@ export class MemStorage implements IStorage {
   // Alias for getDocument to maintain backward compatibility
   async getDocumentById(id: number): Promise<Document | undefined> {
     return this.getDocument(id);
+  }
+  
+  // Update document with new data
+  async updateDocument(id: number, data: Partial<Document>): Promise<Document | undefined> {
+    try {
+      // Try to get document from database first
+      const documentFromDb = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+      
+      if (documentFromDb.length > 0) {
+        // Document exists in database, update it
+        const result = await db.update(documents)
+          .set({
+            ...data,
+            updatedAt: new Date()
+          })
+          .where(eq(documents.id, id))
+          .returning();
+        
+        if (result.length > 0) {
+          console.log(`Updated document ${id} in database`);
+          return result[0];
+        }
+      }
+    } catch (error) {
+      console.error(`Database error when updating document ${id}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    const document = this.documents.get(id);
+    
+    if (!document) {
+      return undefined;
+    }
+    
+    const updatedDocument: Document = {
+      ...document,
+      ...data,
+      updatedAt: new Date()
+    };
+    
+    this.documents.set(id, updatedDocument);
+    console.log(`Updated document ${id} in memory:`, updatedDocument);
+    return updatedDocument;
   }
   
   // Update document metadata

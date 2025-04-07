@@ -9,6 +9,8 @@ import { AzureOpenAI } from 'openai';
 import { MongoClient } from 'mongodb';
 import Pipeline from '@xenova/transformers/dist/pipeline';
 import type { FeatureExtractionPipeline } from '@xenova/transformers/dist/types';
+import { Queue, Worker, QueueEvents } from 'bullmq';
+import IORedis from 'ioredis';
 
 // Maximum chunk size in characters - configurable via environment variables
 const MAX_CHUNK_SIZE = process.env.MAX_CHUNK_SIZE ? parseInt(process.env.MAX_CHUNK_SIZE, 10) : 1000;
@@ -25,6 +27,229 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const MONGODB_DB_NAME = 'gloriamundo';
 const MONGODB_DOCUMENTS_COLLECTION = 'documents';
 const MONGODB_CHUNKS_COLLECTION = 'document_chunks';
+
+// Redis configuration for BullMQ
+const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
+const REDIS_PORT = process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379;
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
+
+// Redis is not required in this environment, so we'll use a simple in-memory processing approach
+// This is a simplified version that doesn't depend on Redis/BullMQ
+console.log('Using in-memory document processing (Redis not available)');
+
+// Simple implementation of UUID for job IDs
+function generateJobId(): string {
+  return 'job-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+/**
+ * Process a document in the background
+ * This function handles the chunking, embedding generation, and storage of a document
+ */
+async function processDocumentInBackground(data: {
+  documentId: number;
+  text: string;
+  fileName: string;
+  fileType: string;
+  conversationId: number;
+  userId?: number;
+}): Promise<void> {
+  const { documentId, text, fileName, fileType, conversationId, userId } = data;
+  const jobId = generateJobId();
+  
+  console.log(`Starting background processing for document ${documentId}: ${fileName} (Job ${jobId})`);
+  
+  try {
+    // Update document status to processing
+    await storage.updateDocument(documentId, {
+      metadata: {
+        processingStatus: 'processing',
+        startedAt: new Date().toISOString()
+      }
+    });
+    
+    console.time(`job-${jobId}-document-processing`);
+    
+    // Get the document from storage
+    const document = await storage.getDocument(documentId);
+    if (!document) {
+      throw new Error(`Document ${documentId} not found`);
+    }
+    
+    // Create optimized chunks for this document
+    console.time(`job-${jobId}-document-chunking`);
+    const chunks = createOptimizedChunks(text, fileName);
+    console.timeEnd(`job-${jobId}-document-chunking`);
+    console.log(`Created ${chunks.length} optimized chunks for document ${documentId}`);
+    
+    // Store chunks in database
+    const documentChunks: DocumentChunk[] = [];
+    
+    // Check if MongoDB is available for storing chunks
+    let mongoClient: MongoClient | null = null;
+    let mongoChunksCollection: any = null;
+    
+    if (MONGODB_URI) {
+      try {
+        mongoClient = await getMongoClient();
+        const mongoDb = mongoClient.db(MONGODB_DB_NAME);
+        mongoChunksCollection = mongoDb.collection(MONGODB_CHUNKS_COLLECTION);
+      } catch (mongoError) {
+        console.error(`Job ${jobId}: Error connecting to MongoDB:`, mongoError);
+      }
+    }
+    
+    // Store chunk data without embeddings first
+    console.time(`job-${jobId}-chunk-storage`);
+    for (let i = 0; i < chunks.length; i++) {
+      // Skip empty chunks
+      if (!chunks[i].trim()) {
+        console.log(`Skipping empty chunk at index ${i}`);
+        continue;
+      }
+      
+      // Create chunk in primary storage
+      const chunk = await storage.createDocumentChunk({
+        documentId,
+        content: chunks[i],
+        chunkIndex: i
+      });
+      
+      documentChunks.push(chunk);
+      
+      // Store in MongoDB if available for vector search
+      if (mongoChunksCollection) {
+        try {
+          // Ensure userId is always present and in correct format for vector search filtering
+          const userIdValue = userId ? userId.toString() : "0";
+          
+          await mongoChunksCollection.insertOne({
+            id: chunk.id.toString(),
+            documentId: documentId.toString(),
+            userId: userIdValue, // Always store userId (critical for vector search filtering)
+            content: chunks[i],
+            chunkIndex: i,
+            embedding: "", // Will be updated with vector later
+            createdAt: new Date()
+          });
+        } catch (mongoInsertError) {
+          console.error(`Job ${jobId}: Error storing chunk ${i} in MongoDB:`, mongoInsertError);
+        }
+      }
+      
+      // Log progress less frequently
+      if (i % 10 === 0 || i === chunks.length - 1) {
+        console.log(`Job ${jobId}: Created ${i + 1}/${chunks.length} chunks`);
+      }
+    }
+    console.timeEnd(`job-${jobId}-chunk-storage`);
+    
+    // OPTIMIZATION: Offload to Azure OpenAI for bulk embedding generation
+    // This is much faster than generating embeddings one by one
+    console.time(`job-${jobId}-embedding-generation`);
+    let embeddings: string[] = [];
+    
+    try {
+      // Process in small batches to stay within Azure OpenAI limits
+      const batchSize = 16; // Azure OpenAI batch limit 
+      let allResults: string[] = [];
+      
+      // Process chunks in batches
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        const batchResults = await processBatch(batch);
+        allResults.push(...batchResults);
+        
+        console.log(`Job ${jobId}: Processed embeddings for batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(chunks.length/batchSize)}`);
+      }
+      
+      embeddings = allResults;
+    } catch (embeddingError) {
+      console.error(`Job ${jobId}: Error generating batch embeddings:`, embeddingError);
+      
+      // If batch processing fails, fall back to individual processing
+      // But only process a limited number to keep it fast
+      const maxFallbackChunks = Math.min(chunks.length, 10);
+      console.log(`Job ${jobId}: Falling back to processing ${maxFallbackChunks} individual chunks`);
+      
+      embeddings = await Promise.all(
+        chunks.slice(0, maxFallbackChunks).map(async (chunk) => {
+          try {
+            return await generateEmbedding(chunk);
+          } catch (e) {
+            console.error(`Job ${jobId}: Error generating individual embedding:`, e);
+            return ""; // Empty embedding on error
+          }
+        })
+      );
+      
+      // Fill the rest with empty strings
+      while (embeddings.length < chunks.length) {
+        embeddings.push("");
+      }
+    }
+    console.timeEnd(`job-${jobId}-embedding-generation`);
+    
+    // Update chunks with embeddings
+    console.time(`job-${jobId}-embedding-storage`);
+    const updatePromises = [];
+    
+    for (let i = 0; i < documentChunks.length; i++) {
+      if (i < embeddings.length && embeddings[i]) {
+        const chunk = documentChunks[i];
+        
+        // Update in primary storage
+        updatePromises.push(
+          storage.updateDocumentChunkEmbedding(chunk.id, embeddings[i])
+        );
+        
+        // Update in MongoDB if available
+        if (mongoChunksCollection) {
+          updatePromises.push(
+            mongoChunksCollection.updateOne(
+              { id: chunk.id.toString() },
+              { $set: { embedding: embeddings[i] } }
+            ).catch((err: Error) => console.error(`Job ${jobId}: MongoDB update error for chunk ${i}:`, err))
+          );
+        }
+      }
+    }
+    
+    await Promise.all(updatePromises);
+    console.timeEnd(`job-${jobId}-embedding-storage`);
+    
+    console.timeEnd(`job-${jobId}-document-processing`);
+    console.log(`Job ${jobId}: Document processing complete for ${fileName}`);
+    
+    // Update document processing status
+    await storage.updateDocument(documentId, {
+      metadata: {
+        processingStatus: 'complete',
+        completedAt: new Date().toISOString(),
+        chunksProcessed: documentChunks.length
+      }
+    });
+    
+    return;
+  } catch (error) {
+    console.error(`Job ${jobId}: Background document processing error:`, error);
+    
+    // Update document with error status
+    try {
+      await storage.updateDocument(documentId, {
+        metadata: {
+          processingStatus: 'error',
+          errorMessage: String(error).substring(0, 255), // Truncate to avoid too long strings
+          errorAt: new Date().toISOString()
+        }
+      });
+    } catch (updateError) {
+      console.error(`Job ${jobId}: Error updating document status:`, updateError);
+    }
+    
+    throw error; // Rethrow to allow the calling function to handle it
+  }
+}
 
 // Map to track collections that support vector search
 const vectorSearchCapableCollections = new Map<string, boolean>();
@@ -91,6 +316,8 @@ const azureOpenAI = new AzureOpenAI({
 let mongoClient: MongoClient | null = null;
 let isMongoConnected = false;
 
+// No Redis/BullMQ worker or event handling needed for the background processing approach
+
 async function getMongoClient(): Promise<MongoClient> {
   if (!mongoClient) {
     mongoClient = new MongoClient(MONGODB_URI);
@@ -138,153 +365,36 @@ export async function processDocument(params: {
     metadata: {
       extractedAt: new Date().toISOString(),
       fileType,
-      processingStatus: 'extracting'
+      processingStatus: 'processing'
     }
   });
   
-  // Process everything else in the background to allow immediate response
+  // Process the document in the background using setTimeout
+  // This allows the HTTP request to return immediately while processing continues
   setTimeout(() => {
-    (async () => {
-      try {
-        // RADICAL OPTIMIZATION: For very large documents, we'll use a "representative sampling" approach
-        // Instead of processing the entire document, we'll select key portions that represent
-        // the document's content effectively while keeping processing time minimal
-        
-        console.time('document-chunking');
-        const chunks = createOptimizedChunks(text, fileName);
-        console.timeEnd('document-chunking');
-        console.log(`Created ${chunks.length} optimized chunks`);
-        
-        // Store chunks in database
-        const documentChunks: DocumentChunk[] = [];
-        
-        // Check if MongoDB is available for storing chunks
-        let mongoClient: MongoClient | null = null;
-        let mongoChunksCollection: any = null;
-        
-        if (MONGODB_URI) {
-          try {
-            mongoClient = await getMongoClient();
-            const mongoDb = mongoClient.db(MONGODB_DB_NAME);
-            mongoChunksCollection = mongoDb.collection(MONGODB_CHUNKS_COLLECTION);
-          } catch (mongoError) {
-            console.error("Error connecting to MongoDB:", mongoError);
-          }
+    processDocumentInBackground({
+      documentId: document.id,
+      text,
+      fileName,
+      fileType,
+      conversationId,
+      userId
+    }).catch(error => {
+      console.error(`Background processing failed for document ${document.id}:`, error);
+      // Update document with error status
+      storage.updateDocument(document.id, {
+        metadata: {
+          processingStatus: 'error',
+          errorMessage: String(error).substring(0, 255) // Truncate to avoid too long strings
         }
-        
-        // Store chunk data without embeddings first
-        console.time('chunk-storage');
-        for (let i = 0; i < chunks.length; i++) {
-          // Create chunk in primary storage
-          const chunk = await storage.createDocumentChunk({
-            documentId: document.id,
-            content: chunks[i],
-            chunkIndex: i
-          });
-          
-          documentChunks.push(chunk);
-          
-          // Store in MongoDB if available for vector search
-          if (mongoChunksCollection) {
-            try {
-              // Ensure userId is always present and in correct format for vector search filtering
-              const userIdValue = userId ? userId.toString() : "0";
-              
-              await mongoChunksCollection.insertOne({
-                id: chunk.id.toString(),
-                documentId: document.id.toString(),
-                userId: userIdValue, // Always store userId (critical for vector search filtering)
-                content: chunks[i],
-                chunkIndex: i,
-                embedding: "", // Will be updated with vector later
-                createdAt: new Date()
-              });
-            } catch (mongoInsertError) {
-              console.error(`Error storing chunk ${i} in MongoDB:`, mongoInsertError);
-            }
-          }
-        }
-        console.timeEnd('chunk-storage');
-        
-        // RADICAL OPTIMIZATION: Offload to Azure OpenAI for bulk embedding generation
-        // This is much faster than generating embeddings one by one
-        console.time('embedding-generation');
-        let embeddings: string[] = [];
-        
-        try {
-          // Process in small batches to stay within Azure OpenAI limits
-          const batchSize = 16; // Azure OpenAI batch limit 
-          let allResults: string[] = [];
-          
-          // Process chunks in batches
-          for (let i = 0; i < chunks.length; i += batchSize) {
-            const batch = chunks.slice(i, i + batchSize);
-            const batchResults = await processBatch(batch);
-            allResults.push(...batchResults);
-          }
-          
-          embeddings = allResults;
-        } catch (embeddingError) {
-          console.error('Error generating batch embeddings:', embeddingError);
-          
-          // If batch processing fails, fall back to individual processing
-          // But only process a limited number to keep it fast
-          const maxFallbackChunks = Math.min(chunks.length, 10);
-          console.log(`Falling back to processing ${maxFallbackChunks} individual chunks`);
-          
-          embeddings = await Promise.all(
-            chunks.slice(0, maxFallbackChunks).map(async (chunk) => {
-              try {
-                return await generateEmbedding(chunk);
-              } catch (e) {
-                console.error('Error generating individual embedding:', e);
-                return ""; // Empty embedding on error
-              }
-            })
-          );
-          
-          // Fill the rest with empty strings
-          while (embeddings.length < chunks.length) {
-            embeddings.push("");
-          }
-        }
-        console.timeEnd('embedding-generation');
-        
-        // Update chunks with embeddings
-        console.time('embedding-storage');
-        const updatePromises = [];
-        
-        for (let i = 0; i < documentChunks.length; i++) {
-          if (i < embeddings.length && embeddings[i]) {
-            const chunk = documentChunks[i];
-            
-            // Update in primary storage
-            updatePromises.push(
-              storage.updateDocumentChunkEmbedding(chunk.id, embeddings[i])
-            );
-            
-            // Update in MongoDB if available
-            if (mongoChunksCollection) {
-              updatePromises.push(
-                mongoChunksCollection.updateOne(
-                  { id: chunk.id.toString() },
-                  { $set: { embedding: embeddings[i] } }
-                ).catch((err: Error) => console.error(`MongoDB update error for chunk ${i}:`, err))
-              );
-            }
-          }
-        }
-        
-        await Promise.all(updatePromises);
-        console.timeEnd('embedding-storage');
-        
-        console.timeEnd('document-processing');
-        console.log(`Document processing complete for ${fileName}`);
-      } catch (error) {
-        console.error('Background document processing error:', error);
-      }
-    })();
-  }, 10); // Start right away but allow response to return first
+      }).catch(updateError => {
+        console.error(`Failed to update error status for document ${document.id}:`, updateError);
+      });
+    });
+  }, 100); // Small delay to ensure the response has been sent
+  
+  console.log(`Document ${document.id} (${fileName}) queued for background processing`);
+  console.timeEnd('document-processing');
   
   return document;
 }
