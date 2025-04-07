@@ -282,25 +282,41 @@ export const ModelPresets = () => {
   // Render free tier button
   const renderFreeTierButton = () => {
     return (
-      <Button
-        onClick={handleFreeTierClick}
-        variant={activeFreeTierModel ? "default" : "outline"}
-        className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
-          activeFreeTierModel ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-        }`}
-      >
-        {activeFreeTierModel ? (
-          <>
-            <Check size={16} className="mr-1" />
-            <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
-          </>
-        ) : (
-          <>
-            <Network size={16} className="mr-1" />
-            <span>Free Tier</span>
-          </>
-        )}
-      </Button>
+      <div className="relative group">
+        <Button
+          onClick={handleFreeTierClick}
+          variant={activeFreeTierModel ? "default" : "outline"}
+          className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
+            activeFreeTierModel ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+          }`}
+        >
+          {activeFreeTierModel ? (
+            <>
+              <Check size={16} className="mr-1" />
+              <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
+            </>
+          ) : (
+            <>
+              <Network size={16} className="mr-1" />
+              <span>Free Tier</span>
+            </>
+          )}
+        </Button>
+        
+        {/* Edit button */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering the free tier button click
+            setFreeTierSearchTerm(''); // Clear search when opening dialog
+            setIsFreeTierDialogOpen(true);
+          }}
+        >
+          <Edit size={12} />
+        </Button>
+      </div>
     );
   };
   
