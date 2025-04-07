@@ -138,11 +138,19 @@ app.use((req, res, next) => {
     console.error('Global error handler:', err);
     
     // Use our centralized error handling system
-    const { handleInternalError, sendErrorResponse } = require('./errorHandler');
-    const apiError = handleInternalError(err, 'application');
-    
-    // Send the standardized error response
-    sendErrorResponse(res, apiError);
+    import('./errorHandler').then(({ handleInternalError, sendErrorResponse }) => {
+      const apiError = handleInternalError(err, 'application');
+      
+      // Send the standardized error response
+      sendErrorResponse(res, apiError);
+    }).catch(importError => {
+      console.error('Failed to import error handler:', importError);
+      
+      // Fallback error response if error handler import fails
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+      res.status(status).json({ message });
+    });
     
     // Don't rethrow the error as it will crash the server
     // The error is already logged above

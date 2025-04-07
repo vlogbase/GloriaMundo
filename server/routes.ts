@@ -376,8 +376,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test API connections without sending real messages
   // OpenRouter Models endpoint
   app.get("/api/openrouter/models", async (req, res) => {
-    const { parseOpenRouterError, handleInternalError, sendErrorResponse, ErrorCategory } = require("./errorHandler");
-    
     if (!isOpenRouterKeyValid) {
       sendErrorResponse(res, {
         status: 401,
