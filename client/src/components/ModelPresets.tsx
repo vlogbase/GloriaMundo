@@ -33,7 +33,7 @@ import {
   CommandItem, 
   CommandList 
 } from '@/components/ui/command';
-import { Network, Edit, Check, Lock, Search } from 'lucide-react';
+import { Network, Edit, Check, Lock, Search, Image } from 'lucide-react';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -260,6 +260,8 @@ export const ModelPresets = () => {
           >
             {isPreset5 ? (
               <Search size={16} className="mr-1" />
+            ) : isPreset4 ? (
+              <Image size={16} className="mr-1" />
             ) : (
               <Network size={16} className="mr-1" />
             )}
@@ -351,6 +353,8 @@ export const ModelPresets = () => {
             <DialogDescription>
               {currentPresetKey === 'preset5' 
                 ? "Select a search model to assign to this preset. Preset 5 is dedicated to search capabilities."
+                : currentPresetKey === 'preset4'
+                ? "Select a multimodal model to assign to this preset. Preset 4 is dedicated to image understanding capabilities."
                 : "Select a model from the list below to assign to this preset. Click the edit icon on a preset button anytime to change this assignment."
               }
             </DialogDescription>
@@ -362,7 +366,13 @@ export const ModelPresets = () => {
                 <Label htmlFor="model-search">Search models</Label>
                 <Input
                   id="model-search"
-                  placeholder={currentPresetKey === 'preset5' ? "Search Sonar models..." : "Search models..."}
+                  placeholder={
+                    currentPresetKey === 'preset5' 
+                    ? "Search Sonar models..." 
+                    : currentPresetKey === 'preset4'
+                    ? "Search multimodal models..."
+                    : "Search models..."
+                  }
                   value={presetSearchTerm}
                   onChange={(e) => {
                     setPresetSearchTerm(e.target.value);
@@ -374,6 +384,22 @@ export const ModelPresets = () => {
                               (model.id.toLowerCase().includes('perplexity/sonar') || 
                                model.name.toLowerCase().includes('sonar')) &&
                               model.id.toLowerCase().includes('perplexity') &&
+                              (model.id.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                               model.name.toLowerCase().includes(e.target.value.toLowerCase()))
+                            )
+                          : currentPresetKey === 'preset4'
+                          ? models.filter(model => 
+                              // Filter for multimodal models that mention vision or image capabilities
+                              (model.id.toLowerCase().includes('vision') || 
+                               model.name.toLowerCase().includes('vision') ||
+                               model.id.toLowerCase().includes('image') ||
+                               model.name.toLowerCase().includes('image') ||
+                               model.id.toLowerCase().includes('multimodal') ||
+                               model.name.toLowerCase().includes('multimodal') ||
+                               model.id.toLowerCase().includes('gemini') ||
+                               model.id.toLowerCase().includes('claude-3') ||
+                               model.id.toLowerCase().includes('gpt-4-vision') ||
+                               model.id.toLowerCase().includes('llava')) &&
                               (model.id.toLowerCase().includes(e.target.value.toLowerCase()) ||
                                model.name.toLowerCase().includes(e.target.value.toLowerCase()))
                             )
@@ -442,6 +468,23 @@ export const ModelPresets = () => {
                               (presetSearchTerm === '' ||
                                 model.id.toLowerCase().includes(presetSearchTerm.toLowerCase()) ||
                                 model.name.toLowerCase().includes(presetSearchTerm.toLowerCase()))
+                            ))
+                          : currentPresetKey === 'preset4'
+                          ? groupModelsByProvider(models.filter(model => 
+                              // Filter for multimodal models that mention vision or image capabilities
+                              (model.id.toLowerCase().includes('vision') || 
+                               model.name.toLowerCase().includes('vision') ||
+                               model.id.toLowerCase().includes('image') ||
+                               model.name.toLowerCase().includes('image') ||
+                               model.id.toLowerCase().includes('multimodal') ||
+                               model.name.toLowerCase().includes('multimodal') ||
+                               model.id.toLowerCase().includes('gemini') ||
+                               model.id.toLowerCase().includes('claude-3') ||
+                               model.id.toLowerCase().includes('gpt-4-vision') ||
+                               model.id.toLowerCase().includes('llava')) &&
+                              (presetSearchTerm === '' ||
+                               model.id.toLowerCase().includes(presetSearchTerm.toLowerCase()) ||
+                               model.name.toLowerCase().includes(presetSearchTerm.toLowerCase()))
                             ))
                           : groupModelsByProvider(models.filter(model =>
                               presetSearchTerm === '' ||
