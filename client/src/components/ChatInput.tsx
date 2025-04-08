@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ModelType } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/models";
 import { ModelPresets } from "@/components/ModelPresets";
+import { CameraView } from "@/components/CameraView";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -481,21 +482,19 @@ export const ChatInput = ({
                 Center your subject in the frame and click the capture button.
               </DialogDescription>
             </DialogHeader>
-            <div className="relative overflow-hidden rounded-md bg-background">
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                className="w-full h-auto aspect-video object-cover"
-              />
-              <canvas ref={canvasRef} className="hidden" />
-            </div>
-            <div className="flex justify-center gap-4 mt-4">
-              <Button onClick={closeCamera} variant="outline">Cancel</Button>
-              <Button onClick={takePhoto} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Capture
-              </Button>
-            </div>
+            {/* Use the new enhanced CameraView component */}
+            <CameraView 
+              onClose={closeCamera} 
+              onCapture={(imageData) => {
+                // Process the captured image
+                const img = document.createElement('img');
+                img.onload = () => {
+                  processImage(img);
+                  closeCamera();
+                };
+                img.src = imageData;
+              }} 
+            />
           </DialogContent>
         </Dialog>
         
