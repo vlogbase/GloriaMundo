@@ -17,9 +17,11 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Function to start the camera with a specific facing mode
+  // Function to start the camera with a specific facing mode - improved with constraints
   const startCamera = async (facingMode: 'user' | 'environment') => {
     try {
+      console.log(`Starting camera with facing mode: ${facingMode}`);
+      
       // Check if MediaDevices API is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setIsCameraSupported(false);
@@ -27,14 +29,51 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
         return;
       }
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode }
-      });
+      // Try to get device info to ensure camera exists with this facing mode
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      console.log(`Found ${videoDevices.length} video input devices`);
       
+      // Use more specific constraints for better compatibility
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: false
+      };
+      
+      // If there's already a stream active, ensure it's properly stopped
+      if (stream) {
+        console.log('Stopping any existing stream before starting new one');
+        stream.getTracks().forEach(track => track.stop());
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+      }
+      
+      console.log('Requesting camera with constraints:', constraints);
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      console.log(`Got media stream with ${mediaStream.getVideoTracks().length} video tracks`);
+      
+      // Save the stream and connect it to the video element
       setStream(mediaStream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        
+        // Add event listeners to handle any connection issues
+        videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded');
+          if (videoRef.current) {
+            videoRef.current.play().catch(e => {
+              console.error('Error playing video:', e);
+            });
+          }
+        };
       }
       
       setHasCameraPermission(true);
@@ -49,6 +88,23 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
           setIsCameraSupported(false);
           setError("No camera found on this device.");
+        } else if (err.name === 'OverconstrainedError') {
+          // Try again with simpler constraints if the specified ones didn't work
+          console.log('Camera constraints not satisfied, trying simpler configuration');
+          try {
+            const simpleStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode },
+              audio: false
+            });
+            setStream(simpleStream);
+            if (videoRef.current) {
+              videoRef.current.srcObject = simpleStream;
+            }
+            setHasCameraPermission(true);
+            setError(null);
+          } catch (e) {
+            setError(`Camera not available: ${e instanceof Error ? e.message : 'Unknown error'}`);
+          }
         } else {
           setError(`Camera error: ${err.message}`);
         }
@@ -71,21 +127,42 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
     };
   }, [currentFacingMode]);
 
-  // Handle camera switching
-  const handleSwitchCamera = () => {
-    // Stop current stream
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+  // Handle camera switching - improved with proper async handling
+  const handleSwitchCamera = async () => {
+    try {
+      console.log(`Switching camera from ${currentFacingMode} mode...`);
+      
+      // Stop current stream
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          console.log(`Stopping track: ${track.kind}, enabled: ${track.enabled}, muted: ${track.muted}`);
+          track.stop();
+        });
+        
+        // Clear video source
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+      }
+      
+      // Determine the new facing mode (flip it)
+      const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      console.log(`Setting new facing mode to: ${newFacingMode}`);
+      
+      // Update the facing mode state
+      setCurrentFacingMode(newFacingMode);
+      
+      // Small delay to ensure previous stream is fully stopped
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Explicitly start the camera with the new facing mode
+      await startCamera(newFacingMode);
+      
+      console.log(`Camera switched to ${newFacingMode} mode successfully`);
+    } catch (error) {
+      console.error('Error switching camera:', error);
+      setError(`Failed to switch camera: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    // Determine the new facing mode (flip it)
-    const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-    
-    // Update the facing mode state
-    setCurrentFacingMode(newFacingMode);
-    
-    // Explicitly start the camera with the new facing mode
-    startCamera(newFacingMode);
   };
 
   // Take photo from video stream

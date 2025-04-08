@@ -144,6 +144,21 @@ export const ModelPresets = () => {
     setIsDialogOpen(true);
   };
   
+  // Helper function to check if a model is multimodal
+  const isMultimodalModel = (modelId: string): boolean => {
+    // Check if model supports vision/images based on ID or name
+    return (
+      modelId.toLowerCase().includes('vision') || 
+      modelId.toLowerCase().includes('image') ||
+      modelId.toLowerCase().includes('multimodal') ||
+      modelId.toLowerCase().includes('gemini') ||
+      modelId.toLowerCase().includes('claude-3') ||
+      modelId.toLowerCase().includes('gpt-4-vision') ||
+      modelId.toLowerCase().includes('gpt-4o') ||
+      modelId.toLowerCase().includes('llava')
+    );
+  };
+
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     // Get the model ID associated with this preset
@@ -154,13 +169,15 @@ export const ModelPresets = () => {
     
     // If a valid model ID was returned from the preset
     if (modelId) {
-      // Special handling for preset4 (multimodal preset)
-      if (presetKey === 'preset4') {
-        // For preset4, we need to set the model type to 'multimodal' to enable image upload buttons
-        console.log(`Setting selected model to 'multimodal' for preset4`);
+      // Determine model type based on model capabilities, not just on preset number
+      const shouldSetMultimodal = isMultimodalModel(modelId);
+      
+      if (shouldSetMultimodal) {
+        // Only set to multimodal if the model actually supports it
+        console.log(`Setting selected model to 'multimodal' for model: ${modelId}`);
         setSelectedModel('multimodal');
       } else {
-        // For all other presets, use the standard 'openrouter' type
+        // For all non-multimodal models, use the standard 'openrouter' type
         console.log(`Setting selected model to 'openrouter'`);
         setSelectedModel('openrouter');
       }

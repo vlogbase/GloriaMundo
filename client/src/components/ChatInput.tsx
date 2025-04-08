@@ -529,6 +529,8 @@ export const ChatInput = ({
                     className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
                     disabled={isLoading || uploadingDocument}
                     onClick={startCamera}
+                    data-testid="camera-button" /* For easier testing */
+                    id="camera-button" /* For easier DOM selection */
                   >
                     <Camera size={18} />
                   </Button>
