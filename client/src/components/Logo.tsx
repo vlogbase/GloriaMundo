@@ -25,13 +25,19 @@ export const Logo: React.FC<LogoProps> = memo(({
       onClick={onClick}
       aria-label="GloriaMundo Logo"
     >
-      <img 
-        src="/images/logo.png" 
-        alt="GloriaMundo Logo" 
-        width={size} 
-        height={size} 
-        className="object-contain"
-      />
+      <picture>
+        <source srcSet="/images/logo.webp" type="image/webp" />
+        <source srcSet="/images/logo.png" type="image/png" />
+        <img 
+          src="/images/logo.png" 
+          alt="GloriaMundo Logo" 
+          width={size} 
+          height={size} 
+          className="object-contain"
+          loading={size > 48 ? "lazy" : "eager"} // Eager load small logos (likely above-the-fold)
+          decoding="async"
+        />
+      </picture>
       {showText && (
         <span className="ml-2 font-semibold text-xl text-primary">GloriaMundo</span>
       )}

@@ -49,7 +49,9 @@
     <!-- End Google Tag Manager -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Use custom GloriaMundo logo as favicon -->
+    <!-- Use custom GloriaMundo logo as favicon (with WebP format) -->
+    <link rel="icon" type="image/webp" href="/GloriaMundoroundtransp.webp" />
+    <!-- Fallback for browsers that don't support WebP -->
     <link rel="icon" type="image/png" href="/GloriaMundoroundtransp.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#38B2AC" />
@@ -59,12 +61,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="GloriaMundo - Free AI" />
-    <link rel="apple-touch-icon" href="/GloriaMundoroundtransp.png" />
+    <link rel="apple-touch-icon" href="/GloriaMundoroundtransp.webp" />
     
     <!-- Preconnect to important origins -->
     <link rel="preconnect" href="/" crossorigin />
-    <!-- We're removing the preload for gm-logo.png since it may not be needed immediately -->
-    <!-- Instead, we'll ensure it's loaded when needed in the component itself -->
+    
+    <!-- Preload critical above-the-fold images -->
+    <link rel="preload" as="image" href="/images/logo.webp" type="image/webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/GloriaMundoroundtransp.webp" type="image/webp" fetchpriority="high" />
     
     <!-- Font optimization -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,10 +80,10 @@
     <title>GloriaMundo - Free & Unlimited AI Assistant</title>
     <meta name="description" content="Access powerful AI capabilities for free without limits. GloriaMundo offers unrestricted conversations with advanced models for all your questions and tasks." />
     
-    <!-- Apple splash screens -->
-    <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" />
+    <!-- Apple splash screens with WebP format -->
+    <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)" />
+    <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
+    <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" />
     
     <!-- Fetch AdSense script only when needed (deferred) -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312" crossorigin="anonymous"></script>

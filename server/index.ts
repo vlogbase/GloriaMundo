@@ -9,10 +9,26 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { db } from "./db";
 import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
+import compression from "compression";
 
 const app = express();
 // Trust the proxy headers set by Replit (to fix https redirect issues)
 app.set('trust proxy', 1);
+
+// Enable Gzip compression for all responses
+app.use(compression({
+  // Only compress responses for requests that have the following headers
+  filter: (req, res) => {
+    // Don't compress responses with this header
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Use compression filter function from the module
+    return compression.filter(req, res);
+  },
+  // Set compression level (0-9, where 9 is highest compression but slowest)
+  level: 6,
+}));
 
 // Increase the request size limit for JSON and URL encoded data to handle larger images
 // Default is 100kb, increasing to 50MB for multimodal content
