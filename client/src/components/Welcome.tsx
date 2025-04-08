@@ -1,6 +1,6 @@
 import { Sparkles, LogIn } from "lucide-react";
 import { motion } from "framer-motion";
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 interface User {
@@ -16,10 +16,19 @@ interface WelcomeProps {
   isLoading?: boolean;
 }
 
+// Static welcome paragraph that renders immediately for LCP optimization
+export const StaticWelcomeParagraph = () => (
+  <p className="text-lg text-muted-foreground mb-6 welcome-paragraph">
+    Ask me anything and I'll provide helpful, accurate responses. Sign in to save your conversations and access them from any device.
+  </p>
+);
+
 // The main Welcome component
 export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomeProps) => {
+  const [userDataLoaded, setUserDataLoaded] = useState(false);
+  
   // Check if user is authenticated
-  const { data: user } = useQuery<User | null>({
+  const { data: user, isSuccess, isError } = useQuery<User | null>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       try {
@@ -42,52 +51,66 @@ export const Welcome = memo(({ onSuggestionClick, isLoading = false }: WelcomePr
       }
     }
   });
+  
+  // Mark user data as loaded when query is settled (either success or error)
+  useEffect(() => {
+    if (isSuccess || isError) {
+      setUserDataLoaded(true);
+    }
+  }, [isSuccess, isError]);
 
   const handleExampleClick = () => {
     if (isLoading) return;
     onSuggestionClick("Tell me more about your features and capabilities.");
   };
   
+  // Split the component into two parts:
+  // 1. The static content that renders immediately (for LCP)
+  // 2. The animated content that appears after user data is loaded
+
   return (
-    <motion.div 
-      className="flex flex-col items-center justify-center mt-20 mb-10"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div className="flex flex-col items-center justify-center mt-20 mb-10">
+      {/* Static content for immediate rendering (LCP optimization) */}
       <div className="flex flex-col items-center justify-center text-center max-w-2xl mx-auto px-4">
         <div className="mb-4">
           <Sparkles className="h-12 w-12 text-primary mb-2" />
         </div>
         <h1 className="text-3xl font-bold mb-4">
-          {user ? `Welcome back, ${user.name}!` : 'Welcome to GloriaMundo!'}
+          Welcome to GloriaMundo!
         </h1>
-        <p className="text-lg text-muted-foreground mb-6">
-          {user 
-            ? "Your conversations are now being saved to your account. Ask me anything and I'll provide helpful, accurate responses." 
-            : "Sign in to save your conversations and access them from any device. Ask me anything and I'll provide helpful, accurate responses."
-          }
-        </p>
         
-        {!user && (
-          <div className="mb-6 p-4 bg-secondary/30 rounded-lg">
-            <p className="flex items-center gap-2 text-md">
-              <LogIn size={16} />
-              <span>Sign in with Google in the top right corner to save your conversations.</span>
-            </p>
-          </div>
-        )}
-        
-        <button
-          onClick={handleExampleClick}
-          disabled={isLoading}
-          className="flex items-center gap-1 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors"
-        >
-          <Sparkles size={16} />
-          <span>Try an example question</span>
-        </button>
+        {/* Static paragraph that renders immediately - this is our LCP target */}
+        <StaticWelcomeParagraph />
       </div>
-    </motion.div>
+
+      {/* Dynamic content that renders after user data is loaded */}
+      {userDataLoaded && (
+        <motion.div 
+          className="flex flex-col items-center justify-center w-full max-w-2xl mx-auto px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          {!user && (
+            <div className="mb-6 p-4 bg-secondary/30 rounded-lg">
+              <p className="flex items-center gap-2 text-md">
+                <LogIn size={16} />
+                <span>Sign in with Google in the top right corner to save your conversations.</span>
+              </p>
+            </div>
+          )}
+          
+          <button
+            onClick={handleExampleClick}
+            disabled={isLoading}
+            className="flex items-center gap-1 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors"
+          >
+            <Sparkles size={16} />
+            <span>Try an example question</span>
+          </button>
+        </motion.div>
+      )}
+    </div>
   );
 });
 

@@ -30,6 +30,36 @@ app.use(compression({
   level: 6,
 }));
 
+// Set appropriate cache headers for static assets
+app.use((req, res, next) => {
+  // Skip API routes and only apply to static assets
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  
+  // Apply different cache control headers based on file type
+  const path = req.path.toLowerCase();
+  
+  if (path.endsWith('.html')) {
+    // HTML files - shorter cache (users need fresh content)
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  } else if (path.match(/\.(js|css|json)$/)) {
+    // JS/CSS files - cache for 1 week with revalidation
+    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+  } else if (path.match(/\.(jpg|jpeg|png|gif|webp|ico|svg|woff2|woff|ttf|eot)$/)) {
+    // Static assets - cache for 1 month
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+  } else if (!path.includes('.')) {
+    // Routes without file extensions (likely React routes) - no caching
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  } else {
+    // Other files - cache for 1 day
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+  
+  next();
+});
+
 // Increase the request size limit for JSON and URL encoded data to handle larger images
 // Default is 100kb, increasing to 50MB for multimodal content
 app.use(express.json({ limit: '50mb' }));
