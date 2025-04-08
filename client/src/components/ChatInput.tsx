@@ -55,8 +55,7 @@ export const ChatInput = ({
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Camera is now handled by the CameraView component
   const { selectedModel, setSelectedModel } = useModelSelection();
   const { models, selectedModelId, setSelectedModelId, isLoading: modelsLoading } = useOpenRouterModels();
   const { toast } = useToast();
@@ -192,59 +191,17 @@ export const ChatInput = ({
     }
   };
   
-  // Start camera for taking a photo
-  const startCamera = async () => {
+  // Start camera for taking a photo - simplified now that CameraView handles all camera operations
+  const startCamera = () => {
     setCameraModalOpen(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      setCameraModalOpen(false);
-    }
   };
   
-  // Close camera and stop stream
+  // Close camera modal - CameraView component handles the stream cleanup
   const closeCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      const tracks = stream.getTracks();
-      tracks.forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
     setCameraModalOpen(false);
   };
   
-  // Take a photo from camera stream
-  const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      // Draw video frame to canvas
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Create an image from the canvas
-        const img = document.createElement('img');
-        img.onload = () => {
-          processImage(img);
-          closeCamera();
-        };
-        img.src = canvas.toDataURL('image/jpeg', 0.9);
-      }
-    }
-  };
+  // No longer needed - CameraView component handles photo capture
   
   // Handle document upload
   const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -485,7 +442,7 @@ export const ChatInput = ({
             {/* Use the new enhanced CameraView component */}
             <CameraView 
               onClose={closeCamera} 
-              onCapture={(imageData) => {
+              onCapture={(imageData: string) => {
                 // Process the captured image
                 const img = document.createElement('img');
                 img.onload = () => {

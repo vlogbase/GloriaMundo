@@ -9,7 +9,7 @@ interface CameraViewProps {
 
 export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [currentFacingMode, setCurrentFacingMode] = useState<'user' | 'environment'>('environment');
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean>(true);
   const [isCameraSupported, setIsCameraSupported] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,49 +17,51 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Start camera when component mounts
-  useEffect(() => {
-    const startCamera = async () => {
-      try {
-        // Check if MediaDevices API is supported
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setIsCameraSupported(false);
-          setError("Camera API is not supported in this browser");
-          return;
-        }
-
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode }
-        });
-        
-        setStream(mediaStream);
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-        }
-        
-        setHasCameraPermission(true);
-        setError(null);
-      } catch (err) {
-        console.error("Error accessing camera:", err);
-        
-        if (err instanceof Error) {
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            setHasCameraPermission(false);
-            setError("Camera permission denied. Please allow camera access.");
-          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            setIsCameraSupported(false);
-            setError("No camera found on this device.");
-          } else {
-            setError(`Camera error: ${err.message}`);
-          }
-        } else {
-          setError("Unknown camera error occurred");
-        }
+  // Function to start the camera with a specific facing mode
+  const startCamera = async (facingMode: 'user' | 'environment') => {
+    try {
+      // Check if MediaDevices API is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setIsCameraSupported(false);
+        setError("Camera API is not supported in this browser");
+        return;
       }
-    };
 
-    startCamera();
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode }
+      });
+      
+      setStream(mediaStream);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      
+      setHasCameraPermission(true);
+      setError(null);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setHasCameraPermission(false);
+          setError("Camera permission denied. Please allow camera access.");
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          setIsCameraSupported(false);
+          setError("No camera found on this device.");
+        } else {
+          setError(`Camera error: ${err.message}`);
+        }
+      } else {
+        setError("Unknown camera error occurred");
+      }
+    }
+  };
+
+  // Start camera when component mounts or facing mode changes
+  useEffect(() => {
+    // Initialize camera with current facing mode
+    startCamera(currentFacingMode);
 
     // Cleanup function to stop all tracks when component unmounts
     return () => {
@@ -67,17 +69,23 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [facingMode]);
+  }, [currentFacingMode]);
 
   // Handle camera switching
-  const switchCamera = () => {
+  const handleSwitchCamera = () => {
     // Stop current stream
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
     
-    // Toggle facing mode
-    setFacingMode(prevMode => prevMode === 'user' ? 'environment' : 'user');
+    // Determine the new facing mode (flip it)
+    const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+    
+    // Update the facing mode state
+    setCurrentFacingMode(newFacingMode);
+    
+    // Explicitly start the camera with the new facing mode
+    startCamera(newFacingMode);
   };
 
   // Take photo from video stream
@@ -141,7 +149,7 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
             </Button>
             
             <Button 
-              onClick={switchCamera} 
+              onClick={handleSwitchCamera} 
               variant="secondary"
               className="flex-1"
             >
@@ -164,4 +172,4 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
   );
 };
 
-export default CameraView;
+// This export style matches the rest of the components in the project
