@@ -428,18 +428,18 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="border-t border-border p-4">
+    <div className="border-t border-border p-4 sticky bottom-0 bg-background">
       <div className="max-w-4xl mx-auto">
         {/* Camera Dialog */}
         <Dialog open={cameraModalOpen} onOpenChange={open => !open && closeCamera()}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-md w-[95vw] max-h-[90dvh] overflow-hidden">
+            <DialogHeader className="p-4 pb-0">
               <DialogTitle>Take a Photo</DialogTitle>
               <DialogDescription>
                 Center your subject in the frame and click the capture button.
               </DialogDescription>
             </DialogHeader>
-            {/* Use the new enhanced CameraView component */}
+            {/* Use the enhanced CameraView component */}
             <CameraView 
               onClose={closeCamera} 
               onCapture={(imageData: string) => {

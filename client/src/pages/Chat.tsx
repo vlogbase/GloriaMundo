@@ -219,7 +219,7 @@ export default function Chat() {
 
   return (
     <div className={cn(
-      "flex h-screen overflow-hidden bg-background",
+      "flex h-[100dvh] overflow-hidden bg-background",
       sidebarState === 'collapsed' ? "sidebar-collapsed" : ""
     )}>
       {/* Sidebar component */}
@@ -236,7 +236,7 @@ export default function Chat() {
       
       {/* Main content */}
       <div className={cn(
-        "flex-1 flex flex-col overflow-hidden transition-all duration-300",
+        "flex-1 flex flex-col overflow-hidden transition-all duration-300 h-[100dvh]",
         sidebarState === 'collapsed' ? "ml-16 md:ml-16" : "ml-0 md:ml-0"
       )}>
         {/* Mobile header */}
@@ -266,7 +266,7 @@ export default function Chat() {
         <div 
           className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 space-y-6"
           style={{
-            minHeight: "calc(100vh - 120px)", /* Reserve space for chat container */
+            /* Using flex-1 instead of fixed height - this will allow content to scroll properly */
             contain: "layout paint size", /* Improve paint/layout performance */
             contentVisibility: "auto", /* Optimize rendering for off-screen content */
           }}

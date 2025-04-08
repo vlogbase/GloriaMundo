@@ -113,7 +113,7 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
   };
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full max-h-[80dvh]">
       {/* Camera not supported or permission denied */}
       {(!isCameraSupported || !hasCameraPermission) && (
         <div className="flex flex-col items-center justify-center p-6 bg-muted/10 rounded-lg text-center min-h-[250px]">
@@ -133,10 +133,23 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
               autoPlay 
               playsInline 
               muted 
-              className="w-full h-auto aspect-[4/3] object-cover"
+              className="w-full h-auto aspect-[4/3] object-cover touch-none"
             />
             {/* Hidden canvas for capturing photos */}
             <canvas ref={canvasRef} className="hidden" />
+            
+            {/* Overlay with guide grid for better photo composition */}
+            <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-30">
+              <div className="border-r border-b border-white/20"></div>
+              <div className="border-r border-l border-b border-white/20"></div>
+              <div className="border-l border-b border-white/20"></div>
+              <div className="border-r border-t border-b border-white/20"></div>
+              <div className="border-r border-l border-t border-b border-white/20"></div>
+              <div className="border-l border-t border-b border-white/20"></div>
+              <div className="border-r border-t border-white/20"></div>
+              <div className="border-r border-l border-t border-white/20"></div>
+              <div className="border-l border-t border-white/20"></div>
+            </div>
           </div>
           
           <div className="flex justify-between gap-2 mt-4">
