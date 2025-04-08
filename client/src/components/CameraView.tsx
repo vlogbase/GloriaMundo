@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { CameraOff, RotateCw, Camera } from "lucide-react";
+import { CameraOff, FlipHorizontal, Camera } from "lucide-react";
 
 interface CameraViewProps {
   onClose: () => void;
@@ -13,6 +13,7 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean>(true);
   const [isCameraSupported, setIsCameraSupported] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,6 +34,9 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       console.log(`Found ${videoDevices.length} video input devices`);
+      
+      // Update the hasMultipleCameras state based on device count
+      setHasMultipleCameras(videoDevices.length > 1);
       
       // Use more specific constraints for better compatibility
       const constraints: MediaStreamConstraints = {
@@ -92,6 +96,11 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
           // Try again with simpler constraints if the specified ones didn't work
           console.log('Camera constraints not satisfied, trying simpler configuration');
           try {
+            // Check if multiple cameras are available, even in fallback mode
+            const devicesCheck = await navigator.mediaDevices.enumerateDevices();
+            const videoDevicesCheck = devicesCheck.filter(device => device.kind === 'videoinput');
+            setHasMultipleCameras(videoDevicesCheck.length > 1);
+            
             const simpleStream = await navigator.mediaDevices.getUserMedia({
               video: { facingMode },
               audio: false
@@ -229,28 +238,31 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
             </div>
           </div>
           
-          <div className="flex justify-between gap-2 mt-4">
+          <div className={`flex ${hasMultipleCameras ? 'justify-between' : 'justify-around'} gap-2 mt-4`}>
             <Button 
               onClick={onClose} 
               variant="outline"
-              className="flex-1"
+              className={hasMultipleCameras ? 'flex-1' : 'w-[40%]'}
             >
               Cancel
             </Button>
             
-            <Button 
-              onClick={handleSwitchCamera} 
-              variant="secondary"
-              className="flex-1"
-            >
-              <RotateCw className="mr-1" />
-              Switch
-            </Button>
+            {/* Only show switch camera button if multiple cameras are detected */}
+            {hasMultipleCameras && (
+              <Button 
+                onClick={handleSwitchCamera} 
+                variant="secondary"
+                className="flex-1"
+              >
+                <FlipHorizontal className="mr-1" />
+                Flip
+              </Button>
+            )}
             
             <Button 
               onClick={capturePhoto} 
               variant="default"
-              className="flex-1"
+              className={hasMultipleCameras ? 'flex-1' : 'w-[40%]'}
             >
               <Camera className="mr-1" />
               Capture
