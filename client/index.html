@@ -71,9 +71,18 @@
     <link rel="preload" as="image" href="/GloriaMundoroundtransp.webp" type="image/webp" fetchpriority="high" />
     
     <!-- Font optimization -->
+    <!-- Optimized font loading: preconnect to font providers -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Preload critical font files directly -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiA.woff2" as="font" type="font/woff2" crossorigin>
+    
+    <!-- Preload the font stylesheet -->
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    
+    <!-- Load the font stylesheet with optimized loading -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     
     <!-- SEO metadata -->
@@ -120,8 +129,8 @@
     <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" />
     
-    <!-- Fetch AdSense script only when needed (deferred) -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312" crossorigin="anonymous"></script>
+    <!-- Optimized loading of AdSense script - load after page visible -->
+    <script defer src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312" crossorigin="anonymous"></script>
   </head>
   <body>
     <!-- Google Tag Manager (noscript) -->
@@ -239,8 +248,18 @@
       }
     </script>
     
-    <!-- Skimlinks Commerce Script -->
-    <script type="text/javascript" src="https://s.skimresources.com/js/44501X1766367.skimlinks.js"></script>
+    <!-- Skimlinks Commerce Script - Lazy loaded to avoid blocking main thread -->
+    <script>
+      // Delayed loading of non-critical Skimlinks script
+      window.addEventListener('load', function() {
+        // Give the page time to become interactive first
+        setTimeout(function() {
+          const skimScript = document.createElement('script');
+          skimScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
+          document.body.appendChild(skimScript);
+        }, 2000); // 2-second delay after load
+      });
+    </script>
     <!-- End Skimlinks Commerce Script -->
   </body>
 </html>

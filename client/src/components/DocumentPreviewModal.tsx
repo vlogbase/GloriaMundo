@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { DocumentIcon } from "./DocumentIcon";
-import { Loader2 } from "lucide-react";
+import { OptimizedDocumentPreview } from "./OptimizedDocumentPreview";
 
 interface DocumentPreviewModalProps {
   isOpen: boolean;
@@ -25,50 +25,28 @@ export const DocumentPreviewModal = ({
   fileType,
   onClose,
 }: DocumentPreviewModalProps) => {
-  const [loading, setLoading] = useState(true);
-  const [documentContent, setDocumentContent] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch document content when the modal opens and document ID changes
-  useEffect(() => {
-    if (isOpen && documentId) {
-      setLoading(true);
-      setError(null);
-      
-      // Fetch document content from the server
-      fetch(`/api/documents/${documentId}/content`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Failed to load document: ${response.status} ${response.statusText}`);
-          }
-          return response.text();
-        })
-        .then(content => {
-          // Handle different file types appropriately
-          if (fileType === "application/pdf") {
-            setDocumentContent("PDF document preview is not available in this view. You can download the document to view it.");
-          } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-            setDocumentContent("DOCX document preview is not available in this view. You can download the document to view it.");
-          } else if (fileType.startsWith("text/")) {
-            // For text files, display the actual content
-            setDocumentContent(content);
-          } else {
-            setError("Preview not available for this file type.");
-          }
-        })
-        .catch(err => {
-          console.error("Error fetching document content:", err);
-          setError(`Failed to load document: ${err.message}`);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+  // Track when the dialog is fully mounted to prevent eagerly loading content
+  const [isFullyMounted, setIsFullyMounted] = useState(false);
+  
+  // Handle dialog open state changes
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onClose();
+      // Reset mounted state when dialog closes
+      setIsFullyMounted(false);
+    } else {
+      // Set fully mounted when dialog opens
+      setIsFullyMounted(true);
     }
-  }, [isOpen, documentId, fileType]);
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent 
+        className="sm:max-w-md"
+        // Prevent layout shifting during opening animation
+        onAnimationComplete={() => setIsFullyMounted(true)}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DocumentIcon fileType={fileType} size={18} />
@@ -79,15 +57,19 @@ export const DocumentPreviewModal = ({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="p-4 bg-muted/30 rounded-md h-[300px] overflow-auto">
-          {loading ? (
-            <div className="flex justify-center items-center h-full">
-              <Loader2 className="animate-spin h-6 w-6 text-primary" />
-            </div>
-          ) : error ? (
-            <div className="text-destructive text-sm">{error}</div>
+        {/* Only render optimized document preview when fully mounted and has ID */}
+        <div className="h-[300px] overflow-auto rounded-md bg-muted/30">
+          {isFullyMounted && documentId ? (
+            <OptimizedDocumentPreview
+              documentId={documentId}
+              fileName={fileName}
+              fileType={fileType}
+              isPreviewOpen={isOpen && isFullyMounted}
+            />
           ) : (
-            <div className="whitespace-pre-wrap text-sm">{documentContent}</div>
+            <div className="flex justify-center items-center h-full">
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
           )}
         </div>
         
@@ -102,7 +84,7 @@ export const DocumentPreviewModal = ({
                 window.open(downloadUrl, '_blank');
               }
             }}
-            disabled={!documentId || loading}
+            disabled={!documentId}
           >
             Download
           </Button>

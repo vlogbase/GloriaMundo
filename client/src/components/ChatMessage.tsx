@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Message } from "@/lib/types";
 import { MarkdownRenderer } from "@/lib/markdown";
 import { MessageActions } from "@/components/MessageActions";
@@ -8,6 +8,35 @@ import { AdSense } from "@/components/AdSense";
 import { Document } from "@/hooks/useDocuments";
 import { DocumentItem } from "./DocumentItem";
 import { DocumentPreviewModal } from "./DocumentPreviewModal";
+
+// Custom hook for intersection observer (lazy loading)
+function useIntersectionObserver(options = {}) {
+  const ref = useRef(null);
+  const [isIntersecting, setIsIntersecting] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsIntersecting(entry.isIntersecting);
+    }, { 
+      rootMargin: '200px', // Start loading when element is 200px from viewport
+      threshold: 0.1,      // Trigger when at least 10% is visible
+      ...options 
+    });
+
+    const currentRef = ref.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [options]);
+
+  return [ref, isIntersecting];
+}
 
 interface ChatMessageProps {
   message: Message;
@@ -19,10 +48,23 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
   const [previewDocument, setPreviewDocument] = useState<Document | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
-  // Use effect to refresh Skimlinks when an AI message is rendered
+  // Use the intersection observer hook for lazy loading
+  const [messageRef, isVisible] = useIntersectionObserver();
+  
+  // State to track if content should be rendered (for optimization)
+  const [shouldRenderContent, setShouldRenderContent] = useState(false);
+  
+  // When message becomes visible, mark it for rendering
   useEffect(() => {
-    // Only trigger Skimlinks refresh for AI (assistant) messages
-    if (!isUser) {
+    if (isVisible && !shouldRenderContent) {
+      setShouldRenderContent(true);
+    }
+  }, [isVisible, shouldRenderContent]);
+  
+  // Use effect to refresh Skimlinks when an AI message is rendered and visible
+  useEffect(() => {
+    // Only trigger Skimlinks refresh for AI (assistant) messages that are visible
+    if (!isUser && shouldRenderContent) {
       // Small delay to ensure content is fully rendered
       const timer = setTimeout(() => {
         refreshSkimlinks();
@@ -30,7 +72,7 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
       
       return () => clearTimeout(timer);
     }
-  }, [isUser, message.id]);
+  }, [isUser, message.id, shouldRenderContent]);
   
   // Handler for document preview
   const handlePreviewDocument = (document: Document) => {
@@ -41,12 +83,28 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
   return (
     <>
       <motion.div 
+        ref={messageRef as React.RefObject<HTMLDivElement>}
         className="w-full max-w-4xl mx-auto px-4 sm:px-6"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {isUser ? (
+        {/* Render optimized placeholder when not visible/rendered */}
+        {!shouldRenderContent ? (
+          // Lightweight placeholder with same dimensions to prevent layout shifts
+          <div 
+            className={isUser ? "flex justify-end" : "w-full"}
+            style={{ 
+              minHeight: isUser ? "60px" : "100px",
+              // Reserve appropriate space for the message
+              maxWidth: isUser ? "75%" : "100%", 
+              marginLeft: isUser ? "auto" : "0"
+            }}
+          >
+            <div className="w-full h-full bg-muted/20 animate-pulse rounded-lg"></div>
+          </div>
+        ) : isUser ? (
+          // User message content - only render when visible
           <div className="flex justify-end">
             <div className="max-w-[75%]">
               <div className="bg-userBg/30 p-4 rounded-2xl shadow-none">
@@ -75,6 +133,7 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
             </div>
           </div>
         ) : (
+          // AI message content - only render when visible
           <div className="w-full">
             <div className="markdown break-words">
               {/* Pass citations to MarkdownRenderer for processing reference links */}
@@ -114,14 +173,15 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
         )}
       </motion.div>
       
-      {/* Add AdSense below each AI response */}
-      {!isUser && (
+      {/* Add AdSense below each AI response - only when visible/rendered */}
+      {!isUser && shouldRenderContent && (
         <div className="w-full max-w-4xl mx-auto mt-3 mb-6 px-4 sm:px-6">
           <AdSense 
             adSlot="5678901234" 
             adFormat="auto" 
             style={{ display: 'block', maxHeight: '150px' }}
             className="rounded-md overflow-hidden"
+            lazyLoad={true}
           />
         </div>
       )}

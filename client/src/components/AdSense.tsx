@@ -5,19 +5,29 @@ interface AdSenseProps {
   adFormat?: 'auto' | 'rectangle' | 'horizontal' | 'vertical';
   style?: React.CSSProperties;
   className?: string;
+  lazyLoad?: boolean; // Added lazyLoad prop with default behavior
+  rootMargin?: string; // Control when ad loads relative to viewport
 }
 
 export const AdSense = ({ 
   adSlot, 
   adFormat = 'auto', 
   style = {}, 
-  className = '' 
+  className = '',
+  lazyLoad = true, // Default to true for automatic lazy loading
+  rootMargin = '200px' // Load ads when they're 200px from viewport
 }: AdSenseProps) => {
   const adRef = useRef<HTMLDivElement>(null);
   const [isAdVisible, setIsAdVisible] = useState(false);
 
   // Set up the intersection observer to load ads only when they enter the viewport
   useEffect(() => {
+    // If lazyLoad is false, set ad as visible immediately without using IntersectionObserver
+    if (!lazyLoad) {
+      setIsAdVisible(true);
+      return;
+    }
+    
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
@@ -30,7 +40,10 @@ export const AdSense = ({
           }
         });
       },
-      { threshold: 0.1 } // Trigger when at least 10% of the ad is visible
+      { 
+        threshold: 0.1, // Trigger when at least 10% of the ad is visible
+        rootMargin    // Use the provided rootMargin for controlling when ads load
+      }
     );
 
     if (adRef.current) {
@@ -42,7 +55,7 @@ export const AdSense = ({
         observer.unobserve(adRef.current);
       }
     };
-  }, []);
+  }, [lazyLoad, rootMargin]);
 
   // Only initialize the ad when it becomes visible
   useEffect(() => {

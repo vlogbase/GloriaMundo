@@ -262,8 +262,15 @@ export default function Chat() {
           <ThemeToggle />
         </div>
         
-        {/* Chat messages area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 space-y-6">
+        {/* Chat messages area - with layout stabilization to prevent CLS */}
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 space-y-6"
+          style={{
+            minHeight: "calc(100vh - 120px)", /* Reserve space for chat container */
+            contain: "layout paint size", /* Improve paint/layout performance */
+            contentVisibility: "auto", /* Optimize rendering for off-screen content */
+          }}
+        >
           {isLoadingMessages ? (
             <div className="flex justify-center items-center h-full">
               <div className="typing-indicator">
