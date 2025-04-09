@@ -313,6 +313,30 @@ export const ModelPresets = () => {
     }
   };
   
+  // Long press handler for mobile
+  const useLongPress = (callback: () => void, ms = 500) => {
+    const [startLongPress, setStartLongPress] = useState(false);
+    
+    useEffect(() => {
+      let timerId: NodeJS.Timeout;
+      if (startLongPress) {
+        timerId = setTimeout(callback, ms);
+      }
+      
+      return () => {
+        clearTimeout(timerId);
+      };
+    }, [callback, ms, startLongPress]);
+    
+    return {
+      onMouseDown: () => setStartLongPress(true),
+      onMouseUp: () => setStartLongPress(false),
+      onMouseLeave: () => setStartLongPress(false),
+      onTouchStart: () => setStartLongPress(true),
+      onTouchEnd: () => setStartLongPress(false),
+    };
+  };
+
   // Render presets
   const renderPresets = () => {
     return Object.entries(presets).map(([key, modelId]) => {
@@ -325,6 +349,15 @@ export const ModelPresets = () => {
       // Determine if this model should be locked (non-free model and no credits)
       const isLocked = !isFreeTier && !hasCredits && modelId;
       
+      // Configure long press for mobile
+      const longPressProps = useLongPress(() => {
+        if (!isLocked && !isLoading && !isPending) {
+          setCurrentPresetKey(presetKey);
+          setSelectedModelId(presets[presetKey] || '');
+          setIsDialogOpen(true);
+        }
+      });
+      
       return (
         <div key={key} className="relative group">
           <Button
@@ -334,6 +367,7 @@ export const ModelPresets = () => {
               isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
             } ${isLocked ? 'cursor-pointer' : ''}`}
             disabled={isLoading || isPending}
+            {...longPressProps}
           >
             {getPresetIcon(presetKey, modelId || '')}
             {modelId ? (
@@ -354,11 +388,11 @@ export const ModelPresets = () => {
             </div>
           )}
           
-          {/* Edit button */}
+          {/* Edit button (desktop only) */}
           <Button
             size="icon"
             variant="ghost"
-            className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+            className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hidden sm:flex"
             onClick={(e) => handleEditClick(e, presetKey)}
           >
             <Edit size={12} />
@@ -368,28 +402,53 @@ export const ModelPresets = () => {
     });
   };
   
-  // Render free tier button
+  // Render free tier button (now with same design pattern as presets)
   const renderFreeTierButton = () => {
+    const isActive = !!activeFreeTierModel;
+    
+    // Configure long press for mobile
+    const longPressProps = useLongPress(() => {
+      if (!isLoading && !isPending) {
+        setIsFreeTierDialogOpen(true);
+      }
+    });
+    
     return (
-      <Button
-        onClick={handleFreeTierClick}
-        variant={activeFreeTierModel ? "default" : "outline"}
-        className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
-          activeFreeTierModel ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-        }`}
-      >
-        {activeFreeTierModel ? (
-          <>
-            <Check size={16} className="mr-1" />
-            <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
-          </>
-        ) : (
-          <>
-            <Network size={16} className="mr-1" />
-            <span>Free Tier</span>
-          </>
-        )}
-      </Button>
+      <div className="relative group">
+        <Button
+          onClick={handleFreeTierClick}
+          variant={isActive ? "default" : "outline"}
+          className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
+            isActive ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+          }`}
+          {...longPressProps}
+        >
+          {activeFreeTierModel ? (
+            <>
+              <Network size={16} className="mr-1" />
+              <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
+            </>
+          ) : (
+            <>
+              <Network size={16} className="mr-1" />
+              <span>Free Tier</span>
+            </>
+          )}
+        </Button>
+        
+        {/* Edit button (only on desktop) */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hidden sm:flex"
+          onClick={(e) => {
+            e.stopPropagation();  // Prevent triggering the button click
+            setIsFreeTierDialogOpen(true);
+          }}
+        >
+          <Edit size={12} />
+        </Button>
+      </div>
     );
   };
   
@@ -416,7 +475,7 @@ export const ModelPresets = () => {
           <DialogHeader>
             <DialogTitle>Assign Model to Preset {getPresetNumber(currentPresetKey)}</DialogTitle>
             <DialogDescription>
-              Select a model from the list below to assign to this preset. Click the edit icon on a preset button anytime to change this assignment.
+              Select a model from the list below to assign to this preset. On desktop, click the edit icon on a preset button to change this assignment. On mobile, long-press the preset button.
             </DialogDescription>
           </DialogHeader>
           
@@ -488,7 +547,7 @@ export const ModelPresets = () => {
           <DialogHeader>
             <DialogTitle>Select a Free Model</DialogTitle>
             <DialogDescription>
-              These models are available at no cost. Choose one to use for your conversation.
+              These models are available at no cost. Select a model to use it immediately. On mobile, you can long-press the Free Tier button to access this selection.
             </DialogDescription>
           </DialogHeader>
           
