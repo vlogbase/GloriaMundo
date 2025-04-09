@@ -219,11 +219,10 @@ export const ModelPresets = () => {
     }
   };
   
-  // Handle click to activate a preset
-  const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
-    const modelId = activatePreset(presetKey);
-    
+  // Helper function to consistently set model type and ID
+  const handleActivation = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5', modelId: string | null) => {
     if (modelId) {
+      // Set the selected model ID
       setSelectedModelId(modelId);
       
       // Set model type based on preset and capabilities
@@ -245,8 +244,15 @@ export const ModelPresets = () => {
         setSelectedModel(shouldSetMultimodal ? 'multimodal' : 'openrouter');
       }
       
-      // Set the custom OpenRouter model ID
+      // Set the custom OpenRouter model ID (important for the actual API call)
       setCustomOpenRouterModelId(modelId);
+      
+      // Log for debugging purposes
+      console.log(`Model activated: ${modelId}, Type: ${presetKey === 'preset2' ? 'reasoning' : 
+                                                   presetKey === 'preset3' ? 'openrouter' :
+                                                   presetKey === 'preset4' ? 'multimodal' :
+                                                   presetKey === 'preset5' ? 'search' :
+                                                   isMultimodalModel(modelId) ? 'multimodal' : 'openrouter'}`);
     } else {
       // If no model is assigned to this preset yet, set default types based on preset
       if (presetKey === 'preset2') {
@@ -260,6 +266,12 @@ export const ModelPresets = () => {
       }
     }
   };
+
+  // Handle click to activate a preset
+  const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
+    const modelId = activatePreset(presetKey);
+    handleActivation(presetKey, modelId);
+  };
   
   // Handle free tier button click
   const handleFreeTierClick = () => {
@@ -268,25 +280,34 @@ export const ModelPresets = () => {
       setIsFreeTierDialogOpen(true);
     } else {
       // If a free tier model is already active, activate it again
-      setSelectedModelId(activeFreeTierModel);
-      setSelectedModel('openrouter');
+      // Treat free tier models as preset1 type (general)
+      handleActivation('preset1', activeFreeTierModel);
+      console.log(`Free tier model activated: ${activeFreeTierModel}`);
     }
   };
   
   // Handle selecting a free model
   const handleSelectFreeModel = (modelId: string) => {
     activateFreeTierModel(modelId);
-    setSelectedModelId(modelId);
-    setSelectedModel('openrouter');
+    
+    // Set model for use - free models are treated as regular OpenRouter models (preset1)
+    handleActivation('preset1', modelId);
+    
+    // Close the dialog
     setIsFreeTierDialogOpen(false);
   };
   
-  // Save selected model to preset
+  // Save selected model to preset and activate it immediately
   const saveModelToPreset = () => {
     if (selectedModelId) {
+      // Assign the model to the preset
       assignModelToPreset(currentPresetKey, selectedModelId);
+      
+      // Now immediately activate this preset
+      handleActivation(currentPresetKey, selectedModelId);
+      
+      // Close the dialog and reset filters
       setIsDialogOpen(false);
-      // Reset filtered models list
       setFilteredPresetModels([]);
       setSearchTerm('');
     }
@@ -407,19 +428,29 @@ export const ModelPresets = () => {
               className="mb-4"
             />
             
-            <Select
-              value={selectedModelId || undefined}
-              onValueChange={(value) => setSelectedModelId(value)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(groupedModels).map(([provider, providerModels]) => (
-                  <SelectGroup key={provider}>
-                    <SelectLabel>{provider}</SelectLabel>
-                    {providerModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id} className="flex justify-between">
+            <div className="space-y-4">
+              {Object.entries(groupedModels).map(([provider, providerModels]) => (
+                <div key={provider} className="space-y-2">
+                  <h3 className="text-sm font-medium">{provider}</h3>
+                  <div className="space-y-1">
+                    {providerModels.map(model => (
+                      <Button
+                        key={model.id}
+                        variant="outline"
+                        className={`w-full justify-between text-left h-auto py-2 ${selectedModelId === model.id ? 'bg-primary/10 border-primary/50' : ''}`}
+                        onClick={() => {
+                          // Immediately assign and activate the model
+                          assignModelToPreset(currentPresetKey, model.id);
+                          handleActivation(currentPresetKey, model.id);
+                          
+                          // Close dialog
+                          setIsDialogOpen(false);
+                          
+                          // Reset UI state
+                          setFilteredPresetModels([]);
+                          setSearchTerm('');
+                        }}
+                      >
                         <div className="flex flex-col">
                           <span>{model.name}</span>
                           <span className="text-xs text-muted-foreground">{model.id}</span>
@@ -429,25 +460,23 @@ export const ModelPresets = () => {
                             </span>
                           )}
                         </div>
-                      </SelectItem>
+                        {selectedModelId === model.id && (
+                          <Check className="h-4 w-4 text-primary" />
+                        )}
+                      </Button>
                     ))}
-                  </SelectGroup>
-                ))}
-                {Object.keys(groupedModels).length === 0 && (
-                  <SelectItem value="none" disabled>
-                    No models found
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+                  </div>
+                </div>
+              ))}
+              {Object.keys(groupedModels).length === 0 && (
+                <p className="text-center text-muted-foreground">No models found</p>
+              )}
+            </div>
           </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
-            </Button>
-            <Button onClick={saveModelToPreset} disabled={!selectedModelId || isPending}>
-              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -484,7 +513,7 @@ export const ModelPresets = () => {
                         <Button
                           key={model.id}
                           variant="outline"
-                          className="w-full justify-start text-left h-auto py-2"
+                          className={`w-full justify-between text-left h-auto py-2 ${activeFreeTierModel === model.id ? 'bg-green-100 dark:bg-green-950 border-green-500' : ''}`}
                           onClick={() => handleSelectFreeModel(model.id)}
                         >
                           <div className="flex flex-col">
@@ -496,6 +525,9 @@ export const ModelPresets = () => {
                               </span>
                             )}
                           </div>
+                          {activeFreeTierModel === model.id && (
+                            <Check className="h-4 w-4 text-green-600" />
+                          )}
                         </Button>
                       ))}
                     </div>
