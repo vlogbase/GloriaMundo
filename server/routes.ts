@@ -1970,8 +1970,11 @@ Format your responses using markdown for better readability and organization.`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
+        // Declare the response variable outside the try block so it's accessible later
+        let response;
+        
         try {
-          const response = await fetch(modelConfig.apiUrl, {
+          response = await fetch(modelConfig.apiUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2036,15 +2039,17 @@ Format your responses using markdown for better readability and organization.`;
           // Safely access the response variable or define a placeholder if not available
           let reader;
           try {
-            // Here we would normally have a 'response' variable from a fetch call
-            // Since it might not be defined in this context, we need to handle the error
-            if (typeof response !== 'undefined' && response && response.body) {
-              reader = response.body.getReader();
-            } else {
-              throw new Error("Response is not available");
+            // Check if response exists and has a body
+            if (!response || !response.body) {
+              throw new Error("Response or response body is not available");
             }
+            reader = response.body.getReader();
           } catch (readerError) {
-            console.error("Error getting reader from response:", readerError);
+            console.error("Error getting reader from response:", {
+              error: readerError instanceof Error ? readerError.message : String(readerError),
+              responseExists: !!response,
+              responseBodyExists: response && !!response.body
+            });
             throw new Error("Failed to get reader from response");
           }
           
@@ -2162,12 +2167,14 @@ Format your responses using markdown for better readability and organization.`;
           return;
         } else {
           // Non-streaming response
-          // Note: A 'response' variable should be defined from a fetch call in the outer scope
-          // Adding a safe check to avoid errors
+          // Ensure response exists and is valid
           if (!response) {
+            console.error("Error: Response object is not available");
             throw new Error("Response object is not available");
           }
-          const data = await response.json();
+          // Clone the response before consuming it with json()
+          const responseClone = response.clone();
+          const data = await responseClone.json();
           
           console.log(`Received response from ${modelConfig.apiProvider} API:`, {
             model: data.model,
