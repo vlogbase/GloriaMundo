@@ -218,7 +218,7 @@ async function processDocumentInBackground(data: {
       embeddings = await Promise.all(
         chunks.slice(0, maxFallbackChunks).map(async (chunk) => {
           try {
-            return await generateEmbedding(chunk);
+            return await generateEmbedding(chunk, userId, true);
           } catch (e) {
             console.error(`Job ${jobId}: Error generating individual embedding:`, e);
             return ""; // Empty embedding on error
@@ -385,7 +385,8 @@ const documentProcessingWorker = new Worker('document-processing', async (job) =
         // Process embeddings in parallel for this batch
         await Promise.all(batch.map(async (chunk: { id: number; content: string }) => {
           try {
-            const embedding = await generateEmbedding(chunk.content);
+            // Pass userId when generating embedding for proper billing
+            const embedding = await generateEmbedding(chunk.content, job.data.userId, true);
             
             // Update embedding in primary storage
             await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
@@ -711,7 +712,8 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     // Process embeddings in parallel
     await Promise.all(documentChunks.map(async (chunk) => {
       try {
-        const embedding = await generateEmbedding(chunk.content);
+        // Pass userId when generating embedding for proper billing
+        const embedding = await generateEmbedding(chunk.content, document.userId, true);
         
         // Update embedding in primary storage
         await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
@@ -1015,6 +1017,8 @@ async function processBatch(batch: string[]): Promise<string[]> {
     const individualResults = await Promise.all(
       batch.map(async (chunk) => {
         try {
+          // Note: userId would need to be passed from the job data to this function 
+          // to properly charge for embeddings in batch processing
           return await generateEmbedding(chunk);
         } catch (e) {
           console.error('Error generating individual embedding:', e);
@@ -1038,7 +1042,7 @@ let usingAzureOpenAI = AZURE_OPENAI_KEY && AZURE_OPENAI_ENDPOINT;
  * Generate embedding for text
  * OPTIMIZATION: Cached to prevent redundant processing of identical text
  */
-export async function generateEmbedding(text: string): Promise<string> {
+export async function generateEmbedding(text: string, userId?: number, isForDocument: boolean = true): Promise<string> {
   // Truncate and normalize text
   const truncatedText = text.substring(0, 8000).trim(); // Azure OpenAI has 8K token limit
   
@@ -1068,11 +1072,54 @@ export async function generateEmbedding(text: string): Promise<string> {
       // Get the embedding vector
       const embedding = response.data[0].embedding;
       
-      console.log(`Successfully generated embedding with Azure OpenAI (${embedding.length} dimensions)`);
+      // Get token count for billing purposes
+      const tokenCount = response.usage?.total_tokens || Math.ceil(truncatedText.length / 4); // Estimate if unavailable
+      
+      console.log(`Successfully generated embedding with Azure OpenAI (${embedding.length} dimensions, ${tokenCount} tokens)`);
       
       // Verify dimensions are as expected for text-embedding-3-large
       if (embedding.length !== 3072) {
         console.warn(`Warning: Generated embedding has ${embedding.length} dimensions, expected 3072 for text-embedding-3-large`);
+      }
+      
+      // Only charge and log usage for document processing, not for message memory/conversations
+      if (isForDocument && userId) {
+        // Import the calculateCreditsToCharge function
+        const { calculateCreditsToCharge } = await import('./paypal');
+        
+        // Calculate cost based on embedding tokens
+        const creditsToCharge = calculateCreditsToCharge(
+          tokenCount, // All tokens count as "prompt" for embedding models
+          0, // No completion tokens for embeddings
+          0, // Not using OpenRouter pricing 
+          0, // Not using OpenRouter pricing
+          'embedding' // Specify this is an embedding model
+        );
+        
+        console.log(`Charging ${creditsToCharge} credits (${creditsToCharge/10000} USD) for embedding ${tokenCount} tokens`);
+        
+        // Log usage and deduct credits
+        try {
+          await storage.createUsageLog({
+            userId: userId,
+            messageId: null, // Not associated with a message
+            modelId: 'azure-embedding',
+            promptTokens: tokenCount,
+            completionTokens: 0,
+            imageCount: 0,
+            creditsUsed: creditsToCharge,
+            metadata: { 
+              type: 'document_embedding',
+              documentLength: truncatedText.length 
+            }
+          });
+          
+          // Deduct cost from user's balance
+          await storage.deductUserCredits(userId, creditsToCharge);
+        } catch (creditError) {
+          console.error(`Error logging embedding usage for user ${userId}:`, creditError);
+          // Continue even if logging fails
+        }
       }
       
       // Convert to string for storage
@@ -1102,6 +1149,49 @@ export async function generateEmbedding(text: string): Promise<string> {
     pooling: 'mean',
     normalize: true,
   });
+  
+  // For local model, estimate token count (4 chars ≈ 1 token)
+  const estimatedTokens = Math.ceil(truncatedText.length / 4);
+  
+  // Only charge and log usage for document processing, not for message memory
+  if (isForDocument && userId) {
+    // Import the calculateCreditsToCharge function
+    const { calculateCreditsToCharge } = await import('./paypal');
+    
+    // Calculate cost based on embedding tokens
+    const creditsToCharge = calculateCreditsToCharge(
+      estimatedTokens, // All tokens count as "prompt" for embedding models
+      0, // No completion tokens for embeddings
+      0, // Not using OpenRouter pricing 
+      0, // Not using OpenRouter pricing
+      'embedding' // Specify this is an embedding model
+    );
+    
+    console.log(`Charging ${creditsToCharge} credits (${creditsToCharge/10000} USD) for embedding ${estimatedTokens} tokens (local model)`);
+    
+    // Log usage and deduct credits
+    try {
+      await storage.createUsageLog({
+        userId: userId,
+        messageId: null, // Not associated with a message
+        modelId: 'local-embedding',
+        promptTokens: estimatedTokens,
+        completionTokens: 0,
+        imageCount: 0,
+        creditsUsed: creditsToCharge,
+        metadata: { 
+          type: 'document_embedding',
+          documentLength: truncatedText.length 
+        }
+      });
+      
+      // Deduct cost from user's balance
+      await storage.deductUserCredits(userId, creditsToCharge);
+    } catch (creditError) {
+      console.error(`Error logging embedding usage for user ${userId}:`, creditError);
+      // Continue even if logging fails
+    }
+  }
   
   // Convert to string for storage
   result = JSON.stringify(Array.from(output.data));
@@ -1144,7 +1234,8 @@ export async function findSimilarChunks(query: string, conversationId: number, l
     // OPTIMIZATION: Generate embedding for the query only after confirming we have documents
     // This saves an expensive embedding call when there are no documents
     console.time('query-embedding-generation');
-    const queryEmbedding = await generateEmbedding(query);
+    // Pass userId but set isForDocument to false to prevent charging for search queries
+    const queryEmbedding = await generateEmbedding(query, userId, false);
     console.timeEnd('query-embedding-generation');
     
     // If MongoDB is available, use it for vector similarity search

@@ -210,7 +210,12 @@ export function CreditsPage() {
   }>({
     queryKey: ['/api/account/usage/stats', dateRange.startDate.toISOString(), dateRange.endDate.toISOString()],
     queryFn: async () => {
-      const response = await fetch(`/api/account/usage/stats?startDate=${dateRange.startDate.toISOString()}&endDate=${dateRange.endDate.toISOString()}`);
+      // In development mode, we can use a userId parameter for testing
+      const isDev = import.meta.env.DEV;
+      const testUserId = isDev ? '2' : '';
+      const userIdParam = isDev ? `&userId=${testUserId}` : '';
+      
+      const response = await fetch(`/api/account/usage/stats?startDate=${dateRange.startDate.toISOString()}&endDate=${dateRange.endDate.toISOString()}${userIdParam}`);
       if (!response.ok) {
         throw new Error('Failed to fetch usage statistics');
       }
@@ -873,11 +878,33 @@ const handleCaptureOrder = (data: any = null) => {
           
           <TabsContent value="usage" className="mt-6">
             <Card>
-              <CardHeader>
-                <CardTitle>Usage Analytics</CardTitle>
-                <CardDescription>
-                  Track your AI model usage and spending patterns
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Usage Analytics</CardTitle>
+                  <CardDescription>
+                    Track your AI model usage and spending patterns
+                  </CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => {
+                    // In development mode, we can use a userId parameter for testing
+                    const isDev = import.meta.env.DEV;
+                    const testUserId = isDev ? '2' : '';
+                    const userIdParam = isDev ? `&userId=${testUserId}` : '';
+                    
+                    window.open(`/api/account/usage/export?startDate=${dateRange.startDate.toISOString()}&endDate=${dateRange.endDate.toISOString()}${userIdParam}`, '_blank');
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  Export CSV
+                </Button>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">

@@ -53,7 +53,8 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
 
 // Credit calculation constants
 export const CREDIT_VALUE_USD = 0.0001; // $0.0001 per credit (10,000 credits = $1)
-export const MARKUP_PERCENTAGE = 38; // 38% markup on base cost
+export const OPENROUTER_MARKUP_PERCENTAGE = 100; // 100% markup (double) on base cost for OpenRouter models
+export const EMBEDDING_PRICE_PER_MILLION = 1.0; // $1 per million tokens for embedding
 
 /**
  * Calculate cost in hundredths of cents based on token usage and model pricing
@@ -67,18 +68,27 @@ export function calculateCreditsToCharge(
   promptTokens: number, 
   completionTokens: number, 
   promptPricePerM: number,
-  completionPricePerM: number
+  completionPricePerM: number,
+  modelType: 'openrouter' | 'embedding' = 'openrouter'
 ): number {
   // Calculate base cost in USD
-  const baseCostUsd = 
-    (promptTokens / 1_000_000 * promptPricePerM) + 
-    (completionTokens / 1_000_000 * completionPricePerM);
+  let baseCostUsd;
   
-  // Apply markup
-  const chargeAmountUsd = baseCostUsd * (1 + MARKUP_PERCENTAGE/100);
+  if (modelType === 'embedding') {
+    // For embedding models, charge $1 per million tokens, ignoring provided pricing
+    baseCostUsd = ((promptTokens + completionTokens) / 1_000_000) * EMBEDDING_PRICE_PER_MILLION;
+  } else {
+    // For OpenRouter models, calculate based on provided pricing
+    baseCostUsd = 
+      (promptTokens / 1_000_000 * promptPricePerM) + 
+      (completionTokens / 1_000_000 * completionPricePerM);
+    
+    // Apply markup for OpenRouter models (double the price)
+    baseCostUsd = baseCostUsd * (1 + OPENROUTER_MARKUP_PERCENTAGE/100);
+  }
   
   // Convert to hundredths of cents and round up
-  const amountInHundredthsOfCents = Math.ceil(chargeAmountUsd * 10000);
+  const amountInHundredthsOfCents = Math.ceil(baseCostUsd * 10000);
   
   return amountInHundredthsOfCents;
 }

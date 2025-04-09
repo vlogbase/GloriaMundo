@@ -201,6 +201,38 @@ export const isAuthenticated = (req: Request, res: Response, next: NextFunction)
   if (req.isAuthenticated()) {
     return next();
   }
+  
+  // Development mode: allow testing with a query parameter for a specific user ID
+  // WARNING: This should only be enabled in development environments
+  if (process.env.NODE_ENV !== 'production' && req.query.userId) {
+    const userId = parseInt(req.query.userId as string, 10);
+    if (!isNaN(userId)) {
+      // Fetch user data from database
+      storage.getUserById(userId).then(user => {
+        if (user) {
+          // Manually set user for this request
+          req.user = {
+            id: user.id,
+            googleId: user.googleId,
+            email: user.email,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            creditBalance: user.creditBalance,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt
+          };
+          return next();
+        } else {
+          res.status(401).json({ message: "User not found" });
+        }
+      }).catch(err => {
+        console.error("Error fetching user for development authentication:", err);
+        res.status(500).json({ message: "Server error during development authentication" });
+      });
+      return;
+    }
+  }
+  
   res.status(401).json({ message: "Unauthorized" });
 };
 
@@ -2415,7 +2447,13 @@ Format your responses using markdown for better readability and organization.`;
   // Get usage statistics for a time period
   app.get("/api/account/usage/stats", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      let userId = req.user!.id;
+      
+      // For development and testing, allow admin user override
+      if (req.query.userId && process.env.NODE_ENV === "development") {
+        userId = parseInt(req.query.userId as string, 10);
+      }
+      
       // Default to last 30 days if no dates provided
       const endDate = new Date();
       const startDate = new Date(endDate);
@@ -2451,6 +2489,60 @@ Format your responses using markdown for better readability and organization.`;
     } catch (error) {
       console.error("Error fetching usage statistics:", error);
       res.status(500).json({ message: "Failed to fetch usage statistics" });
+    }
+  });
+  
+  // Export usage statistics as CSV
+  app.get("/api/account/usage/export", isAuthenticated, async (req, res) => {
+    try {
+      let userId = req.user!.id;
+      
+      // For development and testing, allow admin user override
+      if (req.query.userId && process.env.NODE_ENV === "development") {
+        userId = parseInt(req.query.userId as string, 10);
+      }
+      
+      // Default to last 30 days if no dates provided
+      const endDate = new Date();
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 30);
+      
+      // Parse date range from query params if provided
+      if (req.query.startDate && req.query.endDate) {
+        const queryStartDate = new Date(req.query.startDate as string);
+        const queryEndDate = new Date(req.query.endDate as string);
+        
+        // Validate dates
+        if (!isNaN(queryStartDate.getTime()) && !isNaN(queryEndDate.getTime())) {
+          startDate.setTime(queryStartDate.getTime());
+          endDate.setTime(queryEndDate.getTime());
+        }
+      }
+      
+      const stats = await storage.getUsageStatsByModel(userId, startDate, endDate);
+      
+      // Generate CSV string
+      const header = 'Model,Total Tokens,Prompt Tokens,Completion Tokens,Images,Usage Count,Total Credits,Cost (USD)';
+      const rows = stats.map(stat => {
+        const costUSD = (stat.totalCredits / 10000).toFixed(4); // Convert 10000 credits = $1
+        return `"${stat.modelId}",${stat.totalTokens},${stat.promptTokens},${stat.completionTokens},${stat.imageCount},${stat.usageCount},${stat.totalCredits},${costUSD}`;
+      });
+      
+      const csvContent = [header, ...rows].join('\n');
+      
+      // Format date for filename
+      const formatDate = (date: Date) => date.toISOString().split('T')[0];
+      const filename = `usage_report_${formatDate(startDate)}_to_${formatDate(endDate)}.csv`;
+      
+      // Set response headers for CSV download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      // Send CSV content
+      res.send(csvContent);
+    } catch (error) {
+      console.error("Error exporting usage statistics:", error);
+      res.status(500).json({ message: "Failed to export usage statistics" });
     }
   });
   

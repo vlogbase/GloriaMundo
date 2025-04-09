@@ -24,6 +24,8 @@ export interface UserPresets {
 export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
+  getUserById(id: number): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getUserPresets(userId: number): Promise<UserPresets>;
@@ -152,6 +154,30 @@ export class MemStorage implements IStorage {
     // Fallback to in-memory storage if DB fails
     return Array.from(this.users.values()).find(
       (user) => user.email === username,
+    );
+  }
+  
+  async getUserById(id: number): Promise<User | undefined> {
+    // This is an alias for getUser() for API consistency
+    return this.getUser(id);
+  }
+  
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    // First try to get user from DB
+    try {
+      const userFromDb = await db.select().from(users).where(eq(users.googleId, googleId)).limit(1);
+      
+      if (userFromDb.length > 0) {
+        // User exists in the database
+        return userFromDb[0];
+      }
+    } catch (error) {
+      console.error(`Database error when getting user by Google ID ${googleId}:`, error);
+    }
+    
+    // Fallback to in-memory storage if DB fails
+    return Array.from(this.users.values()).find(
+      (user) => user.googleId === googleId,
     );
   }
 
@@ -1254,7 +1280,7 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
   
-  async getUsageStatsByModel(userId: number, startDate: Date, endDate: Date): Promise<{modelId: string, totalCredits: number, totalTokens: number}[]> {
+  async getUsageStatsByModel(userId: number, startDate: Date, endDate: Date): Promise<{modelId: string, totalCredits: number, totalTokens: number, promptTokens: number, completionTokens: number, imageCount: number, usageCount: number}[]> {
     try {
       // Try database first - this would be a more complex query in SQL
       const logsFromDb = await db.select().from(usageLogs)
@@ -1264,13 +1290,33 @@ export class MemStorage implements IStorage {
         );
       
       if (logsFromDb.length > 0) {
-        // Group and aggregate the logs by model ID
-        const modelStats = new Map<string, {totalCredits: number, totalTokens: number}>();
+        // Group and aggregate the logs by model ID with more detailed metrics
+        const modelStats = new Map<string, {
+          totalCredits: number, 
+          totalTokens: number,
+          promptTokens: number,
+          completionTokens: number,
+          imageCount: number,
+          usageCount: number
+        }>();
         
         logsFromDb.forEach((log: any) => {
-          const stats = modelStats.get(log.modelId) || {totalCredits: 0, totalTokens: 0};
+          const stats = modelStats.get(log.modelId) || {
+            totalCredits: 0, 
+            totalTokens: 0,
+            promptTokens: 0,
+            completionTokens: 0,
+            imageCount: 0,
+            usageCount: 0
+          };
+          
           stats.totalCredits += log.creditsUsed;
+          stats.promptTokens += log.promptTokens || 0;
+          stats.completionTokens += log.completionTokens || 0;
           stats.totalTokens += (log.promptTokens + log.completionTokens);
+          stats.imageCount += log.imageCount || 0;
+          stats.usageCount += 1;
+          
           modelStats.set(log.modelId, stats);
         });
         
@@ -1278,7 +1324,11 @@ export class MemStorage implements IStorage {
         return Array.from(modelStats.entries()).map(([modelId, stats]) => ({
           modelId,
           totalCredits: stats.totalCredits,
-          totalTokens: stats.totalTokens
+          totalTokens: stats.totalTokens,
+          promptTokens: stats.promptTokens,
+          completionTokens: stats.completionTokens,
+          imageCount: stats.imageCount,
+          usageCount: stats.usageCount
         }));
       }
     } catch (error) {
@@ -1293,13 +1343,33 @@ export class MemStorage implements IStorage {
         new Date(log.createdAt) <= endDate
       );
     
-    // Group and aggregate the logs by model ID
-    const modelStats = new Map<string, {totalCredits: number, totalTokens: number}>();
+    // Group and aggregate the logs by model ID with more detailed metrics
+    const modelStats = new Map<string, {
+      totalCredits: number, 
+      totalTokens: number,
+      promptTokens: number,
+      completionTokens: number,
+      imageCount: number,
+      usageCount: number
+    }>();
     
     logs.forEach(log => {
-      const stats = modelStats.get(log.modelId) || {totalCredits: 0, totalTokens: 0};
+      const stats = modelStats.get(log.modelId) || {
+        totalCredits: 0, 
+        totalTokens: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        imageCount: 0,
+        usageCount: 0
+      };
+      
       stats.totalCredits += log.creditsUsed;
+      stats.promptTokens += log.promptTokens || 0;
+      stats.completionTokens += log.completionTokens || 0;
       stats.totalTokens += (log.promptTokens + log.completionTokens);
+      stats.imageCount += log.imageCount || 0;
+      stats.usageCount += 1;
+      
       modelStats.set(log.modelId, stats);
     });
     
@@ -1307,7 +1377,11 @@ export class MemStorage implements IStorage {
     return Array.from(modelStats.entries()).map(([modelId, stats]) => ({
       modelId,
       totalCredits: stats.totalCredits,
-      totalTokens: stats.totalTokens
+      totalTokens: stats.totalTokens,
+      promptTokens: stats.promptTokens,
+      completionTokens: stats.completionTokens,
+      imageCount: stats.imageCount,
+      usageCount: stats.usageCount
     }));
   }
   
