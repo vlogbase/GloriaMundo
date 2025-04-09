@@ -7,8 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
 
 export const useChat = () => {
-  // Logging for useChat initialization (debugging first message issue)
-  console.log('[useChat] Hook initializing...');
+  // Removed excessive debug logging
+  // console.log('[useChat] Hook initializing...');
   
   // Initialize with an empty array for messages
   const [messages, setMessages] = useState<Message[]>([]);
@@ -18,6 +18,16 @@ export const useChat = () => {
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedModel, customOpenRouterModelId } = useModelSelection();
+  
+  // Track hook initialization count to prevent unnecessary re-renders
+  const initCountRef = useRef(0);
+  useEffect(() => {
+    // Only log on first initialization and not on re-renders
+    if (initCountRef.current === 0) {
+      // console.log('[useChat] Hook initialized (first time)');
+    }
+    initCountRef.current++;
+  }, []);
   
   // For debugging the first message issue
   const isFirstMessageSentRef = useRef(false);

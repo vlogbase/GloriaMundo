@@ -33,12 +33,42 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // Determine if this is a chat API call using OpenRouter model
+  // and increase timeout for specific models known to be slower
+  let timeout = 30000; // default 30 second timeout
+  
+  // Check if this is a message API call
+  if (url.includes('/conversations/') && url.includes('/messages')) {
+    // Check if data contains modelType and modelId for OpenRouter
+    if (data && typeof data === 'object') {
+      const payload = data as any;
+      
+      // When using OpenRouter with specific models known to be slower, use extended timeout
+      if (payload.modelType === 'openrouter') {
+        // Increase timeout for OpenRouter models, especially for models known to be slower
+        if (payload.modelId && (
+          payload.modelId.includes('deepseek') || 
+          payload.modelId.includes('llama') || 
+          payload.modelId.includes('claude')
+        )) {
+          // Use 90-second timeout for slower models
+          timeout = 90000; // 90 seconds for slower models
+          console.log(`Extended timeout (90s) for slower OpenRouter model: ${payload.modelId}`);
+        } else {
+          // Use 60-second timeout for other OpenRouter models
+          timeout = 60000; // 60 seconds for other OpenRouter models
+          console.log(`Extended timeout (60s) for OpenRouter model: ${payload.modelId}`);
+        }
+      }
+    }
+  }
+
   const res = await fetchWithTimeout(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
-  }, 30000); // 30 second timeout
+  }, timeout);
 
   await throwIfResNotOk(res);
   return res;

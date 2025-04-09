@@ -1931,27 +1931,72 @@ Format your responses using markdown for better readability and organization.`;
           }
         });
         
-        const response = await fetch(modelConfig.apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${modelConfig.apiKey}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`${modelConfig.apiProvider} API error details: ${errorText}`);
+        // Determine if we need a longer timeout based on the model
+        let timeoutMs = 60000; // Default 60-second timeout for most models
+        
+        // For specific slower models, use an extended timeout
+        if (modelConfig.apiProvider === "openrouter" && modelId) {
+          if (
+            modelId.includes('deepseek') || 
+            modelId.includes('llama') || 
+            modelId.includes('claude')
+          ) {
+            // Use 120-second timeout for known slower models
+            timeoutMs = 120000; // 120 seconds
+            console.log(`Using extended timeout (120s) for slower OpenRouter model: ${modelId}`);
+          } else {
+            // Use 90-second timeout for other OpenRouter models
+            timeoutMs = 90000; // 90 seconds
+            console.log(`Using extended timeout (90s) for OpenRouter model: ${modelId}`);
+          }
+        }
+        
+        // Create an AbortController for timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        try {
+          const response = await fetch(modelConfig.apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${modelConfig.apiKey}`
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
           
-          // Use the error handler to parse the error
-          const { parseOpenRouterError } = require("./errorHandler");
-          const apiError = parseOpenRouterError(response.status, errorText);
+          // Clear the timeout as we got a response
+          clearTimeout(timeoutId);
           
-          // Add more context to the error message
-          throw new Error(
-            `${modelConfig.apiProvider} API error: ${apiError.message} (Status: ${response.status}, Category: ${apiError.category})`
-          );
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`${modelConfig.apiProvider} API error details: ${errorText}`);
+            
+            // Use the error handler to parse the error
+            const { parseOpenRouterError } = require("./errorHandler");
+            const apiError = parseOpenRouterError(response.status, errorText);
+            
+            // Add more context to the error message
+            throw new Error(
+              `${modelConfig.apiProvider} API error: ${apiError.message} (Status: ${response.status}, Category: ${apiError.category})`
+            );
+          }
+        } catch (fetchError) {
+          // Handle AbortError (timeout) or network errors specifically
+          clearTimeout(timeoutId);
+          
+          console.error(`Fetch error with ${modelType} model:`, {
+            errorType: fetchError instanceof Error ? fetchError.name : 'Unknown',
+            errorMessage: fetchError instanceof Error ? fetchError.message : String(fetchError),
+            isAbortError: fetchError instanceof Error && fetchError.name === 'AbortError'
+          });
+          
+          // Rethrow to be handled by the outer catch block
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            throw new Error(`Request timeout exceeded after ${timeoutMs/1000} seconds. The ${modelId || modelType} model is taking too long to respond.`);
+          }
+          throw fetchError;
         }
 
         // Handle streaming vs non-streaming responses
@@ -2288,6 +2333,7 @@ Format your responses using markdown for better readability and organization.`;
         // Log error with additional diagnostic information
         console.error(`Error with ${modelType} model (${modelConfig.apiProvider}):`, {
           error: error instanceof Error ? error.message : String(error),
+          errorName: error instanceof Error ? error.name : "Unknown",
           modelType,
           apiProvider: modelConfig.apiProvider,
           apiUrl: modelConfig.apiUrl,
@@ -2295,6 +2341,11 @@ Format your responses using markdown for better readability and organization.`;
           hasValidKey: isValidApiKey(modelConfig.apiKey),
           messagesCount: messages.length
         });
+        
+        // Clear the timeout if it was an abort error (timeout)
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         
         // Parse error message and categorize it
         let apiError: ApiError;
