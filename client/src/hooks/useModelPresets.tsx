@@ -16,10 +16,10 @@ export interface ModelPresets {
 // Default model presets with verified valid model IDs from OpenRouter
 const defaultPresets: ModelPresets = {
   preset1: 'openai/o3-mini',
-  preset2: 'anthropic/claude-3.7-sonnet',
-  preset3: 'deepseek/deepseek-r1',
-  preset4: 'openai/gpt-4o', // Updated to OpenAI's GPT-4o for multimodal
-  preset5: 'perplexity/sonar-pro'
+  preset2: 'perplexity/sonar-reasoning-pro', // Reasoning preset
+  preset3: 'x-ai/grok-2-1212',               // Uncensored preset
+  preset4: 'openai/gpt-4o',                  // Multimodal preset
+  preset5: 'perplexity/sonar-pro'            // Search preset
 };
 
 interface ModelPresetsContextType {
@@ -141,8 +141,14 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       return 'Deepseek R1';
     } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
-    } else if (normalizedId.includes('perplexity/sonar-pro')) {
+    } else if (normalizedId === 'perplexity/sonar-pro') {
       return 'Sonar Pro';
+    } else if (normalizedId === 'perplexity/sonar-reasoning-pro') {
+      return 'Sonar Reasoning';
+    } else if (normalizedId.includes('x-ai/grok-2-1212')) {
+      return 'Grok 2';
+    } else if (normalizedId.includes('openai/gpt-4o')) {
+      return 'GPT-4o';
     }
     
     // Generic formatting for other models
@@ -331,8 +337,14 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       return 'Deepseek R1';
     } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
-    } else if (normalizedId.includes('perplexity/sonar-pro')) {
+    } else if (normalizedId === 'perplexity/sonar-pro') {
       return 'Sonar Pro';
+    } else if (normalizedId === 'perplexity/sonar-reasoning-pro') {
+      return 'Sonar Reasoning';
+    } else if (normalizedId.includes('x-ai/grok-2-1212')) {
+      return 'Grok 2';
+    } else if (normalizedId.includes('openai/gpt-4o')) {
+      return 'GPT-4o';
     }
     
     // Generic formatting for other models

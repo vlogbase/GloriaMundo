@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Network, Edit, Check, Lock, Search, Image } from 'lucide-react';
+import { Network, Edit, Check, Lock, Search, Image, Brain, Sparkles } from 'lucide-react';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -160,7 +160,13 @@ export const ModelPresets = () => {
   
   // Helper function to get preset-specific icon
   const getPresetIcon = (presetKey: string, modelId: string): React.ReactNode => {
-    if (presetKey === 'preset4' || (presetKey === 'preset4' && !modelId)) {
+    if (presetKey === 'preset2' || (presetKey === 'preset2' && !modelId)) {
+      // For preset2 (reasoning models), use Brain icon
+      return <Brain size={16} className="mr-1" />;
+    } else if (presetKey === 'preset3' || (presetKey === 'preset3' && !modelId)) {
+      // For preset3 (uncensored models), use Sparkles icon
+      return <Sparkles size={16} className="mr-1" />;
+    } else if (presetKey === 'preset4' || (presetKey === 'preset4' && !modelId)) {
       // For preset4 (multimodal models), use Image icon
       return <Image size={16} className="mr-1" />;
     } else if (presetKey === 'preset5' || (presetKey === 'preset5' && !modelId)) {
@@ -172,9 +178,36 @@ export const ModelPresets = () => {
     }
   };
   
+  // Helper function to check if a model is a reasoning model
+  const isReasoningModel = (modelId: string): boolean => {
+    return (
+      modelId.toLowerCase().includes('reasoning') ||
+      modelId.toLowerCase().includes('perplexity/sonar-reasoning') ||
+      modelId.toLowerCase().includes('claude-reasoning')
+    );
+  };
+  
+  // Helper function to check if a model is an uncensored model
+  const isUncensoredModel = (modelId: string): boolean => {
+    return (
+      modelId.toLowerCase().includes('grok') ||
+      modelId.toLowerCase().includes('uncensored') ||
+      modelId.toLowerCase().includes('instruct') ||
+      modelId.toLowerCase().includes('x-ai') ||
+      modelId.toLowerCase().includes('meta/llama') ||
+      modelId.toLowerCase().includes('mistral')
+    );
+  };
+  
   // Helper function to filter models for specific presets
   const filterModelsForPreset = (presetKey: string): any[] => {
-    if (presetKey === 'preset4') {
+    if (presetKey === 'preset2') {
+      // Only allow reasoning models for preset2
+      return models.filter(model => isReasoningModel(model.id));
+    } else if (presetKey === 'preset3') {
+      // Only allow uncensored models for preset3
+      return models.filter(model => isUncensoredModel(model.id));
+    } else if (presetKey === 'preset4') {
       // Only allow multimodal models for preset4
       return models.filter(model => isMultimodalModel(model.id));
     } else if (presetKey === 'preset5') {
@@ -194,7 +227,13 @@ export const ModelPresets = () => {
       setSelectedModelId(modelId);
       
       // Set model type based on preset and capabilities
-      if (presetKey === 'preset4') {
+      if (presetKey === 'preset2') {
+        // Preset 2 is for reasoning models
+        setSelectedModel('reasoning');
+      } else if (presetKey === 'preset3') {
+        // Preset 3 is for uncensored models
+        setSelectedModel('openrouter'); // Using standard OpenRouter for uncensored models
+      } else if (presetKey === 'preset4') {
         // Preset 4 is always for multimodal models
         setSelectedModel('multimodal');
       } else if (presetKey === 'preset5') {
@@ -210,7 +249,11 @@ export const ModelPresets = () => {
       setCustomOpenRouterModelId(modelId);
     } else {
       // If no model is assigned to this preset yet, set default types based on preset
-      if (presetKey === 'preset4') {
+      if (presetKey === 'preset2') {
+        setSelectedModel('reasoning');
+      } else if (presetKey === 'preset3') {
+        setSelectedModel('openrouter');
+      } else if (presetKey === 'preset4') {
         setSelectedModel('multimodal');
       } else if (presetKey === 'preset5') {
         setSelectedModel('search');
