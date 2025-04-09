@@ -322,16 +322,16 @@ const MODEL_CONFIGS = {
     pricing: DEFAULT_MODEL_PRICING.reasoning
   },
   search: {
-    // Using OpenRouter as fallback for search since Perplexity is no longer used
+    // Using Perplexity's Sonar Pro model via OpenRouter for search
     apiProvider: "openrouter",
-    modelName: "anthropic/claude-3-haiku",  // Good for search capabilities
+    modelName: "perplexity/sonar-pro",  // Perplexity's best search model
     apiUrl: "https://openrouter.ai/api/v1/chat/completions",
     apiKey: OPENROUTER_API_KEY,
     pricing: DEFAULT_MODEL_PRICING.search
   },
   multimodal: {
-    apiProvider: "openrouter", // Changed from groq to openrouter for better multimodal support
-    modelName: "openai/gpt-4-vision-preview",
+    apiProvider: "openrouter",
+    modelName: "openai/gpt-4o-latest", // OpenAI's latest multimodal model
     apiUrl: "https://openrouter.ai/api/v1/chat/completions",
     apiKey: OPENROUTER_API_KEY, 
     pricing: DEFAULT_MODEL_PRICING.multimodal
