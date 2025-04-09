@@ -190,6 +190,10 @@ export const useChat = () => {
         // Set a default free model to ensure we don't leave modelId undefined
         console.log("Using default free model as fallback");
         modelMetadata = { modelId: "openai/o3-mini" }; // Using a more reliable free model
+      } else if (selectedModel === 'multimodal' && customOpenRouterModelId) {
+        // Critical fix: For multimodal models from OpenRouter, we need to include the modelId
+        console.log(`Using multimodal OpenRouter model: ${customOpenRouterModelId}`);
+        modelMetadata = { modelId: customOpenRouterModelId };
       }
       
       // Try to get document context for this query

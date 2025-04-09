@@ -1545,6 +1545,15 @@ Format your responses using markdown for better readability and organization.`;
       }
       
       // Check if we're using OpenRouter (custom modelId is provided)
+      // Also validate that modelId is not the placeholder 'not set' value
+      if (modelId === 'not set') {
+        console.error("Invalid modelId received: 'not set'");
+        return res.status(400).json({ 
+          message: "Invalid model ID parameter. Please select a valid model.",
+          error: "INVALID_MODEL_ID"
+        });
+      }
+      
       const isOpenRouter = modelId && modelId !== "" && isOpenRouterKeyValid;
       
       // For OpenRouter, we'll use custom configurations
