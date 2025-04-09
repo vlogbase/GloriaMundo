@@ -40,19 +40,22 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB file size limit
   },
   fileFilter: function (req, file, cb) {
-    // Allow only certain file types
-    const allowedMimeTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'text/html',
-      'text/markdown',
-    ];
-    
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    // Allow various file types
+    // Text-based files
+    if (
+      file.mimetype === 'application/pdf' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.mimetype.startsWith('text/') ||
+      file.mimetype === 'application/rtf' ||
+      file.mimetype === 'application/json' ||
+      file.mimetype === 'application/csv' ||
+      file.mimetype === 'text/csv' ||
+      // Image files
+      file.mimetype.startsWith('image/')
+    ) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Allowed types: PDF, DOCX, TXT, HTML, MD'));
+      cb(new Error('Invalid file type. Allowed types: PDF, DOCX, TXT, HTML, MD, RTF, JSON, CSV, and common image formats'));
     }
   }
 });
@@ -107,14 +110,14 @@ export function registerDocumentRoutes(app: Express) {
           // If we've reached here, we couldn't find the content
           console.error(`Document ${documentId} content not found in storage or filesystem`);
           return res.status(404).json({ message: 'Document content not found' });
-        } catch (readErr) {
+        } catch (readErr: any) {
           console.error(`Error reading document ${documentId}:`, readErr);
           return res.status(500).json({ message: `Error reading document: ${readErr.message}` });
         }
       }
       
       return res.status(415).json({ message: 'Preview not available for this file type' });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error getting document content:', err);
       return res.status(500).json({ message: `Failed to get document content: ${err.message}` });
     }
@@ -238,7 +241,8 @@ export function registerDocumentRoutes(app: Express) {
           const updateProcessingStatus = async (status: string, progress: number) => {
             try {
               await storage.updateDocumentMetadata(placeholderDocument.id, {
-                ...placeholderDocument.metadata,
+                extractedAt: placeholderDocument.metadata?.extractedAt || new Date().toISOString(),
+                fileType: placeholderDocument.metadata?.fileType || '',
                 processingStatus: status,
                 processingProgress: progress,
                 lastUpdated: new Date().toISOString()

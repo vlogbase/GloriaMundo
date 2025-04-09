@@ -476,8 +476,9 @@ export async function processDocument(params: {
   fileSize: number;
   conversationId: number;
   userId?: number;
+  progressCallback?: (stage: string, progress: number) => Promise<void>;
 }): Promise<Document> {
-  const { buffer, fileName, fileType, fileSize, conversationId, userId } = params;
+  const { buffer, fileName, fileType, fileSize, conversationId, userId, progressCallback } = params;
   
   console.time('document-processing');
   console.log(`Processing document: ${fileName} (${Math.round(fileSize/1024)} KB)`);
@@ -539,13 +540,41 @@ async function extractTextFromFile(buffer: Buffer, fileType: string): Promise<st
     } else if (fileType.includes('docx')) {
       // Use our simplified DOCX extractor
       return await docxExtractor.extract(buffer);
-    } else if (fileType.includes('text') || fileType.includes('txt')) {
+    } else if (fileType.includes('text') || fileType.includes('txt') || fileType.includes('plain')) {
       return buffer.toString('utf-8');
     } else if (fileType.includes('html')) {
       const root = parse(buffer.toString('utf-8'));
       // Remove scripts and styles
       root.querySelectorAll('script, style').forEach(el => el.remove());
       return root.text;
+    } else if (fileType.includes('json')) {
+      // Try to pretty-print JSON for better readability
+      try {
+        const jsonObj = JSON.parse(buffer.toString('utf-8'));
+        return JSON.stringify(jsonObj, null, 2);
+      } catch (jsonErr) {
+        console.warn('Error formatting JSON, returning as plain text');
+        return buffer.toString('utf-8');
+      }
+    } else if (fileType.includes('csv')) {
+      // Return CSV as is - it's already text format
+      return buffer.toString('utf-8');
+    } else if (fileType.includes('rtf')) {
+      // Simple RTF to text conversion - strip RTF control sequences
+      const rtfText = buffer.toString('utf-8');
+      // Basic RTF cleanup - remove control sequences
+      return rtfText
+        .replace(/\{\\rtf[^{}]*\}/g, '') // Remove RTF header
+        .replace(/\\\w+\s?/g, '') // Remove control words
+        .replace(/\{|\}/g, '') // Remove curly braces
+        .replace(/\\[^\\{}]+/g, '') // Remove other control sequences
+        .trim();
+    } else if (fileType.includes('markdown') || fileType.endsWith('md')) {
+      // Markdown is already a text format, return as is
+      return buffer.toString('utf-8');
+    } else if (fileType.startsWith('image/')) {
+      // For images, we return a descriptive text
+      return `[This is an image file of type ${fileType}. The image was uploaded for processing but cannot be directly transcribed as text. Users can refer to the visual content in the image or ask questions about what they see in the image.]`;
     } else {
       // For unknown types, try to extract as text
       return buffer.toString('utf-8');
