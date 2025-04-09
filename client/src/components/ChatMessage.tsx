@@ -110,6 +110,17 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
               <div className="bg-userBg/30 p-4 rounded-2xl shadow-none">
                 <p>{message.content}</p>
                 
+                {/* Display image if one was attached to the message */}
+                {message.image && (
+                  <div className="mt-3 flex justify-center">
+                    <img 
+                      src={message.image.startsWith('data:') ? message.image : `data:image/jpeg;base64,${message.image}`} 
+                      alt="User uploaded image" 
+                      className="max-w-full rounded-lg max-h-[300px] object-contain"
+                    />
+                  </div>
+                )}
+                
                 {/* Show attached documents with the message if available */}
                 {relatedDocuments.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border/30">
