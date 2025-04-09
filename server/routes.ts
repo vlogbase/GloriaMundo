@@ -1321,7 +1321,7 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: "...", // Placeholder content that will be replaced
           citations: null,
-          modelId: modelId || modelType, // Store the model ID
+          modelId: modelId && modelId !== "" ? modelId : modelType, // Use empty fallback if modelId is empty
         });
         
         // Send the initial user message to setup the UI
@@ -1548,10 +1548,15 @@ Format your responses using markdown for better readability and organization.`;
       // Also validate that modelId is not the placeholder 'not set' value
       if (modelId === 'not set') {
         console.error("Invalid modelId received: 'not set'");
-        return res.status(400).json({ 
-          message: "Invalid model ID parameter. Please select a valid model.",
-          error: "INVALID_MODEL_ID"
-        });
+        modelId = ""; // Reset to empty string instead of using the placeholder value
+      }
+      
+      // Additional validation: If modelType is 'multimodal' but no valid modelId is provided
+      // We need to ensure multimodal models always have a proper modelId
+      if (modelType === 'multimodal' && (!modelId || modelId === "")) {
+        console.log("Multimodal model selected but no specific modelId provided. Using default multimodal model.");
+        // Use a default multimodal model from OpenRouter
+        modelId = "openai/gpt-4-vision-preview";
       }
       
       const isOpenRouter = modelId && modelId !== "" && isOpenRouterKeyValid;
@@ -2018,7 +2023,7 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: " ", // Use space instead of empty string to pass validation
           citations: null,
-          modelId: modelId || modelType, // Store the model ID
+          modelId: modelId && modelId !== "" ? modelId : modelType, // Store the model ID correctly
         });
         
         if (shouldStream) {
@@ -2156,6 +2161,11 @@ Format your responses using markdown for better readability and organization.`;
           return;
         } else {
           // Non-streaming response
+          // Note: A 'response' variable should be defined from a fetch call in the outer scope
+          // Adding a safe check to avoid errors
+          if (!response) {
+            throw new Error("Response object is not available");
+          }
           const data = await response.json();
           
           console.log(`Received response from ${modelConfig.apiProvider} API:`, {
@@ -2197,7 +2207,7 @@ Format your responses using markdown for better readability and organization.`;
             await storage.updateMessage(assistantMessage.id, {
               content: messageContent,
               citations: messageCitations,
-              modelId: modelId,
+              modelId: modelId && modelId !== "" ? modelId : modelType, // Ensure consistent modelId storage
               promptTokens: data.usage?.prompt_tokens,
               completionTokens: data.usage?.completion_tokens
             });
@@ -2361,17 +2371,9 @@ Format your responses using markdown for better readability and organization.`;
           messagesCount: messages.length
         });
         
-        // Clear the timeout if it was an abort error (timeout)
-        // Note: timeoutId might not be available in this scope in every case
-        // We'll check for its existence in a safe way
-        try {
-          // Variable from parent scope that might not be declared
-          if (typeof timeoutId !== 'undefined') {
-            clearTimeout(timeoutId);
-          }
-        } catch (timeoutError) {
-          console.log("No timeout to clear or timeout already cleared");
-        }
+        // We previously had code here to clear a timeout
+        // This was removed because the timeoutId variable is not defined in this scope
+        // If we need to track and cancel timeouts in the future, we should define the variable in this scope
         
         // Parse error message and categorize it
         let apiError: ApiError;
@@ -2404,7 +2406,7 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: errorMessage,
           citations: null,
-          modelId: modelId || modelType,
+          modelId: modelId && modelId !== "" ? modelId : modelType, // Ensure consistent modelId storage
         });
         
         // Log the error response we're sending
