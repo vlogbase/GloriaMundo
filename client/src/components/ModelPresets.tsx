@@ -22,6 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Input } from '@/components/ui/input';
 import { Network, Edit, Check, Lock, Search, Image, Brain, Sparkles } from 'lucide-react';
 
@@ -158,14 +164,28 @@ export const ModelPresets = () => {
     );
   };
   
+  // Helper function to get preset category for tooltip
+  const getPresetCategory = (presetKey: string): string => {
+    switch(presetKey) {
+      case 'preset1':
+      case 'preset2':
+        return 'All Models';
+      case 'preset3':
+        return 'Reasoning';
+      case 'preset4':
+        return 'Multimodal';
+      case 'preset5':
+        return 'Search';
+      default:
+        return 'Model Preset';
+    }
+  };
+  
   // Helper function to get preset-specific icon
   const getPresetIcon = (presetKey: string, modelId: string): React.ReactNode => {
-    if (presetKey === 'preset2' || (presetKey === 'preset2' && !modelId)) {
-      // For preset2 (reasoning models), use Brain icon
+    if (presetKey === 'preset3' || (presetKey === 'preset3' && !modelId)) {
+      // For preset3 (reasoning models), use Brain icon
       return <Brain size={16} className="mr-1" />;
-    } else if (presetKey === 'preset3' || (presetKey === 'preset3' && !modelId)) {
-      // For preset3 (uncensored models), use Sparkles icon
-      return <Sparkles size={16} className="mr-1" />;
     } else if (presetKey === 'preset4' || (presetKey === 'preset4' && !modelId)) {
       // For preset4 (multimodal models), use Image icon
       return <Image size={16} className="mr-1" />;
@@ -173,40 +193,41 @@ export const ModelPresets = () => {
       // For preset5 (Perplexity/search models), use Search icon
       return <Search size={16} className="mr-1" />;
     } else {
-      // For all other presets, use Network icon
+      // For other presets (preset1, preset2) - All Models, use Network icon
       return <Network size={16} className="mr-1" />;
     }
   };
   
-  // Helper function to check if a model is a reasoning model
+  // Helper function to check if a model is a reasoning model from the provided list
   const isReasoningModel = (modelId: string): boolean => {
-    return (
-      modelId.toLowerCase().includes('reasoning') ||
-      modelId.toLowerCase().includes('perplexity/sonar-reasoning') ||
-      modelId.toLowerCase().includes('claude-reasoning')
-    );
-  };
-  
-  // Helper function to check if a model is an uncensored model
-  const isUncensoredModel = (modelId: string): boolean => {
-    return (
-      modelId.toLowerCase().includes('grok') ||
-      modelId.toLowerCase().includes('uncensored') ||
-      modelId.toLowerCase().includes('instruct') ||
-      modelId.toLowerCase().includes('x-ai') ||
-      modelId.toLowerCase().includes('meta/llama') ||
-      modelId.toLowerCase().includes('mistral')
+    const reasoningModels = [
+      'openai/o1',
+      'openai/o1-pro',
+      'openai/o1-preview',
+      'openai/o1-mini',
+      'openai/o1-mini (2024-09-12)',
+      'openai/o3-mini',
+      'openai/o3-mini-high',
+      'perplexity/r1-1776',
+      'anthropic/claude-3.7-sonnet-thinking',
+      'deepseek/r1-zero',
+      'deepseek/r1',
+      'qwen/qwq-32b',
+      'google/gemini-2.0-flash-thinking',
+      'google/gemini-2.5-pro-preview-03-25'
+    ];
+    
+    return reasoningModels.some(model => 
+      modelId.toLowerCase() === model.toLowerCase() || 
+      modelId.toLowerCase().includes(model.toLowerCase().replace(/\s+/g, '-'))
     );
   };
   
   // Helper function to filter models for specific presets
   const filterModelsForPreset = (presetKey: string): any[] => {
-    if (presetKey === 'preset2') {
-      // Only allow reasoning models for preset2
+    if (presetKey === 'preset3') {
+      // Only allow reasoning models for preset3
       return models.filter(model => isReasoningModel(model.id));
-    } else if (presetKey === 'preset3') {
-      // Only allow uncensored models for preset3
-      return models.filter(model => isUncensoredModel(model.id));
     } else if (presetKey === 'preset4') {
       // Only allow multimodal models for preset4
       return models.filter(model => isMultimodalModel(model.id));
@@ -214,7 +235,7 @@ export const ModelPresets = () => {
       // Only allow Perplexity models for preset5
       return models.filter(model => isPerplexityModel(model.id));
     } else {
-      // Return all models for other presets
+      // Return all models for preset1 and preset2
       return models;
     }
   };
@@ -226,12 +247,9 @@ export const ModelPresets = () => {
       setSelectedModelId(modelId);
       
       // Set model type based on preset and capabilities
-      if (presetKey === 'preset2') {
-        // Preset 2 is for reasoning models
+      if (presetKey === 'preset3') {
+        // Preset 3 is for reasoning models
         setSelectedModel('reasoning');
-      } else if (presetKey === 'preset3') {
-        // Preset 3 is for uncensored models
-        setSelectedModel('openrouter'); // Using standard OpenRouter for uncensored models
       } else if (presetKey === 'preset4') {
         // Preset 4 is always for multimodal models
         setSelectedModel('multimodal');
@@ -239,7 +257,7 @@ export const ModelPresets = () => {
         // Preset 5 is for search/Perplexity models
         setSelectedModel('search');
       } else {
-        // For other presets, determine type based on the model's capabilities
+        // For presets 1 and 2 (all models), determine type based on the model's capabilities
         const shouldSetMultimodal = isMultimodalModel(modelId);
         setSelectedModel(shouldSetMultimodal ? 'multimodal' : 'openrouter');
       }
@@ -248,21 +266,21 @@ export const ModelPresets = () => {
       setCustomOpenRouterModelId(modelId);
       
       // Log for debugging purposes
-      console.log(`Model activated: ${modelId}, Type: ${presetKey === 'preset2' ? 'reasoning' : 
-                                                   presetKey === 'preset3' ? 'openrouter' :
+      console.log(`Model activated: ${modelId}, Type: ${presetKey === 'preset3' ? 'reasoning' : 
                                                    presetKey === 'preset4' ? 'multimodal' :
                                                    presetKey === 'preset5' ? 'search' :
                                                    isMultimodalModel(modelId) ? 'multimodal' : 'openrouter'}`);
     } else {
       // If no model is assigned to this preset yet, set default types based on preset
-      if (presetKey === 'preset2') {
+      if (presetKey === 'preset3') {
         setSelectedModel('reasoning');
-      } else if (presetKey === 'preset3') {
-        setSelectedModel('openrouter');
       } else if (presetKey === 'preset4') {
         setSelectedModel('multimodal');
       } else if (presetKey === 'preset5') {
         setSelectedModel('search');
+      } else {
+        // Default for preset1 and preset2
+        setSelectedModel('openrouter');
       }
     }
   };
@@ -360,22 +378,31 @@ export const ModelPresets = () => {
       
       return (
         <div key={key} className="relative group">
-          <Button
-            onClick={isLocked ? handleLockedModelClick : () => handleClick(presetKey)}
-            variant={isActive ? "default" : "outline"}
-            className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
-              isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
-            } ${isLocked ? 'cursor-pointer' : ''}`}
-            disabled={isLoading || isPending}
-            {...longPressProps}
-          >
-            {getPresetIcon(presetKey, modelId || '')}
-            {modelId ? (
-              <span className="truncate max-w-[100px]">{formatModelName(modelId)}</span>
-            ) : (
-              <span className="text-muted-foreground">Preset {getPresetNumber(key)}</span>
-            )}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={isLocked ? handleLockedModelClick : () => handleClick(presetKey)}
+                  variant={isActive ? "default" : "outline"}
+                  className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
+                    isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
+                  } ${isLocked ? 'cursor-pointer' : ''}`}
+                  disabled={isLoading || isPending}
+                  {...longPressProps}
+                >
+                  {getPresetIcon(presetKey, modelId || '')}
+                  {modelId ? (
+                    <span className="truncate max-w-[100px]">{formatModelName(modelId)}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Preset {getPresetNumber(key)}</span>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{getPresetCategory(presetKey)}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           {/* Padlock overlay for locked models */}
           {isLocked && (
@@ -415,26 +442,35 @@ export const ModelPresets = () => {
     
     return (
       <div className="relative group">
-        <Button
-          onClick={handleFreeTierClick}
-          variant={isActive ? "default" : "outline"}
-          className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
-            isActive ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-          }`}
-          {...longPressProps}
-        >
-          {activeFreeTierModel ? (
-            <>
-              <Network size={16} className="mr-1" />
-              <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
-            </>
-          ) : (
-            <>
-              <Network size={16} className="mr-1" />
-              <span>Free Tier</span>
-            </>
-          )}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleFreeTierClick}
+                variant={isActive ? "default" : "outline"}
+                className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
+                  isActive ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                }`}
+                {...longPressProps}
+              >
+                {activeFreeTierModel ? (
+                  <>
+                    <Network size={16} className="mr-1" />
+                    <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
+                  </>
+                ) : (
+                  <>
+                    <Network size={16} className="mr-1" />
+                    <span>Free Tier</span>
+                  </>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Free Models</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         
         {/* Edit button (only on desktop) */}
         <Button

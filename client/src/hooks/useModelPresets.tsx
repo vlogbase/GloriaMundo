@@ -15,11 +15,11 @@ export interface ModelPresets {
 
 // Default model presets with verified valid model IDs from OpenRouter
 const defaultPresets: ModelPresets = {
-  preset1: 'openai/o3-mini',
-  preset2: 'perplexity/sonar-reasoning-pro', // Reasoning preset
-  preset3: 'x-ai/grok-2-1212',               // Uncensored preset
-  preset4: 'openai/gpt-4o',                  // Multimodal preset
-  preset5: 'perplexity/sonar-pro'            // Search preset
+  preset1: 'openai/gpt-4.5-turbo',         // All models preset 1
+  preset2: 'meta/llama-4-maverick',        // All models preset 2
+  preset3: 'openai/o3-mini-high',          // Reasoning preset
+  preset4: 'openai/gpt-4o',                // Multimodal preset
+  preset5: 'perplexity/sonar-pro'          // Search preset
 };
 
 interface ModelPresetsContextType {
