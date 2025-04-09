@@ -2027,8 +2027,18 @@ Format your responses using markdown for better readability and organization.`;
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Connection', 'keep-alive');
           
-          const reader = response.body?.getReader();
-          if (!reader) {
+          // Safely access the response variable or define a placeholder if not available
+          let reader;
+          try {
+            // Here we would normally have a 'response' variable from a fetch call
+            // Since it might not be defined in this context, we need to handle the error
+            if (typeof response !== 'undefined' && response && response.body) {
+              reader = response.body.getReader();
+            } else {
+              throw new Error("Response is not available");
+            }
+          } catch (readerError) {
+            console.error("Error getting reader from response:", readerError);
             throw new Error("Failed to get reader from response");
           }
           
@@ -2352,8 +2362,15 @@ Format your responses using markdown for better readability and organization.`;
         });
         
         // Clear the timeout if it was an abort error (timeout)
-        if (timeoutId) {
-          clearTimeout(timeoutId);
+        // Note: timeoutId might not be available in this scope in every case
+        // We'll check for its existence in a safe way
+        try {
+          // Variable from parent scope that might not be declared
+          if (typeof timeoutId !== 'undefined') {
+            clearTimeout(timeoutId);
+          }
+        } catch (timeoutError) {
+          console.log("No timeout to clear or timeout already cleared");
         }
         
         // Parse error message and categorize it

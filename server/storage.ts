@@ -650,6 +650,8 @@ export class MemStorage implements IStorage {
     
     // Try to create message in database first
     try {
+      // Only include columns that exist in the actual database schema
+      // Based on actual database columns: id, conversation_id, role, content, image, citations, created_at
       const result = await db.insert(messages)
         .values({
           conversationId: data.conversationId,
@@ -657,10 +659,8 @@ export class MemStorage implements IStorage {
           content: data.content || "", // Default to empty string if only image is provided
           image: data.image || null,
           citations: data.citations ?? null,
-          modelId: data.modelId || null,
-          promptTokens: data.promptTokens || null,
-          completionTokens: data.completionTokens || null,
           createdAt: now
+          // modelId, promptTokens, and completionTokens columns don't exist in the actual database
         })
         .returning();
       
@@ -721,12 +721,14 @@ export class MemStorage implements IStorage {
         // Prepare the updates
         const updatesToApply: Partial<Message> = {};
         
+        // Only include fields that exist in the actual database schema
         if (updates.content !== undefined) updatesToApply.content = updates.content;
         if (updates.image !== undefined) updatesToApply.image = updates.image;
         if (updates.citations !== undefined) updatesToApply.citations = updates.citations;
-        if (updates.modelId !== undefined) updatesToApply.modelId = updates.modelId;
-        if (updates.promptTokens !== undefined) updatesToApply.promptTokens = updates.promptTokens;
-        if (updates.completionTokens !== undefined) updatesToApply.completionTokens = updates.completionTokens;
+        // The following fields don't exist in the actual database
+        // if (updates.modelId !== undefined) updatesToApply.modelId = updates.modelId;
+        // if (updates.promptTokens !== undefined) updatesToApply.promptTokens = updates.promptTokens;
+        // if (updates.completionTokens !== undefined) updatesToApply.completionTokens = updates.completionTokens;
         
         // Update in database
         const result = await db.update(messages)
