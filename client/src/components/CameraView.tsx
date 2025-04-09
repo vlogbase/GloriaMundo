@@ -174,7 +174,7 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
     }
   };
 
-  // Take photo from video stream
+  // Take photo from video stream and immediately stop camera
   const capturePhoto = () => {
     if (videoRef.current && canvasRef.current && stream) {
       const video = videoRef.current;
@@ -191,6 +191,20 @@ export const CameraView = ({ onClose, onCapture }: CameraViewProps) => {
         
         // Get image data as base64 string
         const imageData = canvas.toDataURL('image/jpeg', 0.9);
+        
+        // Stop all camera tracks immediately after capture
+        stream.getTracks().forEach(track => {
+          console.log(`Stopping camera track after capture: ${track.kind}`);
+          track.stop();
+        });
+        
+        // Clear video source
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+        
+        // Clear the stream state
+        setStream(null);
         
         // Pass image data to parent component
         onCapture(imageData);
