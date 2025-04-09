@@ -18,7 +18,7 @@ const defaultPresets: ModelPresets = {
   preset1: 'openai/o3-mini',
   preset2: 'anthropic/claude-3.7-sonnet',
   preset3: 'deepseek/deepseek-r1',
-  preset4: 'google/gemini-2.0-flash-001',
+  preset4: 'openai/gpt-4o', // Updated to OpenAI's GPT-4o for multimodal
   preset5: 'perplexity/sonar-pro'
 };
 

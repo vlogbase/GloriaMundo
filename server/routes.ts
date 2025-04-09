@@ -331,7 +331,7 @@ const MODEL_CONFIGS = {
   },
   multimodal: {
     apiProvider: "openrouter",
-    modelName: "openai/gpt-4o-latest", // OpenAI's latest multimodal model
+    modelName: "openai/gpt-4o", // OpenAI's multimodal model
     apiUrl: "https://openrouter.ai/api/v1/chat/completions",
     apiKey: OPENROUTER_API_KEY, 
     pricing: DEFAULT_MODEL_PRICING.multimodal

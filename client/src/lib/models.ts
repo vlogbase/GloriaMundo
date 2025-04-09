@@ -11,16 +11,16 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
   search: {
     id: "search",
     name: "Search",
-    description: "Provides up-to-date information with search capabilities (Sonar)",
-    apiName: "sonar-reasoning",
-    apiProvider: "perplexity"
+    description: "Provides up-to-date information with search capabilities (Sonar Pro)",
+    apiName: "perplexity/sonar-pro",
+    apiProvider: "openrouter"
   },
   multimodal: {
     id: "multimodal",
     name: "Multimodal",
-    description: "Vision capabilities for analyzing images and text (Llama 3.2 Vision)",
-    apiName: "llama-3.2-90b-vision-preview",
-    apiProvider: "groq"
+    description: "Vision capabilities for analyzing images and text (GPT-4o)",
+    apiName: "openai/gpt-4o",
+    apiProvider: "openrouter"
   },
   openrouter: {
     id: "openrouter",
