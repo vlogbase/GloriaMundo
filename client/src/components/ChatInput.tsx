@@ -2,10 +2,12 @@ import { useState, FormEvent, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Send, Lightbulb, Search, Image, X, Camera, Network, Paperclip, File } from "lucide-react";
+import { Send, Lightbulb, Search, Image, X, Camera, Network, Paperclip, File, Lock } from "lucide-react";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { useOpenRouterModels } from "@/hooks/useOpenRouterModels";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { ModelType } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/models";
 import { ModelPresets } from "@/components/ModelPresets";
@@ -59,6 +61,41 @@ export const ChatInput = ({
   const { selectedModel, setSelectedModel } = useModelSelection();
   const { models, selectedModelId, setSelectedModelId, isLoading: modelsLoading } = useOpenRouterModels();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  
+  // Query for user's credit balance
+  const { data: user } = useQuery({
+    queryKey: ['/api/auth/me'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            return null;
+          }
+          throw new Error(`Failed to fetch user data: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    }
+  });
+  
+  // Check if user has credits (positive balance)
+  const hasCredits = user?.creditBalance > 0;
+  
+  // Handle redirection to account balance page for locked features
+  const handleLockedFeatureClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate('/account-balance');
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -522,21 +559,37 @@ export const ChatInput = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors"
-                    disabled={isLoading || uploadingDocument}
-                    onClick={startCamera}
-                    data-testid="camera-button" /* For easier testing */
-                    id="camera-button" /* For easier DOM selection */
-                  >
-                    <Camera size={18} />
-                  </Button>
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="absolute right-12 bottom-3 text-muted-foreground hover:text-primary transition-colors z-0"
+                      disabled={isLoading || uploadingDocument}
+                      onClick={hasCredits ? startCamera : handleLockedFeatureClick}
+                      data-testid="camera-button" /* For easier testing */
+                      id="camera-button" /* For easier DOM selection */
+                    >
+                      <Camera size={18} />
+                    </Button>
+                    
+                    {/* Padlock overlay for locked camera feature */}
+                    {!hasCredits && (
+                      <div 
+                        className="absolute right-12 bottom-3 w-9 h-9 bg-black/50 backdrop-blur-[1px] rounded flex items-center justify-center cursor-pointer z-10"
+                        onClick={handleLockedFeatureClick}
+                        title="You need funds to use the camera. Click to add funds."
+                      >
+                        <Lock className="w-4 h-4 text-white/90" />
+                      </div>
+                    )}
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Take a photo with your camera</p>
+                  {hasCredits 
+                    ? <p>Take a photo with your camera</p>
+                    : <p>Add funds to use camera (premium feature)</p>
+                  }
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -547,26 +600,42 @@ export const ChatInput = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className={`absolute ${selectedModel === 'multimodal' ? 'right-[84px]' : 'right-[42px]'} bottom-3 text-muted-foreground hover:text-primary transition-colors`}
-                    disabled={isLoading || uploadingDocument}
-                    onClick={() => documentInputRef.current?.click()}
-                  >
-                    {uploadingDocument ? (
-                      <div className="h-4 w-4 border-2 border-t-transparent border-primary animate-spin rounded-full" />
-                    ) : (
-                      <Paperclip size={18} />
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className={`absolute ${selectedModel === 'multimodal' ? 'right-[84px]' : 'right-[42px]'} bottom-3 text-muted-foreground hover:text-primary transition-colors z-0`}
+                      disabled={isLoading || uploadingDocument}
+                      onClick={hasCredits ? () => documentInputRef.current?.click() : handleLockedFeatureClick}
+                    >
+                      {uploadingDocument ? (
+                        <div className="h-4 w-4 border-2 border-t-transparent border-primary animate-spin rounded-full" />
+                      ) : (
+                        <Paperclip size={18} />
+                      )}
+                    </Button>
+                    
+                    {/* Padlock overlay for locked document upload feature */}
+                    {!hasCredits && (
+                      <div 
+                        className={`absolute ${selectedModel === 'multimodal' ? 'right-[84px]' : 'right-[42px]'} bottom-3 w-9 h-9 bg-black/50 backdrop-blur-[1px] rounded flex items-center justify-center cursor-pointer z-10`}
+                        onClick={handleLockedFeatureClick}
+                        title="You need funds to upload documents. Click to add funds."
+                      >
+                        <Lock className="w-4 h-4 text-white/90" />
+                      </div>
                     )}
-                  </Button>
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{selectedModel === 'multimodal' 
-                    ? 'Upload content (images, documents, audio, video) - Max 50MB' 
-                    : 'Upload document (PDF, DOCX, TXT) - Max 50MB'}
-                  </p>
+                  {hasCredits 
+                    ? <p>{selectedModel === 'multimodal' 
+                        ? 'Upload content (images, documents, audio, video) - Max 50MB' 
+                        : 'Upload document (PDF, DOCX, TXT) - Max 50MB'}
+                      </p>
+                    : <p>Add funds to upload documents (premium feature)</p>
+                  }
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
