@@ -1579,8 +1579,9 @@ Format your responses using markdown for better readability and organization.`;
         modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       }
       
-      // Disable streaming (using standard requests only)
-      const shouldStream = false;
+      // We've decided to completely remove streaming functionality
+      // This simplifies the code and reduces potential bugs
+      const shouldStream = false; // Always false - streaming is disabled
 
       // Create user message
       const userMessage = await storage.createMessage({
@@ -2030,84 +2031,61 @@ Format your responses using markdown for better readability and organization.`;
           modelId: modelId && modelId !== "" ? modelId : modelType, // Store the model ID correctly
         });
         
-        if (shouldStream) {
-          // Set up Server-Sent Events
-          res.setHeader('Content-Type', 'text/event-stream');
-          res.setHeader('Cache-Control', 'no-cache');
-          res.setHeader('Connection', 'keep-alive');
+        // We've removed the streaming code for simplicity and reliability
+        // Only non-streaming responses are supported
+        
+        // Ensure response exists and is valid
+        if (!response) {
+          console.error("Error: Response object is not available");
+          throw new Error("Response object is not available");
+        }
+        
+        // Clone the response before consuming it with json()
+        const responseClone = response.clone();
+        const data = await responseClone.json();
+        
+        console.log(`Received response from ${modelConfig.apiProvider} API:`, {
+          model: data.model,
+          object: data.object,
+          choicesCount: data.choices?.length || 0
+        });
+        
+        // Handle different API response formats based on provider and model
+        try {
+          let messageContent = "";
+          let messageCitations = null;
           
-          // Safely access the response variable or define a placeholder if not available
-          let reader;
-          try {
-            // Check if response exists and has a body
-            if (!response || !response.body) {
-              throw new Error("Response or response body is not available");
+          // Extract content based on provider/response format
+          if (data.choices && data.choices.length > 0) {
+            if (data.choices[0].message) {
+              // OpenAI-compatible format (Groq and some Perplexity responses)
+              messageContent = data.choices[0].message.content || "";
+            } else if (data.choices[0].text) {
+              // Alternative format sometimes used
+              messageContent = data.choices[0].text || "";
+            } else {
+              console.error(`Unexpected response format from ${modelConfig.apiProvider}:`, 
+                JSON.stringify(data.choices[0]).substring(0, 200));
+              throw new Error(`Could not extract content from ${modelConfig.apiProvider} response`);
             }
-            reader = response.body.getReader();
-          } catch (readerError) {
-            console.error("Error getting reader from response:", {
-              error: readerError instanceof Error ? readerError.message : String(readerError),
-              responseExists: !!response,
-              responseBodyExists: response && !!response.body
-            });
-            throw new Error("Failed to get reader from response");
+          } else {
+            console.error(`No choices in ${modelConfig.apiProvider} response:`, 
+              JSON.stringify(data).substring(0, 200));
+            throw new Error(`Empty response from ${modelConfig.apiProvider}`);
           }
           
-          // Send the initial user message to setup the UI
-          res.write(`data: ${JSON.stringify({ 
-            type: "initial", 
-            userMessage,
-            assistantMessageId: assistantMessage.id 
-          })}\n\n`);
-          
-          // Process the stream
-          const decoder = new TextDecoder("utf-8");
-          let buffer = "";
-          
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            // Decode the chunk and add to buffer
-            buffer += decoder.decode(value, { stream: true });
-            
-            // Process complete lines from the buffer
-            let lines = buffer.split("\n");
-            buffer = lines.pop() || ""; // The last line might be incomplete
-            
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6);
-                if (data === "[DONE]") continue;
-                
-                try {
-                  const parsed = JSON.parse(data);
-                  const delta = parsed.choices[0]?.delta?.content || "";
-                  
-                  if (delta) {
-                    assistantContent += delta;
-                    res.write(`data: ${JSON.stringify({ 
-                      type: "chunk", 
-                      content: delta,
-                      id: assistantMessage.id
-                    })}\n\n`);
-                  }
-                } catch (e) {
-                  console.error("Error parsing streaming response:", e);
-                }
-              }
-            }
+          // Handle citations if present (Perplexity specific)
+          if (data.citations) {
+            messageCitations = data.citations;
           }
           
-          // Update the stored message with the full content
-          // Estimate token usage for streaming response
-          const promptTokens = Math.ceil(JSON.stringify(messages).length / 4);
-          const completionTokens = Math.ceil(assistantContent.length / 4);
-          
+          // Update the assistant message with the content
           await storage.updateMessage(assistantMessage.id, {
-            content: assistantContent,
-            promptTokens: promptTokens,
-            completionTokens: completionTokens
+            content: messageContent,
+            citations: messageCitations,
+            modelId: modelId && modelId !== "" ? modelId : modelType, // Ensure consistent modelId storage
+            promptTokens: data.usage?.prompt_tokens,
+            completionTokens: data.usage?.completion_tokens
           });
           
           // Get the updated message
@@ -2116,182 +2094,71 @@ Format your responses using markdown for better readability and organization.`;
             assistantMessage = updatedMessage;
           }
           
-          // Estimate token usage for streaming response since we don't get usage data directly
-          if (user) {
-            // Approximate tokens based on content length
-            // OpenAI uses ~4 chars per token as a rough estimate
-            const promptTokens = JSON.stringify(messages).length / 4;
-            const completionTokens = assistantContent.length / 4;
+          // Process token usage and deduct credits from user's balance
+          if (data.usage && user) {
+            const promptTokens = data.usage.prompt_tokens || 0;
+            const completionTokens = data.usage.completion_tokens || 0;
             
-            console.log(`Estimated streaming token usage: prompt=${Math.ceil(promptTokens)}, completion=${Math.ceil(completionTokens)}`);
+            console.log(`Message token usage: prompt=${promptTokens}, completion=${completionTokens}`);
             
-            // Use default pricing for reasoning model
-            const pricing = MODEL_CONFIGS.reasoning.pricing || {
-              promptPrice: 0.0000005,
-              completionPrice: 0.0000015
-            };
+            // Get pricing based on the model used
+            let pricing;
+            if (modelId && (modelId.startsWith("openai/") || modelId.includes("/"))) {
+              // OpenRouter model
+              pricing = getModelPricing(modelId);
+            } else {
+              // Default model based on model type
+              pricing = modelConfig.pricing || DEFAULT_MODEL_PRICING[modelType as keyof typeof DEFAULT_MODEL_PRICING] || {
+                promptPrice: 0.000001,
+                completionPrice: 0.000002
+              };
+            }
             
             // Calculate cost in hundredths of cents - uses pricing in dollars per million tokens
             const promptPricePerM = pricing.promptPrice * 1_000_000; 
             const completionPricePerM = pricing.completionPrice * 1_000_000;
             
-            // Calculate total cost to deduct in hundredths of cents
-            const costInHundredthsOfCents = calculateCreditsToCharge(
-              Math.ceil(promptTokens), 
-              Math.ceil(completionTokens), 
+            // Add image cost if applicable
+            let imageCostHundredthsCents = 0;
+            if (image && modelType === "multimodal") {
+              const baseImageCostUsd = 0.002; // $0.002 per image
+              imageCostHundredthsCents = Math.ceil(baseImageCostUsd * 10000);
+              console.log(`Adding ${imageCostHundredthsCents} hundredths of cents (${baseImageCostUsd} USD) for image processing`);
+            }
+            
+            // Calculate token cost in hundredths of cents
+            const tokenCostHundredthsCents = calculateCreditsToCharge(
+              promptTokens, 
+              completionTokens, 
               promptPricePerM, 
               completionPricePerM
             );
             
-            console.log(`Deducting ${costInHundredthsOfCents} hundredths of cents (${costInHundredthsOfCents/10000} USD) from user ${user.id} for streaming response`);
+            const totalCostHundredthsCents = tokenCostHundredthsCents + imageCostHundredthsCents;
+            
+            console.log(`Deducting ${totalCostHundredthsCents} hundredths of cents (${totalCostHundredthsCents/10000} USD) from user ${user.id}`);
             
             // Deduct cost from user's balance
             try {
-              await storage.deductUserCredits(user.id, costInHundredthsOfCents);
+              await storage.deductUserCredits(user.id, totalCostHundredthsCents);
             } catch (creditError) {
               console.error(`Error deducting credits from user ${user.id}:`, creditError);
               // Continue with the response even if credit deduction fails
+              // We'll handle this better in a future version
             }
           }
+        } catch (extractError) {
+          console.error(`Error extracting content from ${modelConfig.apiProvider} response:`, extractError);
           
-          // Final message to signal completion
-          res.write(`data: ${JSON.stringify({ 
-            type: "done", 
-            userMessage,
-            assistantMessage
-          })}\n\n`);
-          
-          res.end();
-          
-          // Since we've handled the response with streaming, return early
-          return;
-        } else {
-          // Non-streaming response
-          // Ensure response exists and is valid
-          if (!response) {
-            console.error("Error: Response object is not available");
-            throw new Error("Response object is not available");
-          }
-          // Clone the response before consuming it with json()
-          const responseClone = response.clone();
-          const data = await responseClone.json();
-          
-          console.log(`Received response from ${modelConfig.apiProvider} API:`, {
-            model: data.model,
-            object: data.object,
-            choicesCount: data.choices?.length || 0
+          // Fallback: Update with error message
+          await storage.updateMessage(assistantMessage.id, {
+            content: `I apologize, but I encountered an error while processing your request with the ${modelType} model. Please try again or select a different model.`,
+            citations: null
           });
           
-          // Handle different API response formats based on provider and model
-          try {
-            let messageContent = "";
-            let messageCitations = null;
-            
-            // Extract content based on provider/response format
-            if (data.choices && data.choices.length > 0) {
-              if (data.choices[0].message) {
-                // OpenAI-compatible format (Groq and some Perplexity responses)
-                messageContent = data.choices[0].message.content || "";
-              } else if (data.choices[0].text) {
-                // Alternative format sometimes used
-                messageContent = data.choices[0].text || "";
-              } else {
-                console.error(`Unexpected response format from ${modelConfig.apiProvider}:`, 
-                  JSON.stringify(data.choices[0]).substring(0, 200));
-                throw new Error(`Could not extract content from ${modelConfig.apiProvider} response`);
-              }
-            } else {
-              console.error(`No choices in ${modelConfig.apiProvider} response:`, 
-                JSON.stringify(data).substring(0, 200));
-              throw new Error(`Empty response from ${modelConfig.apiProvider}`);
-            }
-            
-            // Handle citations if present (Perplexity specific)
-            if (data.citations) {
-              messageCitations = data.citations;
-            }
-            
-            // Update the assistant message with the content
-            await storage.updateMessage(assistantMessage.id, {
-              content: messageContent,
-              citations: messageCitations,
-              modelId: modelId && modelId !== "" ? modelId : modelType, // Ensure consistent modelId storage
-              promptTokens: data.usage?.prompt_tokens,
-              completionTokens: data.usage?.completion_tokens
-            });
-            
-            // Get the updated message
-            const updatedMessage = await storage.getMessage(assistantMessage.id);
-            if (updatedMessage) {
-              assistantMessage = updatedMessage;
-            }
-            
-            // Process token usage and deduct credits from user's balance
-            if (data.usage && user) {
-              const promptTokens = data.usage.prompt_tokens || 0;
-              const completionTokens = data.usage.completion_tokens || 0;
-              
-              console.log(`Message token usage: prompt=${promptTokens}, completion=${completionTokens}`);
-              
-              // Get pricing based on the model used
-              let pricing;
-              if (modelId && (modelId.startsWith("openai/") || modelId.includes("/"))) {
-                // OpenRouter model
-                pricing = getModelPricing(modelId);
-              } else {
-                // Default model based on model type
-                pricing = modelConfig.pricing || DEFAULT_MODEL_PRICING[modelType as keyof typeof DEFAULT_MODEL_PRICING] || {
-                  promptPrice: 0.000001,
-                  completionPrice: 0.000002
-                };
-              }
-              
-              // Calculate cost in hundredths of cents - uses pricing in dollars per million tokens
-              const promptPricePerM = pricing.promptPrice * 1_000_000; 
-              const completionPricePerM = pricing.completionPrice * 1_000_000;
-              
-              // Add image cost if applicable
-              let imageCostHundredthsCents = 0;
-              if (image && modelType === "multimodal") {
-                const baseImageCostUsd = 0.002; // $0.002 per image
-                imageCostHundredthsCents = Math.ceil(baseImageCostUsd * 10000);
-                console.log(`Adding ${imageCostHundredthsCents} hundredths of cents (${baseImageCostUsd} USD) for image processing`);
-              }
-              
-              // Calculate token cost in hundredths of cents
-              const tokenCostHundredthsCents = calculateCreditsToCharge(
-                promptTokens, 
-                completionTokens, 
-                promptPricePerM, 
-                completionPricePerM
-              );
-              
-              const totalCostHundredthsCents = tokenCostHundredthsCents + imageCostHundredthsCents;
-              
-              console.log(`Deducting ${totalCostHundredthsCents} hundredths of cents (${totalCostHundredthsCents/10000} USD) from user ${user.id}`);
-              
-              // Deduct cost from user's balance
-              try {
-                await storage.deductUserCredits(user.id, totalCostHundredthsCents);
-              } catch (creditError) {
-                console.error(`Error deducting credits from user ${user.id}:`, creditError);
-                // Continue with the response even if credit deduction fails
-                // We'll handle this better in a future version
-              }
-            }
-          } catch (extractError) {
-            console.error(`Error extracting content from ${modelConfig.apiProvider} response:`, extractError);
-            
-            // Fallback: Update with error message
-            await storage.updateMessage(assistantMessage.id, {
-              content: `I apologize, but I encountered an error while processing your request with the ${modelType} model. Please try again or select a different model.`,
-              citations: null
-            });
-            
-            const updatedMessage = await storage.getMessage(assistantMessage.id);
-            if (updatedMessage) {
-              assistantMessage = updatedMessage;
-            }
+          const updatedMessage = await storage.getMessage(assistantMessage.id);
+          if (updatedMessage) {
+            assistantMessage = updatedMessage;
           }
         }
 
