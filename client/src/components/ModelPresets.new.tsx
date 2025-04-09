@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useModelPresets } from '@/hooks/useModelPresets.fixed';
+import { useModelPresets } from '@/hooks/useModelPresets';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
 import { useModelSelection } from '@/hooks/useModelSelection';
 import {

@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ModelSelectionProvider } from "@/hooks/useModelSelection";
-import { ModelPresetsProvider } from "@/hooks/useModelPresets.fixed";
+import { ModelPresetsProvider } from "@/hooks/useModelPresets";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
 import { useState, useEffect, lazy, Suspense } from "react";

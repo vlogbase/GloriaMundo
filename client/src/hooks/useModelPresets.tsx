@@ -34,6 +34,7 @@ interface ModelPresetsContextType {
   activateFreeTierModel: (modelId: string) => void;
   getModelNameById: (modelId: string) => string;
   formatModelName: (modelId: string) => string;
+  normalizeModelId: (modelId: string) => string;
 }
 
 const ModelPresetsContext = createContext<ModelPresetsContextType | undefined>(undefined);
@@ -116,25 +117,36 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   });
 
+  // Normalize model IDs to handle special model variants like ":thinking"
+  const normalizeModelId = (modelId: string): string => {
+    if (!modelId) return "";
+    
+    // Remove any thinking or special suffixes (for Claude models)
+    return modelId.replace(/:thinking$/, '').trim();
+  };
+
   // Format model name to display cleaner version
   const formatModelName = (modelId: string): string => {
     if (!modelId) return "";
     
+    // First normalize the ID to remove any special suffixes
+    const normalizedId = normalizeModelId(modelId);
+    
     // Apply specific formatting rules for required models
-    if (modelId.includes('openai/o3-mini')) {
+    if (normalizedId.includes('openai/o3-mini')) {
       return 'o3 Mini';
-    } else if (modelId.includes('anthropic/claude-3.7-sonnet')) {
+    } else if (normalizedId.includes('anthropic/claude-3.7-sonnet')) {
       return 'Claude 3.7 Sonnet';
-    } else if (modelId.includes('deepseek/deepseek-r1')) {
+    } else if (normalizedId.includes('deepseek/deepseek-r1')) {
       return 'Deepseek R1';
-    } else if (modelId.includes('google/gemini-2.0-flash-001')) {
+    } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
-    } else if (modelId.includes('perplexity/sonar-pro')) {
+    } else if (normalizedId.includes('perplexity/sonar-pro')) {
       return 'Sonar Pro';
     }
     
     // Generic formatting for other models
-    const parts = modelId.split('/');
+    const parts = normalizedId.split('/');
     if (parts.length > 1) {
       // Get the part after the provider
       let modelName = parts[1];
@@ -196,7 +208,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
     activatePreset,
     activateFreeTierModel,
     getModelNameById,
-    formatModelName
+    formatModelName,
+    normalizeModelId
   };
 
   return (
@@ -294,25 +307,36 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
     }
   });
 
+  // Normalize model IDs to handle special model variants like ":thinking"
+  const normalizeModelId = (modelId: string): string => {
+    if (!modelId) return "";
+    
+    // Remove any thinking or special suffixes (for Claude models)
+    return modelId.replace(/:thinking$/, '').trim();
+  };
+
   // Format model name to display cleaner version
   const formatModelName = (modelId: string): string => {
     if (!modelId) return "";
     
+    // First normalize the ID to remove any special suffixes
+    const normalizedId = normalizeModelId(modelId);
+    
     // Apply specific formatting rules for required models
-    if (modelId.includes('openai/o3-mini')) {
+    if (normalizedId.includes('openai/o3-mini')) {
       return 'o3 Mini';
-    } else if (modelId.includes('anthropic/claude-3.7-sonnet')) {
+    } else if (normalizedId.includes('anthropic/claude-3.7-sonnet')) {
       return 'Claude 3.7 Sonnet';
-    } else if (modelId.includes('deepseek/deepseek-r1')) {
+    } else if (normalizedId.includes('deepseek/deepseek-r1')) {
       return 'Deepseek R1';
-    } else if (modelId.includes('google/gemini-2.0-flash-001')) {
+    } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
-    } else if (modelId.includes('perplexity/sonar-pro')) {
+    } else if (normalizedId.includes('perplexity/sonar-pro')) {
       return 'Sonar Pro';
     }
     
     // Generic formatting for other models
-    const parts = modelId.split('/');
+    const parts = normalizedId.split('/');
     if (parts.length > 1) {
       // Get the part after the provider
       let modelName = parts[1];
@@ -374,6 +398,7 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
     activatePreset,
     activateFreeTierModel,
     getModelNameById,
-    formatModelName
+    formatModelName,
+    normalizeModelId
   };
 };
