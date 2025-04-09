@@ -322,17 +322,18 @@ const MODEL_CONFIGS = {
     pricing: DEFAULT_MODEL_PRICING.reasoning
   },
   search: {
-    apiProvider: "perplexity",
-    modelName: "sonar-reasoning",  // Updated with the correct model name
-    apiUrl: "https://api.perplexity.ai/chat/completions",
-    apiKey: PERPLEXITY_API_KEY,
+    // Using OpenRouter as fallback for search since Perplexity is no longer used
+    apiProvider: "openrouter",
+    modelName: "anthropic/claude-3-haiku",  // Good for search capabilities
+    apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+    apiKey: OPENROUTER_API_KEY,
     pricing: DEFAULT_MODEL_PRICING.search
   },
   multimodal: {
-    apiProvider: "groq",
-    modelName: "llama-3.2-90b-vision-preview",
-    apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-    apiKey: GROQ_API_KEY,
+    apiProvider: "openrouter", // Changed from groq to openrouter for better multimodal support
+    modelName: "openai/gpt-4-vision-preview",
+    apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+    apiKey: OPENROUTER_API_KEY, 
     pricing: DEFAULT_MODEL_PRICING.multimodal
   }
 };
