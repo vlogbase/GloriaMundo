@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Network, Edit, Check, Lock } from 'lucide-react';
+import { Network, Edit, Check, Lock, Search, Image } from 'lucide-react';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -99,11 +99,15 @@ export const ModelPresets = () => {
   const [currentPresetKey, setCurrentPresetKey] = useState<'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5'>('preset1');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Filter models based on search term
-  const filteredModels = models.filter(model => 
-    model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    model.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // State for filtered models based on preset type
+  const [filteredPresetModels, setFilteredPresetModels] = useState<any[]>([]);
+  
+  // Filter models based on search term and current preset type
+  const filteredModels = (filteredPresetModels.length > 0 ? filteredPresetModels : models)
+    .filter(model => 
+      model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      model.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   
   // Group models by provider for the preset selection dialog
   const groupedModels = groupModelsByProvider(filteredModels);
@@ -116,6 +120,11 @@ export const ModelPresets = () => {
     e.stopPropagation(); // Prevent triggering the preset button click
     setCurrentPresetKey(presetKey);
     setSelectedModelId(presets[presetKey] || '');
+    
+    // Filter models based on preset type before opening dialog
+    const presetFilteredModels = filterModelsForPreset(presetKey);
+    setFilteredPresetModels(presetFilteredModels);
+    
     setIsDialogOpen(true);
   };
   
@@ -141,25 +150,71 @@ export const ModelPresets = () => {
     );
   };
   
+  // Helper function to check if a model is a Perplexity search model
+  const isPerplexityModel = (modelId: string): boolean => {
+    return (
+      modelId.toLowerCase().includes('perplexity') ||
+      modelId.toLowerCase().includes('sonar')
+    );
+  };
+  
+  // Helper function to get preset-specific icon
+  const getPresetIcon = (presetKey: string, modelId: string): React.ReactNode => {
+    if (presetKey === 'preset4' || (presetKey === 'preset4' && !modelId)) {
+      // For preset4 (multimodal models), use Image icon
+      return <Image size={16} className="mr-1" />;
+    } else if (presetKey === 'preset5' || (presetKey === 'preset5' && !modelId)) {
+      // For preset5 (Perplexity/search models), use Search icon
+      return <Search size={16} className="mr-1" />;
+    } else {
+      // For all other presets, use Network icon
+      return <Network size={16} className="mr-1" />;
+    }
+  };
+  
+  // Helper function to filter models for specific presets
+  const filterModelsForPreset = (presetKey: string): any[] => {
+    if (presetKey === 'preset4') {
+      // Only allow multimodal models for preset4
+      return models.filter(model => isMultimodalModel(model.id));
+    } else if (presetKey === 'preset5') {
+      // Only allow Perplexity models for preset5
+      return models.filter(model => isPerplexityModel(model.id));
+    } else {
+      // Return all models for other presets
+      return models;
+    }
+  };
+  
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     const modelId = activatePreset(presetKey);
+    
     if (modelId) {
       setSelectedModelId(modelId);
       
-      // Determine model type based on capabilities
-      const shouldSetMultimodal = isMultimodalModel(modelId);
-      
-      if (shouldSetMultimodal) {
-        // Set to multimodal if the model supports it
+      // Set model type based on preset and capabilities
+      if (presetKey === 'preset4') {
+        // Preset 4 is always for multimodal models
         setSelectedModel('multimodal');
+      } else if (presetKey === 'preset5') {
+        // Preset 5 is for search/Perplexity models
+        setSelectedModel('search');
       } else {
-        // Use openrouter for non-multimodal models
-        setSelectedModel('openrouter');
+        // For other presets, determine type based on the model's capabilities
+        const shouldSetMultimodal = isMultimodalModel(modelId);
+        setSelectedModel(shouldSetMultimodal ? 'multimodal' : 'openrouter');
       }
       
       // Set the custom OpenRouter model ID
       setCustomOpenRouterModelId(modelId);
+    } else {
+      // If no model is assigned to this preset yet, set default types based on preset
+      if (presetKey === 'preset4') {
+        setSelectedModel('multimodal');
+      } else if (presetKey === 'preset5') {
+        setSelectedModel('search');
+      }
     }
   };
   
@@ -188,6 +243,9 @@ export const ModelPresets = () => {
     if (selectedModelId) {
       assignModelToPreset(currentPresetKey, selectedModelId);
       setIsDialogOpen(false);
+      // Reset filtered models list
+      setFilteredPresetModels([]);
+      setSearchTerm('');
     }
   };
   
@@ -213,7 +271,7 @@ export const ModelPresets = () => {
             } ${isLocked ? 'cursor-pointer' : ''}`}
             disabled={isLoading || isPending}
           >
-            <Network size={16} className="mr-1" />
+            {getPresetIcon(presetKey, modelId || '')}
             {modelId ? (
               <span className="truncate max-w-[100px]">{formatModelName(modelId)}</span>
             ) : (
@@ -279,7 +337,17 @@ export const ModelPresets = () => {
       </div>
       
       {/* Model assignment dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog 
+        open={isDialogOpen} 
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          // Reset filtered models when dialog closes
+          if (!open) {
+            setFilteredPresetModels([]);
+            setSearchTerm('');
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Assign Model to Preset {getPresetNumber(currentPresetKey)}</DialogTitle>
