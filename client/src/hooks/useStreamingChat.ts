@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Message } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
+import { refreshSkimlinks } from "@/lib/utils";
 
 export const useStreamingChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
