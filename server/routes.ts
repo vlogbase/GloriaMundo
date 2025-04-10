@@ -2339,6 +2339,32 @@ Format your responses using markdown for better readability and organization.`;
           errorResponseStructure: "{ userMessage, assistantMessage }"
         });
         
+        // Log API usage even for failed requests (with 0 tokens) for analytics
+        // This helps track which models are experiencing errors
+        if (user) {
+          try {
+            await storage.createUsageLog({
+              userId: user.id,
+              messageId: assistantMessage.id,
+              modelId: modelId && modelId !== "" ? modelId : modelType,
+              promptTokens: 0, // No tokens processed since it failed
+              completionTokens: 0,
+              imageCount: image ? 1 : 0,
+              creditsUsed: 0, // No charge for errors
+              metadata: {
+                conversationId: conversationId,
+                modelType: modelType,
+                apiProvider: modelConfig.apiProvider,
+                error: apiError.category,
+                errorStatus: apiError.status
+              }
+            });
+          } catch (logError) {
+            // Don't let error logging failures affect the user experience
+            console.error("Failed to log error usage:", logError);
+          }
+        }
+        
         // Generate a conversation title if this is a new conversation
         // This runs asynchronously and doesn't block the response
         generateAndSaveConversationTitle(conversationId).catch(err => {
