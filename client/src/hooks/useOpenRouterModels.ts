@@ -136,6 +136,8 @@ export const useOpenRouterModels = () => {
       return 'Gemini 2.0 Flash';
     } else if (modelId.includes('perplexity/sonar-pro')) {
       return 'Sonar Pro';
+    } else if (modelId.includes('openai/gpt-4.5-preview')) {
+      return 'GPT-4.5';
     }
     
     // Generic formatting for other models
