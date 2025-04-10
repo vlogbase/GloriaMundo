@@ -2471,6 +2471,7 @@ Format your responses using markdown for better readability and organization.`;
         }
       }
       
+      // Get summary stats by model
       const stats = await storage.getUsageStatsByModel(userId, startDate, endDate);
       
       // Extend with cost in dollars for easier display
@@ -2479,8 +2480,19 @@ Format your responses using markdown for better readability and organization.`;
         totalCreditsDollars: (stat.totalCredits / 10000).toFixed(4) // Convert 10000 credits = $1
       }));
       
+      // Get detailed usage logs for the same period
+      const logs = await storage.getUsageLogsByTimeRange(userId, startDate, endDate);
+      
+      // Format logs to include dollar amounts
+      const formattedLogs = logs.map(log => ({
+        ...log,
+        creditsDollars: (log.creditsUsed / 10000).toFixed(4), // Convert 10000 credits = $1
+        date: new Date(log.createdAt).toISOString() // Ensure consistent date format
+      }));
+      
       res.json({
         stats: statsWithDollars,
+        logs: formattedLogs,
         period: {
           startDate,
           endDate
@@ -2519,27 +2531,72 @@ Format your responses using markdown for better readability and organization.`;
         }
       }
       
-      const stats = await storage.getUsageStatsByModel(userId, startDate, endDate);
+      // Check if we should export detailed logs or summary by model
+      const exportType = req.query.type as string || 'summary';
       
-      // Generate CSV string
-      const header = 'Model,Total Tokens,Prompt Tokens,Completion Tokens,Images,Usage Count,Total Credits,Cost (USD)';
-      const rows = stats.map(stat => {
-        const costUSD = (stat.totalCredits / 10000).toFixed(4); // Convert 10000 credits = $1
-        return `"${stat.modelId}",${stat.totalTokens},${stat.promptTokens},${stat.completionTokens},${stat.imageCount},${stat.usageCount},${stat.totalCredits},${costUSD}`;
-      });
-      
-      const csvContent = [header, ...rows].join('\n');
-      
-      // Format date for filename
-      const formatDate = (date: Date) => date.toISOString().split('T')[0];
-      const filename = `usage_report_${formatDate(startDate)}_to_${formatDate(endDate)}.csv`;
-      
-      // Set response headers for CSV download
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      
-      // Send CSV content
-      res.send(csvContent);
+      if (exportType === 'detailed') {
+        // Get detailed logs
+        const logs = await storage.getUsageLogsByTimeRange(userId, startDate, endDate);
+        
+        // Generate CSV string
+        const header = 'Date,Time,Model,MessageID,ConversationID,Prompt Tokens,Completion Tokens,Images,Credits Used,Cost (USD)';
+        
+        const formatDateTime = (dateStr: string) => {
+          const date = new Date(dateStr);
+          return {
+            date: date.toISOString().split('T')[0],
+            time: date.toISOString().split('T')[1].split('.')[0]
+          };
+        };
+        
+        const rows = logs.map(log => {
+          const { date, time } = formatDateTime(log.createdAt.toString());
+          const costUSD = (log.creditsUsed / 10000).toFixed(4); // Convert 10000 credits = $1
+          const messageId = log.messageId || 'N/A';
+          
+          // Get conversationId from the associated message if available
+          let conversationId = 'N/A';
+          if (log.messageId && log.metadata && typeof log.metadata === 'object' && 'conversationId' in log.metadata) {
+            conversationId = log.metadata.conversationId;
+          }
+          
+          return `"${date}","${time}","${log.modelId}","${messageId}","${conversationId}",${log.promptTokens},${log.completionTokens},${log.imageCount},${log.creditsUsed},${costUSD}`;
+        });
+        
+        const csvContent = [header, ...rows].join('\n');
+        
+        // Format date for filename
+        const formatDate = (date: Date) => date.toISOString().split('T')[0];
+        const filename = `usage_detailed_log_${formatDate(startDate)}_to_${formatDate(endDate)}.csv`;
+        
+        // Set response headers and send
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csvContent);
+      } else {
+        // Default to summary by model
+        const stats = await storage.getUsageStatsByModel(userId, startDate, endDate);
+        
+        // Generate CSV string
+        const header = 'Model,Total Tokens,Prompt Tokens,Completion Tokens,Images,Usage Count,Total Credits,Cost (USD)';
+        const rows = stats.map(stat => {
+          const costUSD = (stat.totalCredits / 10000).toFixed(4); // Convert 10000 credits = $1
+          return `"${stat.modelId}",${stat.totalTokens},${stat.promptTokens},${stat.completionTokens},${stat.imageCount},${stat.usageCount},${stat.totalCredits},${costUSD}`;
+        });
+        
+        const csvContent = [header, ...rows].join('\n');
+        
+        // Format date for filename
+        const formatDate = (date: Date) => date.toISOString().split('T')[0];
+        const filename = `usage_summary_report_${formatDate(startDate)}_to_${formatDate(endDate)}.csv`;
+        
+        // Set response headers for CSV download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        
+        // Send CSV content
+        res.send(csvContent);
+      }
     } catch (error) {
       console.error("Error exporting usage statistics:", error);
       res.status(500).json({ message: "Failed to export usage statistics" });

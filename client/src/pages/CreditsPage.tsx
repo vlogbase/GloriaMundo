@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Card,
   CardContent,
@@ -104,6 +105,7 @@ export function CreditsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('purchase');
+  const [detailView, setDetailView] = useState<'summary' | 'detailed'>('summary');
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [paypalButtonsLoaded, setPaypalButtonsLoaded] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -203,9 +205,26 @@ export function CreditsPage() {
     enabled: !!user && activeTab === 'usage'
   });
   
+  // Define the UsageLog interface
+  interface UsageLog {
+    id: number;
+    userId: number;
+    messageId: number | null;
+    modelId: string;
+    promptTokens: number;
+    completionTokens: number;
+    imageCount: number;
+    creditsUsed: number;
+    metadata: any | null;
+    createdAt: string;
+    creditsDollars: string; // Added on the server
+    date: string; // Added on the server
+  }
+
   // Query for usage statistics by model
   const { data: usageStats, isLoading: isLoadingUsageStats } = useQuery<{
     stats: UsageStats[];
+    logs: UsageLog[];
     period: { startDate: string; endDate: string };
   }>({
     queryKey: ['/api/account/usage/stats', dateRange.startDate.toISOString(), dateRange.endDate.toISOString()],
@@ -885,26 +904,47 @@ const handleCaptureOrder = (data: any = null) => {
                     Track your AI model usage and spending patterns
                   </CardDescription>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="flex items-center gap-1"
-                  onClick={() => {
-                    // In development mode, we can use a userId parameter for testing
-                    const isDev = import.meta.env.DEV;
-                    const testUserId = isDev ? '2' : '';
-                    const userIdParam = isDev ? `&userId=${testUserId}` : '';
-                    
-                    window.open(`/api/account/usage/export?startDate=${dateRange.startDate.toISOString()}&endDate=${dateRange.endDate.toISOString()}${userIdParam}`, '_blank');
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                  </svg>
-                  Export CSV
-                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="border rounded-md p-1">
+                    <Button 
+                      variant={detailView === 'summary' ? 'default' : 'ghost'} 
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setDetailView('summary')}
+                    >
+                      Summary
+                    </Button>
+                    <Button 
+                      variant={detailView === 'detailed' ? 'default' : 'ghost'} 
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setDetailView('detailed')}
+                    >
+                      Detailed
+                    </Button>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="flex items-center gap-1"
+                    onClick={() => {
+                      // In development mode, we can use a userId parameter for testing
+                      const isDev = import.meta.env.DEV;
+                      const testUserId = isDev ? '2' : '';
+                      const userIdParam = isDev ? `&userId=${testUserId}` : '';
+                      const type = detailView === 'detailed' ? 'detailed' : 'summary';
+                      
+                      window.open(`/api/account/usage/export?type=${type}&startDate=${dateRange.startDate.toISOString()}&endDate=${dateRange.endDate.toISOString()}${userIdParam}`, '_blank');
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export CSV
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
@@ -979,7 +1019,65 @@ const handleCaptureOrder = (data: any = null) => {
                         Start Using Models
                       </Button>
                     </div>
+                  ) : detailView === 'detailed' ? (
+                    // Detailed Usage Logs View
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Detailed Usage Logs</CardTitle>
+                        <CardDescription>
+                          Complete record of all model usage with token counts and costs
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date/Time</TableHead>
+                                <TableHead>Model</TableHead>
+                                <TableHead className="text-right">Prompt Tokens</TableHead>
+                                <TableHead className="text-right">Completion Tokens</TableHead>
+                                <TableHead className="text-right">Images</TableHead>
+                                <TableHead className="text-right">Cost (USD)</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {usageStats.logs.map((log) => {
+                                // Format date and time
+                                const createdAt = new Date(log.createdAt);
+                                const formattedDate = createdAt.toLocaleDateString();
+                                const formattedTime = createdAt.toLocaleTimeString();
+                                // Calculate cost in USD
+                                const costUSD = (log.creditsUsed / 10000).toFixed(4);
+                                
+                                return (
+                                  <TableRow key={log.id}>
+                                    <TableCell>
+                                      <div>{formattedDate}</div>
+                                      <div className="text-xs text-muted-foreground">{formattedTime}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="font-medium">{log.modelId}</div>
+                                      {log.messageId && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Message ID: {log.messageId}
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">{log.promptTokens.toLocaleString()}</TableCell>
+                                    <TableCell className="text-right">{log.completionTokens.toLocaleString()}</TableCell>
+                                    <TableCell className="text-right">{log.imageCount}</TableCell>
+                                    <TableCell className="text-right font-medium">${costUSD}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ) : (
+                    // Summary Usage View
                     <>
                       {/* Usage Summary */}
                       <div className="grid gap-6 md:grid-cols-3">
