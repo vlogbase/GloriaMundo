@@ -16,7 +16,7 @@ export interface ModelPresets {
 // Default model presets with verified valid model IDs from OpenRouter
 const defaultPresets: ModelPresets = {
   preset1: 'openai/gpt-4.5-turbo',         // All models preset 1
-  preset2: 'meta/llama-4-maverick',        // All models preset 2
+  preset2: 'anthropic/claude-3.7-sonnet',  // All models preset 2
   preset3: 'openai/o3-mini-high',          // Reasoning preset
   preset4: 'openai/gpt-4o',                // Multimodal preset
   preset5: 'perplexity/sonar-pro'          // Search preset
@@ -236,6 +236,7 @@ export const useModelPresets = (): ModelPresetsContextType => {
 
 // Create a standalone version for components that don't have access to the provider
 export const useStandaloneModelPresets = (): ModelPresetsContextType => {
+  // Note: This uses the same defaultPresets from above, which has been updated to use Claude 3.7 Sonnet for preset2
   const [presets, setPresets] = useState<ModelPresets>(defaultPresets);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeFreeTierModel, setActiveFreeTierModel] = useState<string | null>(null);
