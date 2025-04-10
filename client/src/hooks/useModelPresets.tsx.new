@@ -149,6 +149,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       return 'Grok 2';
     } else if (normalizedId.includes('openai/gpt-4o')) {
       return 'GPT-4o';
+    } else if (normalizedId.includes('openai/gpt-4.5-preview')) {
+      return 'GPT-4.5';
     }
     
     // Generic formatting for other models
@@ -346,6 +348,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       return 'Grok 2';
     } else if (normalizedId.includes('openai/gpt-4o')) {
       return 'GPT-4o';
+    } else if (normalizedId.includes('openai/gpt-4.5-preview')) {
+      return 'GPT-4.5';
     }
     
     // Generic formatting for other models
