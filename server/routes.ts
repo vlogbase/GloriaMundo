@@ -2173,6 +2173,22 @@ Format your responses using markdown for better readability and organization.`;
             // Deduct cost from user's balance
             try {
               await storage.deductUserCredits(user.id, totalCostHundredthsCents);
+              
+              // Create usage log entry for analytics
+              await storage.createUsageLog({
+                userId: user.id,
+                messageId: assistantMessage.id,
+                modelId: modelId && modelId !== "" ? modelId : modelType,
+                promptTokens: promptTokens,
+                completionTokens: completionTokens,
+                imageCount: image ? 1 : 0,
+                creditsUsed: totalCostHundredthsCents,
+                metadata: {
+                  conversationId: conversationId,
+                  modelType: modelType,
+                  apiProvider: modelConfig.apiProvider
+                }
+              });
             } catch (creditError) {
               console.error(`Error deducting credits from user ${user.id}:`, creditError);
               // Continue with the response even if credit deduction fails
