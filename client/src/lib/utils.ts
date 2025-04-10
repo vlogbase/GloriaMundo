@@ -143,35 +143,122 @@ export const cookieUtils = {
 /**
  * Utility to re-process Skimlinks after dynamic content is added
  * Triggers Skimlinks to process links that were added to the page after initial load
+ * 
+ * This enhanced version ensures Skimlinks is reprocessing links even when 
+ * new content is dynamically added to the page, especially AI-generated content
  */
 export const refreshSkimlinks = (): void => {
   try {
     // Check if window is available (for SSR safety)
-    if (typeof window !== 'undefined') {
-      // Call the official reinitialize method if it exists
-      if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reprocess === 'function') {
-        // Use the official reprocess method
-        (window as any).skimlinksAPI.reprocess();
-        console.debug('Skimlinks reprocessed successfully');
-      } else if ((window as any).skimlinksAPI && typeof (window as any).skimlinksAPI.reinitialize === 'function') {
-        // Fallback to reinitialize if reprocess isn't available
-        (window as any).skimlinksAPI.reinitialize();
-        console.debug('Skimlinks reinitialized successfully');
-      } else {
-        // Last resort: reload the script to process new links
+    if (typeof window === 'undefined') return;
+    
+    // Initialize our API object if it doesn't exist
+    window.skimlinksAPI = window.skimlinksAPI || {};
+    
+    // Ensure Skimlinks is loaded
+    const ensureSkimlinksLoaded = (): Promise<void> => {
+      return new Promise((resolve) => {
+        // If Skimlinks is already loaded via the global window.__SKIMLINKS_INITIALIZED__ flag
+        if ((window as any).__SKIMLINKS_INITIALIZED__) {
+          resolve();
+          return;
+        }
+        
+        // Check if skimlinks script exists but hasn't fully initialized
+        const existingScript = document.querySelector('script[src*="skimresources.com"]');
+        if (existingScript) {
+          // Poll for Skimlinks initialization
+          const checkInterval = setInterval(() => {
+            if ((window as any).__SKIMLINKS_INITIALIZED__) {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 200);
+          
+          // Set a timeout in case it never initializes
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            // Load it anyway
+            loadSkimlinks().then(resolve);
+          }, 3000);
+        } else {
+          // No script exists, load it
+          loadSkimlinks().then(resolve);
+        }
+      });
+    };
+    
+    // Function to load the Skimlinks script
+    const loadSkimlinks = (): Promise<void> => {
+      return new Promise((resolve) => {
+        // Remove any existing script to avoid duplicates
         const existingScript = document.querySelector('script[src*="skimresources.com"]');
         if (existingScript) {
           existingScript.remove();
         }
         
+        // Create and append the script
         const skimlinksScript = document.createElement('script');
         skimlinksScript.type = 'text/javascript';
         skimlinksScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
         skimlinksScript.async = true;
+        
+        // Resolve when loaded
+        skimlinksScript.onload = () => {
+          console.debug('Skimlinks script loaded successfully');
+          resolve();
+        };
+        
+        // Resolve even if there's an error, to avoid hanging
+        skimlinksScript.onerror = () => {
+          console.error('Failed to load Skimlinks script');
+          resolve();
+        };
+        
         document.body.appendChild(skimlinksScript);
-        console.debug('Skimlinks script reloaded');
+      });
+    };
+    
+    // Main execution - ensures Skimlinks is loaded then attempts to reprocess links
+    ensureSkimlinksLoaded().then(() => {
+      try {
+        // First try the official global skimlinks object
+        if ((window as any).SKIMLINKS && typeof (window as any).SKIMLINKS.reprocess === 'function') {
+          (window as any).SKIMLINKS.reprocess();
+          console.debug('Skimlinks reprocessed via global SKIMLINKS object');
+          return;
+        }
+        
+        // Then try our custom API methods that might have been defined
+        if ((window as any).skimlinksAPI) {
+          if (typeof (window as any).skimlinksAPI.reprocess === 'function') {
+            (window as any).skimlinksAPI.reprocess();
+            console.debug('Skimlinks reprocessed via skimlinksAPI.reprocess');
+            return;
+          }
+          
+          if (typeof (window as any).skimlinksAPI.reinitialize === 'function') {
+            (window as any).skimlinksAPI.reinitialize();
+            console.debug('Skimlinks reinitialized via skimlinksAPI.reinitialize');
+            return;
+          }
+        }
+        
+        // Last resort - trigger Skimlinks by simulating a DOM mutation event
+        // This often causes Skimlinks to scan for new links
+        const tempDiv = document.createElement('div');
+        tempDiv.style.display = 'none';
+        tempDiv.innerHTML = '<a href="https://example.com">trigger skimlinks</a>';
+        document.body.appendChild(tempDiv);
+        setTimeout(() => {
+          document.body.removeChild(tempDiv);
+        }, 500);
+        
+        console.debug('Attempted to trigger Skimlinks via DOM mutation');
+      } catch (innerError) {
+        console.error('Error invoking Skimlinks methods:', innerError);
       }
-    }
+    });
   } catch (error) {
     console.error('Error refreshing Skimlinks:', error);
   }

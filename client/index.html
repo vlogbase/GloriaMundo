@@ -248,17 +248,30 @@
       }
     </script>
     
-    <!-- Skimlinks Commerce Script - Lazy loaded to avoid blocking main thread -->
+    <!-- Skimlinks Commerce Script -->
     <script>
-      // Delayed loading of non-critical Skimlinks script
-      window.addEventListener('load', function() {
-        // Give the page time to become interactive first
-        setTimeout(function() {
-          const skimScript = document.createElement('script');
-          skimScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
-          document.body.appendChild(skimScript);
-        }, 2000); // 2-second delay after load
-      });
+      // Initialize skimlinksAPI global object to store our helper functions
+      window.skimlinksAPI = window.skimlinksAPI || {};
+      
+      // Function to initialize Skimlinks
+      window.skimlinksAPI.init = function() {
+        const skimScript = document.createElement('script');
+        skimScript.type = 'text/javascript';
+        skimScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
+        skimScript.async = true;
+        skimScript.onload = function() {
+          console.debug('Skimlinks script loaded successfully');
+        };
+        document.body.appendChild(skimScript);
+      };
+      
+      // Load Skimlinks as soon as the page is interactive
+      // This ensures it's available early while still not blocking rendering
+      if (document.readyState === 'interactive' || document.readyState === 'complete') {
+        window.skimlinksAPI.init();
+      } else {
+        window.addEventListener('DOMContentLoaded', window.skimlinksAPI.init);
+      }
     </script>
     <!-- End Skimlinks Commerce Script -->
   </body>
