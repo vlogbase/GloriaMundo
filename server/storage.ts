@@ -1263,7 +1263,7 @@ export class MemStorage implements IStorage {
       
       if (logsFromDb.length > 0) {
         return logsFromDb.sort((a: any, b: any) => 
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       }
     } catch (error) {
@@ -1277,7 +1277,7 @@ export class MemStorage implements IStorage {
         new Date(log.createdAt) >= startDate && 
         new Date(log.createdAt) <= endDate
       )
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
   
   async getUsageStatsByModel(userId: number, startDate: Date, endDate: Date): Promise<{modelId: string, totalCredits: number, totalTokens: number, promptTokens: number, completionTokens: number, imageCount: number, usageCount: number}[]> {
