@@ -214,11 +214,36 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+  
+  // Add error handling to server
+  server.on('error', (error) => {
+    console.error('Server error:', error);
+    // Continue operation if possible
   });
+  
+  // Start server with broader error handling
+  try {
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      log(`serving on port ${port}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    // Attempt to start on alternate port if main port fails
+    try {
+      const alternatePort = 3000;
+      server.listen({
+        port: alternatePort,
+        host: "0.0.0.0",
+        reusePort: true,
+      }, () => {
+        log(`serving on alternate port ${alternatePort} after failure on port ${port}`);
+      });
+    } catch (retryError) {
+      console.error('Fatal error starting server on any port:', retryError);
+    }
+  }
 })();

@@ -1109,15 +1109,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize WebSocket server for chat
   const wss = new WebSocketServer({ noServer: true });
   
-  // Handle WebSocket connections
+  // Handle WebSocket connections with error handling
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected');
     
+    // Add error handling for WebSocket connections
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error.message);
+      // Don't terminate the connection on non-fatal errors
+    });
+    
     ws.on('message', (message) => {
-      console.log('Received message:', message.toString());
-      
-      // Echo back for now (actual implementation will be more complex)
-      ws.send(JSON.stringify({ type: 'echo', data: message.toString() }));
+      try {
+        console.log('Received message:', message.toString());
+        
+        // Echo back for now (actual implementation will be more complex)
+        ws.send(JSON.stringify({ type: 'echo', data: message.toString() }));
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
+      }
     });
     
     ws.on('close', () => {
@@ -1127,9 +1137,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Upgrade HTTP connections to WebSocket when requested
   server.on('upgrade', (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
+    try {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } catch (error) {
+      console.error('WebSocket upgrade error:', error);
+      // Prevent uncaught exceptions from crashing the server
+      socket.destroy();
+    }
+  });
+  
+  // Handle WebSocket server errors
+  wss.on('error', (error) => {
+    console.error('WebSocket server error:', error);
+    // Continue operation, don't crash the server
   });
   
   return server;

@@ -575,7 +575,7 @@ export const ModelPresets = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Providers</SelectItem>
-                  {Object.keys(groupModelsByProvider(models)).map(provider => (
+                  {models && Object.keys(groupModelsByProvider(models || [])).map(provider => (
                     <SelectItem key={provider} value={provider}>{provider}</SelectItem>
                   ))}
                 </SelectContent>
@@ -583,12 +583,12 @@ export const ModelPresets = () => {
             </div>
             
             <div className="space-y-4">
-              {filteredPresetModels.length > 0 ? (
+              {Array.isArray(filteredPresetModels) && filteredPresetModels.length > 0 ? (
                 Object.entries(groupModelsByProvider(filteredPresetModels)).map(([provider, providerModels]) => (
                   <div key={provider} className="space-y-2">
                     <h3 className="text-sm font-medium">{provider}</h3>
                     <div className="space-y-1">
-                      {providerModels.map((model) => (
+                      {Array.isArray(providerModels) && providerModels.map((model) => model && (
                         <div
                           key={model.id}
                           onClick={() => setSelectedModelId(model.id)}
@@ -644,15 +644,15 @@ export const ModelPresets = () => {
             />
             
             <div className="space-y-4">
-              {freeModels.length > 0 ? (
+              {Array.isArray(freeModels) && freeModels.length > 0 ? (
                 Object.entries(groupModelsByProvider(freeModels.filter(model => 
-                  model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  model.id.toLowerCase().includes(searchTerm.toLowerCase())
+                  (model && model.name && model.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                  (model && model.id && model.id.toLowerCase().includes(searchTerm.toLowerCase()))
                 ))).map(([provider, providerModels]) => (
                   <div key={provider} className="space-y-2">
                     <h3 className="text-sm font-medium">{provider}</h3>
                     <div className="space-y-1">
-                      {providerModels.map((model) => (
+                      {Array.isArray(providerModels) && providerModels.map((model) => model && (
                         <div
                           key={model.id}
                           onClick={() => handleSelectFreeModel(model.id)}
