@@ -421,7 +421,16 @@ export const ModelPresets = () => {
   
   // Render preset buttons (1-5)
   const renderPresetButtons = () => {
-    const presetEntries = Object.entries(presets).filter(([key]) => key !== 'preset6'); // Filter out preset6, it's handled separately
+    // Ensure presets is an object, use an empty object as fallback
+    const presetEntries = presets && typeof presets === 'object' 
+      ? Object.entries(presets).filter(([key]) => key !== 'preset6') // Filter out preset6, it's handled separately
+      : [];
+    
+    // Add defensive check for map operation
+    if (!Array.isArray(presetEntries)) {
+      console.error('presetEntries is not an array:', presetEntries);
+      return null;
+    }
     
     return presetEntries.map(([key, modelId]) => {
       // Cast key to expected type
@@ -575,7 +584,7 @@ export const ModelPresets = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Providers</SelectItem>
-                  {models && Object.keys(groupModelsByProvider(models || [])).map(provider => (
+                  {models && Array.isArray(models) && Object.keys(groupModelsByProvider(models || [])).map(provider => (
                     <SelectItem key={provider} value={provider}>{provider}</SelectItem>
                   ))}
                 </SelectContent>
@@ -584,30 +593,59 @@ export const ModelPresets = () => {
             
             <div className="space-y-4">
               {Array.isArray(filteredPresetModels) && filteredPresetModels.length > 0 ? (
-                Object.entries(groupModelsByProvider(filteredPresetModels)).map(([provider, providerModels]) => (
-                  <div key={provider} className="space-y-2">
-                    <h3 className="text-sm font-medium">{provider}</h3>
-                    <div className="space-y-1">
-                      {Array.isArray(providerModels) && providerModels.map((model) => model && (
-                        <div
-                          key={model.id}
-                          onClick={() => setSelectedModelId(model.id)}
-                          className={`flex justify-between items-center p-2 rounded cursor-pointer ${
-                            selectedModelId === model.id ? 'bg-primary/10' : 'hover:bg-muted'
-                          }`}
-                        >
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">{model.name}</span>
-                            <span className="text-xs text-muted-foreground">{model.id}</span>
-                          </div>
-                          {selectedModelId === model.id && (
-                            <Check size={16} className="text-primary" />
-                          )}
+                React.useMemo(() => {
+                  try {
+                    // Group models by provider safely
+                    const groupedModels = groupModelsByProvider(filteredPresetModels);
+                    
+                    // Safety check for grouped models
+                    if (typeof groupedModels !== 'object' || groupedModels === null) {
+                      console.error('Grouped models is not an object:', groupedModels);
+                      return <p key="error-grouping">Error grouping models. Please try again.</p>;
+                    }
+                    
+                    const providerEntries = Object.entries(groupedModels);
+                    if (!Array.isArray(providerEntries) || providerEntries.length === 0) {
+                      return <p>No models available in selected categories.</p>;
+                    }
+                    
+                    // Render provider groups
+                    return providerEntries.map(([provider, providerModels]) => (
+                      <div key={provider} className="space-y-2">
+                        <h3 className="text-sm font-medium">{provider}</h3>
+                        <div className="space-y-1">
+                          {Array.isArray(providerModels) && providerModels.map((model) => {
+                            // Skip invalid models
+                            if (!model || !model.id) {
+                              return null;
+                            }
+                            
+                            return (
+                              <div
+                                key={model.id}
+                                onClick={() => setSelectedModelId(model.id)}
+                                className={`flex justify-between items-center p-2 rounded cursor-pointer ${
+                                  selectedModelId === model.id ? 'bg-primary/10' : 'hover:bg-muted'
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">{model.name || 'Unnamed Model'}</span>
+                                  <span className="text-xs text-muted-foreground">{model.id}</span>
+                                </div>
+                                {selectedModelId === model.id && (
+                                  <Check size={16} className="text-primary" />
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
+                      </div>
+                    ));
+                  } catch (error) {
+                    console.error("Error rendering model list:", error);
+                    return <p>An error occurred while displaying models. Please try again.</p>;
+                  }
+                }, [filteredPresetModels, selectedModelId])
               ) : (
                 <p>No models found matching your criteria.</p>
               )}
@@ -645,33 +683,59 @@ export const ModelPresets = () => {
             
             <div className="space-y-4">
               {Array.isArray(freeModels) && freeModels.length > 0 ? (
-                Object.entries(groupModelsByProvider(freeModels.filter(model => 
-                  (model && model.name && model.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                  (model && model.id && model.id.toLowerCase().includes(searchTerm.toLowerCase()))
-                ))).map(([provider, providerModels]) => (
-                  <div key={provider} className="space-y-2">
-                    <h3 className="text-sm font-medium">{provider}</h3>
-                    <div className="space-y-1">
-                      {Array.isArray(providerModels) && providerModels.map((model) => model && (
-                        <div
-                          key={model.id}
-                          onClick={() => handleSelectFreeModel(model.id)}
-                          className={`flex justify-between items-center p-2 rounded cursor-pointer ${
-                            presets.preset6 === model.id ? 'bg-primary/10' : 'hover:bg-muted'
-                          }`}
-                        >
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">{model.name}</span>
-                            <span className="text-xs text-muted-foreground">{model.id}</span>
-                          </div>
-                          {presets.preset6 === model.id && (
-                            <Check size={16} className="text-primary" />
-                          )}
+                /* Safe filtering of free models with defensive checks */
+                React.useMemo(() => {
+                  // Filter models safely
+                  const filteredModels = Array.isArray(freeModels) ? freeModels.filter(model => 
+                    model && ((model.name && model.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (model.id && model.id.toLowerCase().includes(searchTerm.toLowerCase())))
+                  ) : [];
+                  
+                  // Return early if no models match
+                  if (!Array.isArray(filteredModels) || filteredModels.length === 0) {
+                    return <p key="no-matches">No free models match your search term.</p>;
+                  }
+                  
+                  try {
+                    // Group models by provider
+                    const groupedModels = groupModelsByProvider(filteredModels);
+                    
+                    // Safety check for grouped models
+                    if (typeof groupedModels !== 'object' || groupedModels === null) {
+                      console.error('Grouped models is not an object:', groupedModels);
+                      return <p key="error-grouping">Error grouping models. Please try again.</p>;
+                    }
+                    
+                    // Render provider groups
+                    return Object.entries(groupedModels).map(([provider, providerModels]) => (
+                      <div key={provider} className="space-y-2">
+                        <h3 className="text-sm font-medium">{provider}</h3>
+                        <div className="space-y-1">
+                          {Array.isArray(providerModels) && providerModels.map((model) => model && (
+                            <div
+                              key={model.id}
+                              onClick={() => handleSelectFreeModel(model.id)}
+                              className={`flex justify-between items-center p-2 rounded cursor-pointer ${
+                                presets.preset6 === model.id ? 'bg-primary/10' : 'hover:bg-muted'
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium">{model.name}</span>
+                                <span className="text-xs text-muted-foreground">{model.id}</span>
+                              </div>
+                              {presets.preset6 === model.id && (
+                                <Check size={16} className="text-primary" />
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
+                      </div>
+                    ));
+                  } catch (error) {
+                    console.error('Error rendering free models:', error);
+                    return <p key="error">Error displaying models. Please try again.</p>;
+                  }
+                }, [freeModels, searchTerm, presets.preset6])
               ) : (
                 <p>No free models found. Try again later.</p>
               )}
