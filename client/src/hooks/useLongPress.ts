@@ -10,13 +10,13 @@ export const useLongPress = (callback: () => void, ms = 500) => {
   const [startLongPress, setStartLongPress] = useState(false);
   
   useEffect(() => {
-    let timerId: NodeJS.Timeout;
+    let timerId: ReturnType<typeof setTimeout>;
     if (startLongPress) {
       timerId = setTimeout(callback, ms);
     }
     
     return () => {
-      clearTimeout(timerId);
+      if (timerId) clearTimeout(timerId);
     };
   }, [callback, ms, startLongPress]);
   

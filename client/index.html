@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- Google Tag Manager dataLayer initialization with consent mode -->
     <script>
       // Initialize dataLayer with consent mode
       window.dataLayer = window.dataLayer || [];
-      
+
       // Set default consent - deny all except essential
       window.dataLayer.push({
         'event': 'default_consent',
@@ -17,7 +16,7 @@
           'security_storage': 'granted'       // Security cookies always needed
         }
       });
-      
+
       // Check if user has set preferences previously
       const savedPreferences = localStorage.getItem('cookiePreferences');
       if (savedPreferences) {
@@ -39,57 +38,42 @@
         }
       }
     </script>
-    
-    <!-- Google Tag Manager -->
+
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-M4NNWL9N');</script>
-    <!-- End Google Tag Manager -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Use custom GloriaMundo logo as favicon (with WebP format) -->
     <link rel="icon" type="image/webp" href="/GloriaMundoroundtransp.webp" />
-    <!-- Fallback for browsers that don't support WebP -->
     <link rel="icon" type="image/png" href="/GloriaMundoroundtransp.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#38B2AC" />
-    <!-- Mobile web app capability -->
     <meta name="mobile-web-app-capable" content="yes" />
-    <!-- Keep for backwards compatibility with iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="GloriaMundo - Free AI" />
     <link rel="apple-touch-icon" href="/GloriaMundoroundtransp.webp" />
-    
-    <!-- Preconnect to important origins -->
+
     <link rel="preconnect" href="/" crossorigin />
-    
-    <!-- Preload critical above-the-fold images -->
+
     <link rel="preload" as="image" href="/images/logo.webp" type="image/webp" fetchpriority="high" />
     <link rel="preload" as="image" href="/GloriaMundoroundtransp.webp" type="image/webp" fetchpriority="high" />
-    
-    <!-- Font optimization -->
-    <!-- Optimized font loading: preconnect to font providers -->
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Preload critical font files directly -->
+
     <link rel="preload" href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiA.woff2" as="font" type="font/woff2" crossorigin>
-    
-    <!-- Preload the font stylesheet -->
+
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
-    
-    <!-- Load the font stylesheet with optimized loading -->
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-    
-    <!-- SEO metadata -->
+
     <title>GloriaMundo - Free & Unlimited AI Assistant</title>
     <meta name="description" content="Access powerful AI capabilities for free without limits. GloriaMundo offers unrestricted conversations with advanced models for all your questions and tasks." />
-    
-    <!-- Preloaded fonts with swap -->
+
     <style>
       /* Optimize font loading with font-display: swap */
       @font-face {
@@ -100,7 +84,7 @@
         src: url(https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2) format('woff2');
         unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
       }
-      
+
       @font-face {
         font-family: 'Inter';
         font-style: normal;
@@ -109,7 +93,7 @@
         src: url(https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiA.woff2) format('woff2');
         unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
       }
-      
+
       /* Class for the LCP paragraph */
       .welcome-paragraph {
         font-size: 1.125rem;
@@ -123,21 +107,16 @@
         margin-right: auto;
       }
     </style>
-    
-    <!-- Apple splash screens with WebP format -->
+
     <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="/GloriaMundoroundtransp.webp" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" />
-    
-    <!-- Optimized loading of AdSense script - load after page visible -->
+
     <script defer src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7172335237355312" crossorigin="anonymous"></script>
   </head>
   <body>
-    <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-M4NNWL9N"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
-    <!-- Static critical content for Largest Contentful Paint (LCP) optimization -->
     <div id="initial-content" style="display: block; max-width: 42rem; margin: 5rem auto 0; text-align: center; padding: 0 1rem;">
       <h1 style="font-size: 1.875rem; font-weight: 700; margin-bottom: 1rem; color: var(--foreground, #1e293b);">
         Welcome to GloriaMundo!
@@ -148,8 +127,7 @@
     </div>
 
     <div id="root"></div>
-    
-    <!-- Hide initial content once React loads -->
+
     <script>
       document.addEventListener('DOMContentLoaded', function() {
         // When the React application mounts, it will render its own content
@@ -165,23 +143,22 @@
             }
           });
         });
-        
+
         observer.observe(document.getElementById('root'), { childList: true, subtree: true });
       });
     </script>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- PWA Service Worker Registration with proper messaging -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/service-worker.js')
             .then(registration => {
               console.log('ServiceWorker registration successful with scope: ', registration.scope);
-              
+
               // Listen for updates
               registration.addEventListener('updatefound', () => {
                 const newWorker = registration.installing;
-                
+
                 // When the new service worker is installed
                 newWorker.addEventListener('statechange', () => {
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
@@ -193,7 +170,7 @@
             .catch(error => {
               console.log('ServiceWorker registration failed: ', error);
             });
-            
+
           // Handle communication with service worker using MessageChannel for proper responses
           navigator.serviceWorker.ready.then(registration => {
             // Function to safely communicate with service worker
@@ -201,14 +178,14 @@
               return new Promise((resolve, reject) => {
                 // Create new message channel for each request
                 const messageChannel = new MessageChannel();
-                
+
                 // Set up timeout to prevent message port issues
                 const timeout = setTimeout(() => {
                   // Clean up event listener to prevent memory leaks
                   messageChannel.port1.onmessage = null;
                   resolve({ success: false, message: 'Request timed out' });
                 }, 3000);
-                
+
                 // Set up response handler
                 messageChannel.port1.onmessage = event => {
                   clearTimeout(timeout);
@@ -220,7 +197,7 @@
                   // Explicitly add this to help prevent "port closed" warnings
                   messageChannel.port1.close();
                 };
-                
+
                 // Send message with port for response
                 if (registration.active) {
                   try {
@@ -236,7 +213,7 @@
                 }
               });
             };
-            
+
             // Add a heartbeat to keep SW connection alive
             const heartbeatInterval = 30000; // 30 seconds
             setInterval(() => {
@@ -247,32 +224,6 @@
         });
       }
     </script>
-    
-    <!-- Skimlinks Commerce Script -->
-    <script>
-      // Initialize skimlinksAPI global object to store our helper functions
-      window.skimlinksAPI = window.skimlinksAPI || {};
-      
-      // Function to initialize Skimlinks
-      window.skimlinksAPI.init = function() {
-        const skimScript = document.createElement('script');
-        skimScript.type = 'text/javascript';
-        skimScript.src = 'https://s.skimresources.com/js/44501X1766367.skimlinks.js';
-        skimScript.async = true;
-        skimScript.onload = function() {
-          console.debug('Skimlinks script loaded successfully');
-        };
-        document.body.appendChild(skimScript);
-      };
-      
-      // Load Skimlinks as soon as the page is interactive
-      // This ensures it's available early while still not blocking rendering
-      if (document.readyState === 'interactive' || document.readyState === 'complete') {
-        window.skimlinksAPI.init();
-      } else {
-        window.addEventListener('DOMContentLoaded', window.skimlinksAPI.init);
-      }
-    </script>
-    <!-- End Skimlinks Commerce Script -->
-  </body>
+
+    </body>
 </html>
