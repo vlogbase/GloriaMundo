@@ -312,6 +312,9 @@ export default function Chat() {
               {Array.isArray(messages) && messages.length > 0 && (
                 <div className="messages-container">
                   {messages.map((message, index) => {
+                    // Add detailed debug logging as requested
+                    console.log(`>>> DEBUG: Mapping message index ${index}:`, JSON.stringify(message, null, 2));
+                    
                     // Safety check - skip invalid messages
                     if (!message || typeof message !== 'object' || !message.role) {
                       console.error(`[Chat] Invalid message at index ${index}:`, message);

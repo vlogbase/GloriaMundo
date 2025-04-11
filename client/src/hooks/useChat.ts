@@ -72,6 +72,10 @@ export const useChat = () => {
       }
       
       const data = await response.json();
+      
+      // Add detailed debug logging as requested
+      console.log('>>> DEBUG: Raw data from API:', JSON.stringify(data, null, 2));
+      
       console.log(`[useChat] Loaded ${data.length} messages for conversation ${conversationId}`);
       
       // Check and log if we have user's first message in the data

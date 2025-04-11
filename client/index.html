@@ -149,7 +149,16 @@
         observer.observe(document.getElementById('root'), { childList: true, subtree: true });
       });
     </script>
-    <!-- Browser compatibility polyfills removed as we now use custom hooks without dependencies -->
+    <!-- No polyfills or require overrides - using custom hooks instead -->
+    <script>
+      // Add global error handler to log any errors for debugging
+      window.addEventListener('error', function(event) {
+        console.error('Global error caught:', event.error);
+        console.error('Error message:', event.message);
+        console.error('Error stack:', event.error?.stack);
+      });
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {

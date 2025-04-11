@@ -1,30 +1,75 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useRef } from 'react';
 
 /**
- * Custom hook for detecting long press gestures
- * @param callback Function to execute on long press
- * @param ms Duration of press in milliseconds
- * @returns Object with event handlers for mouse/touch events
+ * Custom hook for detecting long press events
+ * @param onLongPress - Callback to execute on long press
+ * @param onClick - Callback to execute on normal click 
+ * @param options - Options for configuring the long press behavior
+ * @returns Props to spread onto the target element
  */
-export const useLongPress = (callback: () => void, ms = 500) => {
-  const [startLongPress, setStartLongPress] = useState(false);
-  
-  useEffect(() => {
-    let timerId: ReturnType<typeof setTimeout>;
-    if (startLongPress) {
-      timerId = setTimeout(callback, ms);
+export function useLongPress(
+  onLongPress: (e: React.MouseEvent | React.TouchEvent) => void,
+  onClick?: (e: React.MouseEvent | React.TouchEvent) => void,
+  options?: {
+    delay?: number;
+    shouldPreventDefault?: boolean;
+  }
+) {
+  const { delay = 500, shouldPreventDefault = true } = options || {};
+  const timeout = useRef<ReturnType<typeof setTimeout>>();
+  const target = useRef<EventTarget>();
+
+  const clear = useCallback(() => {
+    if (timeout.current) {
+      clearTimeout(timeout.current);
+      timeout.current = undefined;
+    }
+  }, []);
+
+  const onMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (shouldPreventDefault && e.target) {
+      e.target.addEventListener('touchend', preventDefault, { passive: false });
+      target.current = e.target;
     }
     
-    return () => {
-      if (timerId) clearTimeout(timerId);
-    };
-  }, [callback, ms, startLongPress]);
-  
+    clear();
+    timeout.current = setTimeout(() => onLongPress(e), delay);
+  }, [onLongPress, delay, clear, shouldPreventDefault]);
+
+  const onMouseUp = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (shouldPreventDefault && target.current) {
+      (target.current as HTMLElement).removeEventListener('touchend', preventDefault);
+    }
+    
+    clear();
+    
+    if (onClick && e.target === target.current) {
+      onClick(e);
+    }
+  }, [onClick, clear, shouldPreventDefault]);
+
+  const onMouseLeave = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (shouldPreventDefault && target.current) {
+      (target.current as HTMLElement).removeEventListener('touchend', preventDefault);
+    }
+    
+    clear();
+  }, [clear, shouldPreventDefault]);
+
   return {
-    onMouseDown: () => setStartLongPress(true),
-    onMouseUp: () => setStartLongPress(false),
-    onMouseLeave: () => setStartLongPress(false),
-    onTouchStart: () => setStartLongPress(true),
-    onTouchEnd: () => setStartLongPress(false),
+    onMouseDown,
+    onTouchStart: onMouseDown,
+    onMouseUp,
+    onMouseLeave,
+    onTouchEnd: onMouseUp,
   };
+}
+
+/**
+ * Helper function to prevent default event behavior
+ */
+const preventDefault = (e: Event) => {
+  if (e && e.preventDefault) {
+    e.preventDefault();
+  }
 };
