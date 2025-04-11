@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Copy, ThumbsUp, ThumbsDown, Share2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Message } from "@/lib/types";
-import { useMedia } from "react-use";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MessageActionsProps {
@@ -16,7 +16,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
   const [sharing, setSharing] = useState(false);
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
-  const isMobile = useMedia('(max-width: 768px)', false);
+  const isMobile = useMediaQuery('(max-width: 768px)', false);
 
   const handleCopy = async () => {
     try {

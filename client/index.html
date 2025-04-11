@@ -61,15 +61,7 @@
     <link rel="preload" as="image" href="/images/logo.webp" type="image/webp" fetchpriority="high" />
     <link rel="preload" as="image" href="/GloriaMundoroundtransp.webp" type="image/webp" fetchpriority="high" />
     
-    <!-- Ensure browser compatibility and prevent require-related errors -->
-    <script type="importmap">
-    {
-      "imports": {
-        "buffer": "https://esm.sh/buffer@6.0.3",
-        "process": "https://esm.sh/process@0.11.10"
-      }
-    }
-    </script>
+    <!-- Import maps removed as custom hooks now handle browser compatibility -->
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -157,15 +149,7 @@
         observer.observe(document.getElementById('root'), { childList: true, subtree: true });
       });
     </script>
-    <!-- Add browser compatibility polyfills -->
-    <script>
-      // Make sure 'require' is handled safely in browser context
-      window.require = function(moduleName) {
-        console.warn('Browser attempted to use require() for: ' + moduleName);
-        // Return an empty object to prevent crashes
-        return {};
-      };
-    </script>
+    <!-- Browser compatibility polyfills removed as we now use custom hooks without dependencies -->
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
