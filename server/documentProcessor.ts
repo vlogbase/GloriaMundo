@@ -385,6 +385,7 @@ const documentProcessingWorker = new Worker('document-processing', async (job) =
         // Process embeddings in parallel for this batch
         await Promise.all(batch.map(async (chunk: { id: number; content: string }) => {
           try {
+            console.log(`Generating embedding for background job chunk ${chunk.id} with user ${job.data.userId}`);
             // Pass userId when generating embedding for proper billing
             const embedding = await generateEmbedding(chunk.content, job.data.userId, true);
             
@@ -712,6 +713,7 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     // Process embeddings in parallel
     await Promise.all(documentChunks.map(async (chunk) => {
       try {
+        console.log(`Generating embedding for immediate chunk ${chunk.id} with user ${document.userId}`);
         // Pass userId when generating embedding for proper billing
         const embedding = await generateEmbedding(chunk.content, document.userId, true);
         
@@ -1098,12 +1100,13 @@ export async function generateEmbedding(text: string, userId?: number, isForDocu
         
         console.log(`Charging ${creditsToCharge} credits (${creditsToCharge/10000} USD) for embedding ${tokenCount} tokens`);
         
-        // Log usage and deduct credits
+        // Log usage and deduct credits - use text-embedding-3-large as the model ID for clarity
         try {
+          console.log(`Recording usage log for user ${userId}: text-embedding-3-large, ${tokenCount} tokens`);
           await storage.createUsageLog({
             userId: userId,
             messageId: null, // Not associated with a message
-            modelId: 'azure-embedding',
+            modelId: 'text-embedding-3-large', // Use the actual model name for better usage tracking
             promptTokens: tokenCount,
             completionTokens: 0,
             imageCount: 0,
@@ -1171,10 +1174,11 @@ export async function generateEmbedding(text: string, userId?: number, isForDocu
     
     // Log usage and deduct credits
     try {
+      console.log(`Recording usage log for user ${userId}: text-embedding-local, ${estimatedTokens} tokens`);
       await storage.createUsageLog({
         userId: userId,
         messageId: null, // Not associated with a message
-        modelId: 'local-embedding',
+        modelId: 'text-embedding-local',
         promptTokens: estimatedTokens,
         completionTokens: 0,
         imageCount: 0,
