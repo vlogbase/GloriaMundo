@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { useModelPresets } from '@/hooks/useModelPresets';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
@@ -30,6 +30,9 @@ import {
 } from "@/components/ui/tooltip";
 import { Input } from '@/components/ui/input';
 import { Network, Edit, Check, Lock, Search, Image, Brain, Sparkles } from 'lucide-react';
+import { useLongPress } from '@/hooks/useLongPress';
+import PresetButton from './PresetButton';
+import FreeTierButton from './FreeTierButton';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -395,29 +398,7 @@ export const ModelPresets = () => {
     }
   };
   
-  // Long press handler for mobile
-  const useLongPress = (callback: () => void, ms = 500) => {
-    const [startLongPress, setStartLongPress] = useState(false);
-    
-    useEffect(() => {
-      let timerId: NodeJS.Timeout;
-      if (startLongPress) {
-        timerId = setTimeout(callback, ms);
-      }
-      
-      return () => {
-        clearTimeout(timerId);
-      };
-    }, [callback, ms, startLongPress]);
-    
-    return {
-      onMouseDown: () => setStartLongPress(true),
-      onMouseUp: () => setStartLongPress(false),
-      onMouseLeave: () => setStartLongPress(false),
-      onTouchStart: () => setStartLongPress(true),
-      onTouchEnd: () => setStartLongPress(false),
-    };
-  };
+  // Note: useLongPress is now imported from a hook, not defined here
   
   // Render preset buttons (1-5)
   const renderPresetButtons = () => {
@@ -440,62 +421,32 @@ export const ModelPresets = () => {
       // Determine if this model requires credits
       const isLocked = !!modelId && !hasCredits && key !== 'preset6' && !modelId.includes(':free');
       
-      // Configure long press for mobile
-      const longPressProps = useLongPress(() => {
-        // Skip edit for preset6 (FREE tier)
-        if (key !== 'preset6' && !isLoading && !isPending) {
-          setCurrentPresetKey(presetKey);
-          setFilteredPresetModels(filterModelsForPreset(presetKey));
-          setIsDialogOpen(true);
-          setSearchTerm('');
-          setSelectedProvider(null);
-        }
-      });
-      
+      // Use the PresetButton component which internally uses the useLongPress hook
       return (
-        <div key={key} className="relative group">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => isLocked ? handleLockedModelClick() : handleClick(presetKey)}
-                  variant={isActive ? "default" : "outline"}
-                  className={`relative flex flex-row items-center ${isActive ? 'shadow-md' : ''} ${isLocked ? 'opacity-90' : ''}`}
-                  disabled={isLoading || isPending}
-                  {...longPressProps}
-                >
-                  {getPresetIcon(key, modelId || '')}
-                  {getPresetTitle(key, modelId)}
-                  {isActive && <Check size={12} className="ml-1" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{getPresetCategory(presetKey)}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          {/* Padlock overlay for locked models */}
-          {isLocked && (
-            <div 
-              className="absolute inset-0 bg-black/50 backdrop-blur-[1px] rounded flex items-center justify-center cursor-pointer"
-              onClick={handleLockedModelClick}
-              title="You need funds to use this model. Click to add funds."
-            >
-              <Lock className="w-4 h-4 text-white/90" />
-            </div>
-          )}
-          
-          {/* Edit button (desktop only) */}
-          <Button
-            size="icon"
-            variant="ghost"
-            className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hidden sm:flex"
-            onClick={(e) => handleEditClick(e, presetKey)}
-          >
-            <Edit size={12} />
-          </Button>
-        </div>
+        <PresetButton
+          key={key}
+          presetKey={presetKey}
+          modelId={modelId}
+          isActive={isActive}
+          hasCredits={hasCredits}
+          isLoading={isLoading}
+          isPending={isPending}
+          getPresetIcon={getPresetIcon}
+          getPresetTitle={getPresetTitle}
+          getPresetCategory={getPresetCategory}
+          handleClick={handleClick}
+          handleEditClick={handleEditClick}
+          handleLockedModelClick={handleLockedModelClick}
+          onLongPress={() => {
+            if (key !== 'preset6' && !isLoading && !isPending) {
+              setCurrentPresetKey(presetKey);
+              setFilteredPresetModels(filterModelsForPreset(presetKey));
+              setIsDialogOpen(true);
+              setSearchTerm('');
+              setSelectedProvider(null);
+            }
+          }}
+        />
       );
     });
   };
@@ -505,49 +456,20 @@ export const ModelPresets = () => {
     const modelId = presets.preset6;
     const isActive = activePreset === 'preset6';
     
-    // Configure long press for mobile (not needed for FREE tier as it auto-selects)
-    const longPressProps = useLongPress(() => {
-      if (!isLoading && !isPending) {
-        setIsFreeTierDialogOpen(true);
-      }
-    });
-    
     return (
-      <div className="relative group">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={() => handleClick('preset6')}
-                variant={isActive ? "default" : "outline"}
-                className={`relative flex flex-row items-center ${isActive ? 'shadow-md' : ''}`}
-                disabled={isLoading || isPending}
-                {...longPressProps}
-              >
-                {getPresetIcon('preset6', modelId || '')}
-                {getPresetTitle('preset6', modelId)}
-                {isActive && <Check size={12} className="ml-1" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Free Tier</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        
-        {/* Edit button (desktop only) - opens free model selection dialog */}
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hidden sm:flex"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsFreeTierDialogOpen(true);
-          }}
-        >
-          <Edit size={12} />
-        </Button>
-      </div>
+      <FreeTierButton
+        modelId={modelId}
+        isActive={isActive}
+        isLoading={isLoading}
+        isPending={isPending}
+        getPresetIcon={getPresetIcon}
+        getPresetTitle={getPresetTitle}
+        handleClick={handleClick}
+        handleEditClick={(e) => {
+          e.stopPropagation();
+          setIsFreeTierDialogOpen(true);
+        }}
+      />
     );
   };
   
