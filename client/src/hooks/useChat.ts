@@ -10,8 +10,25 @@ export const useChat = () => {
   // Removed excessive debug logging
   // console.log('[useChat] Hook initializing...');
   
-  // Initialize with an empty array for messages
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Initialize with an empty array for messages and ensure it's always an array
+  const [messages, setMessagesInternal] = useState<Message[]>([]);
+  
+  // Wrapper for setMessages that ensures we always set an array
+  const setMessages = (value: Message[] | ((prev: Message[]) => Message[])) => {
+    if (typeof value === 'function') {
+      setMessagesInternal((prev) => {
+        try {
+          const newValue = value(Array.isArray(prev) ? prev : []);
+          return Array.isArray(newValue) ? newValue : [];
+        } catch (err) {
+          console.error("[useChat] Error in setMessages function:", err);
+          return Array.isArray(prev) ? prev : [];
+        }
+      });
+    } else {
+      setMessagesInternal(Array.isArray(value) ? value : []);
+    }
+  };
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
@@ -423,8 +440,12 @@ export const useChat = () => {
     }
   }, [activeConversationId, uploadDocument, setLocation]);
 
+  // Add safety check to ensure messages is always an array
+  // This is to prevent the "e.map is not a function" error
+  const safeMessages = Array.isArray(messages) ? messages : [];
+
   return {
-    messages,
+    messages: safeMessages,  // Always return an array even if something goes wrong
     isLoadingMessages,
     isLoadingResponse,
     activeConversationId,

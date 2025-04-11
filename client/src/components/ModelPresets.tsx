@@ -66,7 +66,8 @@ export const ModelPresets = () => {
     activatePreset,
     activateFreeTierModel,
     getModelNameById,
-    formatModelName
+    formatModelName,
+    initializeFreeTierPreset
   } = useModelPresets();
   
   const { models, selectedModelId, setSelectedModelId } = useOpenRouterModels();
@@ -98,76 +99,133 @@ export const ModelPresets = () => {
   });
   
   // Check if user has credits (positive balance)
-  const hasCredits = user?.creditBalance > 0;
+  const hasCredits = user && user.creditBalance && user.creditBalance > 0;
   
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isFreeTierDialogOpen, setIsFreeTierDialogOpen] = useState(false);
-  const [currentPresetKey, setCurrentPresetKey] = useState<'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5'>('preset1');
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  // State for filtered models based on preset type
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isFreeTierDialogOpen, setIsFreeTierDialogOpen] = useState<boolean>(false);
+  const [currentPresetKey, setCurrentPresetKey] = useState<'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5' | 'preset6'>('preset1');
   const [filteredPresetModels, setFilteredPresetModels] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   
-  // Filter models based on search term and current preset type
-  const filteredModels = (filteredPresetModels.length > 0 ? filteredPresetModels : models)
-    .filter(model => 
-      model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      model.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  // Initialize the free tier preset when models are available
+  useEffect(() => {
+    if (freeModels.length > 0) {
+      initializeFreeTierPreset();
+    }
+  }, [freeModels]);
   
-  // Group models by provider for the preset selection dialog
-  const groupedModels = groupModelsByProvider(filteredModels);
-  
-  // Handle edit button click to open dialog for assigning model
-  const handleEditClick = (
-    e: React.MouseEvent<HTMLButtonElement>, 
-    presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5'
-  ) => {
-    e.stopPropagation(); // Prevent triggering the preset button click
-    setCurrentPresetKey(presetKey);
-    setSelectedModelId(presets[presetKey] || '');
-    
-    // Filter models based on preset type before opening dialog
-    const presetFilteredModels = filterModelsForPreset(presetKey);
-    setFilteredPresetModels(presetFilteredModels);
-    
-    setIsDialogOpen(true);
-  };
-  
-  // Handle redirection to account balance page for locked models
-  const handleLockedModelClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigate('/account-balance');
-  };
-  
-  // Helper function to check if a model is multimodal
+  // Helper function to check if a model is a multimodal model (supports images)
   const isMultimodalModel = (modelId: string): boolean => {
-    // Check if model supports vision/images based on ID or name
-    return (
-      modelId.toLowerCase().includes('vision') || 
-      modelId.toLowerCase().includes('image') ||
-      modelId.toLowerCase().includes('multimodal') ||
-      modelId.toLowerCase().includes('gemini') ||
-      modelId.toLowerCase().includes('claude-3') ||
-      modelId.toLowerCase().includes('gpt-4-vision') ||
-      modelId.toLowerCase().includes('gpt-4o') ||
-      modelId.toLowerCase().includes('llava')
+    const multimodalModels = [
+      'openai/gpt-4o',
+      'openai/gpt-4-vision',
+      'anthropic/claude-3-opus',
+      'anthropic/claude-3-sonnet',
+      'anthropic/claude-3.5-sonnet',
+      'anthropic/claude-3.7-sonnet',
+      'anthropic/claude-3-haiku',
+      'x-ai/grok-2',
+      'google/gemini',
+      'google/gemini-pro',
+      'google/gemini-1.5-pro',
+      'google/gemini-2.0-pro',
+      'google/gemini-2.5-pro',
+      'google/gemini-2.5-pro-exp-03-25',
+      'mistral/mercury-beta'
+    ];
+    
+    return multimodalModels.some(model => 
+      modelId.toLowerCase() === model.toLowerCase() || 
+      modelId.toLowerCase().includes(model.toLowerCase().replace(/\s+/g, '-'))
     );
   };
   
-  // Helper function to check if a model is a Perplexity search model
+  // Helper function to check if a model is a Perplexity model
   const isPerplexityModel = (modelId: string): boolean => {
-    return (
-      modelId.toLowerCase().includes('perplexity') ||
-      modelId.toLowerCase().includes('sonar')
-    );
+    return modelId.toLowerCase().includes('perplexity');
   };
   
-  // Helper function to get preset category for tooltip
+  // Update filtered models when filters change
+  useEffect(() => {
+    // Get the models appropriate for this preset
+    let presetModels = filterModelsForPreset(currentPresetKey);
+    
+    // Filter by search term if one is provided
+    if (searchTerm) {
+      presetModels = presetModels.filter(model => 
+        model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        model.id.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Filter by provider if one is selected
+    if (selectedProvider) {
+      presetModels = presetModels.filter(model => {
+        const parts = model.id.split('/');
+        const provider = parts.length > 1 ? parts[0] : 'Other';
+        return provider === selectedProvider;
+      });
+    }
+    
+    setFilteredPresetModels(presetModels);
+  }, [searchTerm, selectedProvider, currentPresetKey, models]);
+  
+  // Handler for showing the edit dialog
+  const handleEditClick = (e: React.MouseEvent, presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5' | 'preset6') => {
+    e.stopPropagation(); // Prevent button click from triggering the parent
+    
+    // Skip the dialog for preset6 (FREE) since it's automatically managed
+    if (presetKey === 'preset6') {
+      return;
+    }
+    
+    setCurrentPresetKey(presetKey);
+    setFilteredPresetModels(filterModelsForPreset(presetKey));
+    setIsDialogOpen(true);
+    setSearchTerm('');
+    setSelectedProvider(null);
+  };
+  
+  // Handler for clicking a locked model
+  const handleLockedModelClick = () => {
+    // Navigate to credits page
+    navigate('/credits');
+  };
+  
+  // Helper function to get preset title with model name
+  const getPresetTitle = (presetKey: string, modelId: string | null): string => {
+    const presetNumber = getPresetNumber(presetKey);
+    
+    // Special case for preset6 (FREE)
+    if (presetKey === 'preset6') {
+      if (modelId) {
+        // Show "FREE: ModelName" format
+        let modelName = formatModelName(modelId);
+        // Truncate if too long for display
+        if (modelName.length > 10) {
+          modelName = modelName.substring(0, 10) + '...';
+        }
+        return `FREE: ${modelName}`;
+      }
+      return 'FREE';
+    }
+    
+    // For other presets
+    if (modelId) {
+      let modelName = formatModelName(modelId);
+      // Keep preset number in title
+      return `${presetNumber}: ${modelName}`;
+    } else {
+      return `${presetNumber}: Select`;
+    }
+  };
+  
+  // Helper function to get preset category
   const getPresetCategory = (presetKey: string): string => {
-    switch(presetKey) {
+    switch (presetKey) {
       case 'preset1':
+        return 'General Purpose';
       case 'preset2':
         return 'All Models';
       case 'preset3':
@@ -176,6 +234,8 @@ export const ModelPresets = () => {
         return 'Multimodal';
       case 'preset5':
         return 'Search';
+      case 'preset6':
+        return 'Free Tier';
       default:
         return 'Model Preset';
     }
@@ -192,6 +252,9 @@ export const ModelPresets = () => {
     } else if (presetKey === 'preset5' || (presetKey === 'preset5' && !modelId)) {
       // For preset5 (Perplexity/search models), use Search icon
       return <Search size={16} className="mr-1" />;
+    } else if (presetKey === 'preset6' || (presetKey === 'preset6' && !modelId)) {
+      // For preset6 (FREE models), use Sparkles icon
+      return <Sparkles size={16} className="mr-1" />;
     } else {
       // For other presets (preset1, preset2) - All Models, use Network icon
       return <Network size={16} className="mr-1" />;
@@ -234,6 +297,9 @@ export const ModelPresets = () => {
     } else if (presetKey === 'preset5') {
       // Only allow Perplexity models for preset5
       return models.filter(model => isPerplexityModel(model.id));
+    } else if (presetKey === 'preset6') {
+      // Only allow free models for preset6
+      return models.filter(model => model.isFree === true);
     } else {
       // Return all models for preset1 and preset2
       return models;
@@ -241,7 +307,7 @@ export const ModelPresets = () => {
   };
   
   // Helper function to consistently set model type and ID
-  const handleActivation = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5', modelId: string | null) => {
+  const handleActivation = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5' | 'preset6', modelId: string | null) => {
     if (modelId) {
       // Set the selected model ID
       setSelectedModelId(modelId);
@@ -256,6 +322,10 @@ export const ModelPresets = () => {
       } else if (presetKey === 'preset5') {
         // Preset 5 is for search/Perplexity models
         setSelectedModel('search');
+      } else if (presetKey === 'preset6') {
+        // Preset 6 (FREE) - determine type based on the model's capabilities
+        const shouldSetMultimodal = isMultimodalModel(modelId);
+        setSelectedModel(shouldSetMultimodal ? 'multimodal' : 'openrouter');
       } else {
         // For presets 1 and 2 (all models), determine type based on the model's capabilities
         const shouldSetMultimodal = isMultimodalModel(modelId);
@@ -279,37 +349,31 @@ export const ModelPresets = () => {
       } else if (presetKey === 'preset5') {
         setSelectedModel('search');
       } else {
-        // Default for preset1 and preset2
+        // Default for preset1, preset2, and preset6
         setSelectedModel('openrouter');
       }
     }
   };
 
   // Handle click to activate a preset
-  const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
+  const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5' | 'preset6') => {
     const modelId = activatePreset(presetKey);
     handleActivation(presetKey, modelId);
   };
   
-  // Handle free tier button click
+  // Handle free tier button click - this is now the same as clicking preset6
   const handleFreeTierClick = () => {
-    // If no free tier model is active, open the selection dialog
-    if (!activeFreeTierModel) {
-      setIsFreeTierDialogOpen(true);
-    } else {
-      // If a free tier model is already active, activate it again
-      // Treat free tier models as preset1 type (general)
-      handleActivation('preset1', activeFreeTierModel);
-      console.log(`Free tier model activated: ${activeFreeTierModel}`);
-    }
+    // Activate preset6 (FREE tier)
+    handleClick('preset6');
   };
   
   // Handle selecting a free model
   const handleSelectFreeModel = (modelId: string) => {
-    activateFreeTierModel(modelId);
+    // Assign this model to preset6
+    assignModelToPreset('preset6', modelId);
     
-    // Set model for use - free models are treated as regular OpenRouter models (preset1)
-    handleActivation('preset1', modelId);
+    // Activate preset6 with this model
+    handleActivation('preset6', modelId);
     
     // Close the dialog
     setIsFreeTierDialogOpen(false);
@@ -354,25 +418,28 @@ export const ModelPresets = () => {
       onTouchEnd: () => setStartLongPress(false),
     };
   };
-
-  // Render presets
-  const renderPresets = () => {
-    return Object.entries(presets).map(([key, modelId]) => {
-      const isActive = activePreset === key;
+  
+  // Render preset buttons (1-5)
+  const renderPresetButtons = () => {
+    const presetEntries = Object.entries(presets).filter(([key]) => key !== 'preset6'); // Filter out preset6, it's handled separately
+    
+    return presetEntries.map(([key, modelId]) => {
+      // Cast key to expected type
       const presetKey = key as 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5';
+      const isActive = activePreset === presetKey;
       
-      // Check if this preset model is a free model
-      const isFreeTier = modelId ? freeModels.some(model => model.id === modelId) : false;
-      
-      // Determine if this model should be locked (non-free model and no credits)
-      const isLocked = !isFreeTier && !hasCredits && modelId;
+      // Determine if this model requires credits
+      const isLocked = !!modelId && !hasCredits && key !== 'preset6' && !modelId.includes(':free');
       
       // Configure long press for mobile
       const longPressProps = useLongPress(() => {
-        if (!isLocked && !isLoading && !isPending) {
+        // Skip edit for preset6 (FREE tier)
+        if (key !== 'preset6' && !isLoading && !isPending) {
           setCurrentPresetKey(presetKey);
-          setSelectedModelId(presets[presetKey] || '');
+          setFilteredPresetModels(filterModelsForPreset(presetKey));
           setIsDialogOpen(true);
+          setSearchTerm('');
+          setSelectedProvider(null);
         }
       });
       
@@ -382,20 +449,15 @@ export const ModelPresets = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  onClick={isLocked ? handleLockedModelClick : () => handleClick(presetKey)}
+                  onClick={() => isLocked ? handleLockedModelClick() : handleClick(presetKey)}
                   variant={isActive ? "default" : "outline"}
-                  className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
-                    isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
-                  } ${isLocked ? 'cursor-pointer' : ''}`}
+                  className={`relative flex flex-row items-center ${isActive ? 'shadow-md' : ''} ${isLocked ? 'opacity-90' : ''}`}
                   disabled={isLoading || isPending}
                   {...longPressProps}
                 >
-                  {getPresetIcon(presetKey, modelId || '')}
-                  {modelId ? (
-                    <span className="truncate max-w-[100px]">{formatModelName(modelId)}</span>
-                  ) : (
-                    <span className="text-muted-foreground">Preset {getPresetNumber(key)}</span>
-                  )}
+                  {getPresetIcon(key, modelId || '')}
+                  {getPresetTitle(key, modelId)}
+                  {isActive && <Check size={12} className="ml-1" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -429,11 +491,12 @@ export const ModelPresets = () => {
     });
   };
   
-  // Render free tier button (now with same design pattern as presets)
+  // Render FREE tier button (preset6)
   const renderFreeTierButton = () => {
-    const isActive = !!activeFreeTierModel;
+    const modelId = presets.preset6;
+    const isActive = activePreset === 'preset6';
     
-    // Configure long press for mobile
+    // Configure long press for mobile (not needed for FREE tier as it auto-selects)
     const longPressProps = useLongPress(() => {
       if (!isLoading && !isPending) {
         setIsFreeTierDialogOpen(true);
@@ -446,39 +509,30 @@ export const ModelPresets = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                onClick={handleFreeTierClick}
+                onClick={() => handleClick('preset6')}
                 variant={isActive ? "default" : "outline"}
-                className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
-                  isActive ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                }`}
+                className={`relative flex flex-row items-center ${isActive ? 'shadow-md' : ''}`}
+                disabled={isLoading || isPending}
                 {...longPressProps}
               >
-                {activeFreeTierModel ? (
-                  <>
-                    <Network size={16} className="mr-1" />
-                    <span className="truncate max-w-[100px]">Free: {formatModelName(activeFreeTierModel)}</span>
-                  </>
-                ) : (
-                  <>
-                    <Network size={16} className="mr-1" />
-                    <span>Free Tier</span>
-                  </>
-                )}
+                {getPresetIcon('preset6', modelId || '')}
+                {getPresetTitle('preset6', modelId)}
+                {isActive && <Check size={12} className="ml-1" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Free Models</p>
+              <p>Free Tier</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
         
-        {/* Edit button (only on desktop) */}
+        {/* Edit button (desktop only) - opens free model selection dialog */}
         <Button
           size="icon"
           variant="ghost"
           className="absolute -right-1 -top-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hidden sm:flex"
           onClick={(e) => {
-            e.stopPropagation();  // Prevent triggering the button click
+            e.stopPropagation();
             setIsFreeTierDialogOpen(true);
           }}
         >
@@ -489,89 +543,83 @@ export const ModelPresets = () => {
   };
   
   return (
-    <>
-      <div className="flex flex-wrap justify-center gap-2 mb-3">
-        {renderPresets()}
+    <div className="flex flex-col space-y-4">
+      {/* Preset buttons */}
+      <div className="flex flex-wrap gap-2">
+        {renderPresetButtons()}
         {renderFreeTierButton()}
       </div>
       
-      {/* Model assignment dialog */}
-      <Dialog 
-        open={isDialogOpen} 
-        onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          // Reset filtered models when dialog closes
-          if (!open) {
-            setFilteredPresetModels([]);
-            setSearchTerm('');
-          }
-        }}
-      >
+      {/* Model selection dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Assign Model to Preset {getPresetNumber(currentPresetKey)}</DialogTitle>
+            <DialogTitle>Select a Model for Preset {getPresetNumber(currentPresetKey)}</DialogTitle>
             <DialogDescription>
-              Select a model from the list below to assign to this preset. On desktop, click the edit icon on a preset button to change this assignment. On mobile, long-press the preset button.
+              Choose a model to assign to this preset button.
             </DialogDescription>
           </DialogHeader>
           
           <div className="py-4">
-            <Input
-              placeholder="Search models..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="mb-4"
-            />
+            <div className="flex items-center space-x-2 mb-4">
+              <Input
+                placeholder="Search models..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1"
+              />
+              
+              <Select value={selectedProvider || ""} onValueChange={(value) => setSelectedProvider(value || null)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Providers</SelectItem>
+                  {Object.keys(groupModelsByProvider(models)).map(provider => (
+                    <SelectItem key={provider} value={provider}>{provider}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             
             <div className="space-y-4">
-              {Object.entries(groupedModels).map(([provider, providerModels]) => (
-                <div key={provider} className="space-y-2">
-                  <h3 className="text-sm font-medium">{provider}</h3>
-                  <div className="space-y-1">
-                    {providerModels.map(model => (
-                      <Button
-                        key={model.id}
-                        variant="outline"
-                        className={`w-full justify-between text-left h-auto py-2 ${selectedModelId === model.id ? 'bg-primary/10 border-primary/50' : ''}`}
-                        onClick={() => {
-                          // Immediately assign and activate the model
-                          assignModelToPreset(currentPresetKey, model.id);
-                          handleActivation(currentPresetKey, model.id);
-                          
-                          // Close dialog
-                          setIsDialogOpen(false);
-                          
-                          // Reset UI state
-                          setFilteredPresetModels([]);
-                          setSearchTerm('');
-                        }}
-                      >
-                        <div className="flex flex-col">
-                          <span>{model.name}</span>
-                          <span className="text-xs text-muted-foreground">{model.id}</span>
-                          {model.context_length && (
-                            <span className="text-xs text-muted-foreground">
-                              Context: {Math.round(model.context_length / 1000)}k tokens
-                            </span>
+              {filteredPresetModels.length > 0 ? (
+                Object.entries(groupModelsByProvider(filteredPresetModels)).map(([provider, providerModels]) => (
+                  <div key={provider} className="space-y-2">
+                    <h3 className="text-sm font-medium">{provider}</h3>
+                    <div className="space-y-1">
+                      {providerModels.map((model) => (
+                        <div
+                          key={model.id}
+                          onClick={() => setSelectedModelId(model.id)}
+                          className={`flex justify-between items-center p-2 rounded cursor-pointer ${
+                            selectedModelId === model.id ? 'bg-primary/10' : 'hover:bg-muted'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{model.name}</span>
+                            <span className="text-xs text-muted-foreground">{model.id}</span>
+                          </div>
+                          {selectedModelId === model.id && (
+                            <Check size={16} className="text-primary" />
                           )}
                         </div>
-                        {selectedModelId === model.id && (
-                          <Check className="h-4 w-4 text-primary" />
-                        )}
-                      </Button>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {Object.keys(groupedModels).length === 0 && (
-                <p className="text-center text-muted-foreground">No models found</p>
+                ))
+              ) : (
+                <p>No models found matching your criteria.</p>
               )}
             </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="flex justify-between">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
+            </Button>
+            <Button onClick={saveModelToPreset} disabled={!selectedModelId || isPending}>
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -583,7 +631,7 @@ export const ModelPresets = () => {
           <DialogHeader>
             <DialogTitle>Select a Free Model</DialogTitle>
             <DialogDescription>
-              These models are available at no cost. Select a model to use it immediately. On mobile, you can long-press the Free Tier button to access this selection.
+              These models are available at no cost. Choose one to use for your conversation.
             </DialogDescription>
           </DialogHeader>
           
@@ -604,32 +652,28 @@ export const ModelPresets = () => {
                   <div key={provider} className="space-y-2">
                     <h3 className="text-sm font-medium">{provider}</h3>
                     <div className="space-y-1">
-                      {providerModels.map(model => (
-                        <Button
+                      {providerModels.map((model) => (
+                        <div
                           key={model.id}
-                          variant="outline"
-                          className={`w-full justify-between text-left h-auto py-2 ${activeFreeTierModel === model.id ? 'bg-green-100 dark:bg-green-950 border-green-500' : ''}`}
                           onClick={() => handleSelectFreeModel(model.id)}
+                          className={`flex justify-between items-center p-2 rounded cursor-pointer ${
+                            presets.preset6 === model.id ? 'bg-primary/10' : 'hover:bg-muted'
+                          }`}
                         >
                           <div className="flex flex-col">
-                            <span>{model.name}</span>
+                            <span className="text-sm font-medium">{model.name}</span>
                             <span className="text-xs text-muted-foreground">{model.id}</span>
-                            {model.context_length && (
-                              <span className="text-xs text-muted-foreground">
-                                Context: {Math.round(model.context_length / 1000)}k tokens
-                              </span>
-                            )}
                           </div>
-                          {activeFreeTierModel === model.id && (
-                            <Check className="h-4 w-4 text-green-600" />
+                          {presets.preset6 === model.id && (
+                            <Check size={16} className="text-primary" />
                           )}
-                        </Button>
+                        </div>
                       ))}
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-center text-muted-foreground">No free models found</p>
+                <p>No free models found. Try again later.</p>
               )}
             </div>
           </div>
@@ -641,6 +685,6 @@ export const ModelPresets = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 };

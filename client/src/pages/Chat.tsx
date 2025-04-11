@@ -121,10 +121,10 @@ export default function Chat() {
   
   // Handle regular scrolling behavior when messages change
   useEffect(() => {
-    console.log('[Chat] Messages state changed, message count:', messages.length);
+    console.log('[Chat] Messages state changed, message count:', Array.isArray(messages) ? messages.length : 0);
     
     // When messages are loaded or updated
-    if (messages.length > 0) {
+    if (Array.isArray(messages) && messages.length > 0) {
       // When loading is done, prioritize scrolling to the latest message
       if (!isLoadingResponse) {
         if (latestMessageRef.current) {
@@ -158,7 +158,7 @@ export default function Chat() {
   // Effect to show PWA install banner after first AI response
   useEffect(() => {
     // Check if we have at least one AI response in the messages
-    const hasAiResponse = messages.some((m: Message) => m.role === 'assistant');
+    const hasAiResponse = Array.isArray(messages) && messages.some((m: Message) => m && m.role === 'assistant');
     
     if (hasAiResponse && !showPwaBanner) {
       // Set a small delay before showing the banner so it appears after the user has read the response
@@ -271,6 +271,7 @@ export default function Chat() {
             contentVisibility: "auto", /* Optimize rendering for off-screen content */
           }}
         >
+          {/* Simplified loading and content rendering to debug the issue */}
           {isLoadingMessages ? (
             <div className="flex justify-center items-center h-full">
               <div className="typing-indicator">
@@ -279,92 +280,79 @@ export default function Chat() {
                 <span className="h-2 w-2 bg-primary rounded-full animate-bounce delay-300"></span>
               </div>
             </div>
-          ) : messages.length === 0 && !isLoadingResponse ? (
-            <Welcome 
-              onSuggestionClick={handleSuggestionClick} 
-              isLoading={isLoadingResponse} 
-            />
-          ) : messages.length === 0 && isLoadingResponse ? (
-            <div className="flex justify-center items-center h-full">
-              <div className="typing-indicator">
-                <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-0"></span>
-                <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-150 mx-2"></span>
-                <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-300"></span>
-              </div>
-            </div>
           ) : (
             <>
-
+              {/* Welcome Screen - Only show if no messages */}
+              {(!Array.isArray(messages) || messages.length === 0) && !isLoadingResponse && (
+                <Welcome 
+                  onSuggestionClick={handleSuggestionClick} 
+                  isLoading={isLoadingResponse} 
+                />
+              )}
               
-              {/* Debug info showing total message count */}
-              <div className="text-xs text-muted-foreground opacity-50 mb-4">
-                Message count: {messages.length}
-              </div>
-
-              {/* Specific user message presence logging for first message debugging */}
-              {(() => {
-                const userMessages = messages.filter(m => m.role === 'user');
-                const assistantMessages = messages.filter(m => m.role === 'assistant');
-                console.log('[Chat] Current messages state:', {
-                  total: messages.length,
-                  userCount: userMessages.length,
-                  assistantCount: assistantMessages.length,
-                  firstMessage: messages.length > 0 ? messages[0] : null
-                });
-                return null;
-              })()}
-              
-              {messages.map((message: Message, index: number) => {
-                // Add refs to both user and AI messages
-                const isLatestAssistantMessage = index === messages.length - 1 && message.role === 'assistant';
-                const isLatestUserMessage = index === messages.length - 1 && message.role === 'user' && isLoadingResponse;
-                const isFirstEverMessage = index === 0;
-                
-                // For debugging, log each message being rendered
-                console.log(`[Chat] Rendering message ${index}:`, {
-                  id: message.id,
-                  role: message.role,
-                  content: message.content ? message.content.substring(0, 30) + '...' : 'No content',
-                  isLatestAssistantMessage,
-                  isLatestUserMessage,
-                  isFirstEverMessage
-                });
-                
-                // Determine which ref to use
-                let refToUse = undefined;
-                if (isLatestAssistantMessage) {
-                  refToUse = latestMessageRef;
-                } else if (isLatestUserMessage) {
-                  refToUse = userMessageRef;
-                }
-                
-                // Add a key that's more unique and stable than just the message ID
-                const messageKey = `${message.role}-${message.id}-${index}`;
-                
-                return (
-                  <div 
-                    key={messageKey} 
-                    ref={refToUse}
-                    className={isFirstEverMessage ? 'first-message' : ''}
-                  >
-                    <ChatMessage 
-                      message={message} 
-                      relatedDocuments={message.role === 'user' ? documents : []} 
-                    />
+              {/* Loading Indicator - Only show if no messages but loading response */}
+              {(!Array.isArray(messages) || messages.length === 0) && isLoadingResponse && (
+                <div className="flex justify-center items-center h-full">
+                  <div className="typing-indicator">
+                    <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-0"></span>
+                    <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-150 mx-2"></span>
+                    <span className="h-3 w-3 bg-primary rounded-full animate-bounce delay-300"></span>
                   </div>
-                );
-              })}
-              
+                </div>
+              )}
 
+              {/* Debug info showing total message count */}
+              {Array.isArray(messages) && messages.length > 0 && (
+                <div className="text-xs text-muted-foreground opacity-50 mb-4">
+                  Message count: {messages.length}
+                </div>
+              )}
+
+              {/* Message List - Only render if we have messages */}
+              {Array.isArray(messages) && messages.length > 0 && (
+                <div className="messages-container">
+                  {messages.map((message, index) => {
+                    // Safety check - skip invalid messages
+                    if (!message || typeof message !== 'object' || !message.role) {
+                      console.error(`[Chat] Invalid message at index ${index}:`, message);
+                      return null;
+                    }
+                    
+                    // Add refs to both user and AI messages
+                    const isLatestAssistantMessage = index === messages.length - 1 && message.role === 'assistant';
+                    const isLatestUserMessage = index === messages.length - 1 && message.role === 'user' && isLoadingResponse;
+                    const isFirstEverMessage = index === 0;
+                    
+                    // Determine which ref to use
+                    let refToUse = undefined;
+                    if (isLatestAssistantMessage) {
+                      refToUse = latestMessageRef;
+                    } else if (isLatestUserMessage) {
+                      refToUse = userMessageRef;
+                    }
+                    
+                    // Create a safe unique key
+                    const messageKey = `message-${index}-${message.role}-${message.id || Date.now()}`;
+                    
+                    return (
+                      <div 
+                        key={messageKey} 
+                        ref={refToUse}
+                        className={isFirstEverMessage ? 'first-message' : ''}
+                      >
+                        <ChatMessage 
+                          message={message} 
+                          relatedDocuments={message.role === 'user' ? documents : []} 
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               
               {/* Loading indicator for AI response */}
               {isLoadingResponse && (
-                <motion.div 
-                  className="w-full max-w-4xl mx-auto px-4 sm:px-6"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
+                <div className="w-full max-w-4xl mx-auto px-4 sm:px-6">
                   <div className="w-full">
                     <div className="flex space-x-1 py-2">
                       <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-0"></div>
@@ -372,7 +360,7 @@ export default function Chat() {
                       <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-300"></div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               )}
               
               {/* Auto-scroll anchor */}
