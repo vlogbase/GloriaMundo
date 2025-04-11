@@ -19,7 +19,10 @@ export class BullMQService {
       password: process.env.REDIS_PASSWORD || '',
       maxRetriesPerRequest: null, // Required for BullMQ
       enableReadyCheck: false, // Recommended for some cloud Redis providers
-      tls: process.env.REDIS_PORT === '6380' ? {} : undefined // Required for Azure Cache for Redis which uses SSL
+      tls: process.env.REDIS_PORT === '6380' ? {} : undefined, // Required for Azure Cache for Redis which uses SSL
+      // Added explicit Redis options to optimize usage with volatile-lru policy
+      connectionName: 'gloriamundo-bullmq', // Helps identify connections in redis-cli
+      retryStrategy: (times: number) => Math.min(times * 100, 3000) // Progressive reconnection backoff
     };
     
     try {
@@ -32,9 +35,24 @@ export class BullMQService {
         this.isRedisAvailable = false;
       });
       
-      this.redisClient.on('connect', () => {
+      this.redisClient.on('connect', async () => {
         console.log('Successfully connected to Redis');
         this.isRedisAvailable = true;
+        
+        // Check Redis configuration for optimal performance
+        try {
+          const maxmemoryPolicy = await this.redisClient.config('GET', 'maxmemory-policy');
+          if (Array.isArray(maxmemoryPolicy) && maxmemoryPolicy.length > 1) {
+            const policy = maxmemoryPolicy[1];
+            if (policy !== 'noeviction') {
+              console.log(`NOTICE: Redis maxmemory-policy is set to ${policy}. BullMQ recommends 'noeviction' policy.`);
+              console.log('Performance optimizations have been applied to reduce memory pressure.');
+            }
+          }
+        } catch (err) {
+          // Some managed Redis services don't allow CONFIG commands
+          console.log('Unable to check Redis configuration. This is normal for managed Redis services.');
+        }
       });
       
       // Initialize BullMQ queue for document processing
@@ -46,8 +64,8 @@ export class BullMQService {
             type: 'exponential',
             delay: 1000,
           },
-          removeOnComplete: true, // Remove jobs after completion
-          removeOnFail: 100, // Keep the last 100 failed jobs
+          removeOnComplete: true, // Remove jobs after completion to save Redis memory
+          removeOnFail: 50  // Keep only 50 failed jobs to reduce memory usage
         }
       });
       

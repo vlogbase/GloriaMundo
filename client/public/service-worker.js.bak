@@ -1,10 +1,8 @@
-// Use a version number that makes it easy to update and invalidate old caches
-const VERSION = '3';
-const CACHE_NAME = `gloriamundo-cache-v${VERSION}`;
-const RUNTIME_CACHE = `gloriamundo-runtime-v${VERSION}`;
-const FONT_CACHE = `gloriamundo-fonts-v${VERSION}`;
-const IMAGE_CACHE = `gloriamundo-images-v${VERSION}`;
-const STATIC_CACHE = `gloriamundo-static-v${VERSION}`;
+const CACHE_NAME = 'gloriamundo-cache-v2';
+const RUNTIME_CACHE = 'gloriamundo-runtime-v2';
+const FONT_CACHE = 'gloriamundo-fonts-v2';
+const IMAGE_CACHE = 'gloriamundo-images-v2';
+const STATIC_CACHE = 'gloriamundo-static-v2';
 
 // Critical assets to cache on install for faster initial load
 const PRECACHE_CRITICAL_ASSETS = [
@@ -219,24 +217,17 @@ self.addEventListener('message', (event) => {
 });
 
 // Periodically clean up old image cache entries to prevent excessive storage usage
-// Note: We use setTimeout instead of setInterval for better memory management
-// and to avoid potential issues with the browser's task scheduling
-function scheduleCleanup() {
-  setTimeout(() => {
-    cleanupOldCaches()
-      .then(() => {
-        console.log('Cache cleanup completed');
-        scheduleCleanup(); // Schedule next cleanup
-      })
-      .catch(err => {
-        console.error('Cache cleanup error:', err);
-        scheduleCleanup(); // Still schedule next cleanup even after error
-      });
-  }, 86400000); // 24 hours
-}
+// Run once per day
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'cache-cleanup') {
+    event.waitUntil(cleanupOldCaches());
+  }
+});
 
-// Start the cleanup cycle
-scheduleCleanup();
+// Manually trigger cache cleanup occasionally
+setInterval(() => {
+  cleanupOldCaches();
+}, 86400000); // 24 hours
 
 // Function to remove old entries from image and runtime caches
 async function cleanupOldCaches() {

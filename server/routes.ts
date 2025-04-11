@@ -1106,27 +1106,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const server = createServer(app);
   
-  // Initialize WebSocket server for chat
-  const wss = new WebSocketServer({ noServer: true });
+  // Initialize WebSocket server for chat with more robust configuration
+  const wss = new WebSocketServer({ 
+    noServer: true,
+    // Add explicit WebSocket server configuration
+    clientTracking: true,  // Track connected clients
+    perMessageDeflate: {   // Enable message compression
+      zlibDeflateOptions: {
+        chunkSize: 1024,   // Smaller chunks for more reliable transmission
+        level: 6           // Balance between compression and speed
+      }
+    }
+  });
   
-  // Handle WebSocket connections with error handling
-  wss.on('connection', (ws) => {
+  // Track rate limiting for connections
+  const connectionAttempts = new Map();
+  const MAX_CONNECTIONS_PER_IP = 5;
+  const CONNECTION_WINDOW_MS = 10000; // 10 seconds
+  
+  // Ping interval to keep connections alive
+  const PING_INTERVAL = 30000; // 30 seconds
+  
+  // Handle WebSocket connections with enhanced error handling
+  wss.on('connection', (ws: any, req) => {
     console.log('WebSocket client connected');
     
-    // Add error handling for WebSocket connections
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error.message);
-      // Don't terminate the connection on non-fatal errors
+    // Set up ping/pong for connection health monitoring
+    ws.isAlive = true;
+    ws.on('pong', () => {
+      ws.isAlive = true;
     });
     
-    ws.on('message', (message) => {
+    // Save the IP for connection tracking
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    ws.ip = ip;
+    
+    // Add robust error handling for WebSocket connections
+    ws.on('error', (error: any) => {
+      console.error('WebSocket client error:', error.message || 'Unknown error');
+      // Controlled termination instead of unexpected closure
       try {
-        console.log('Received message:', message.toString());
+        ws.terminate(); 
+      } catch (closeError: any) {
+        console.error('Error terminating WebSocket:', closeError.message || 'Unknown error');
+      }
+    });
+    
+    ws.on('message', (message: any) => {
+      try {
+        // Basic message size check to prevent memory issues
+        const msgLength = typeof message.length !== 'undefined' ? message.length : 
+                         (message.byteLength || message.toString().length || 0);
+                         
+        if (msgLength > 100000) { // 100KB limit
+          console.warn('Large WebSocket message rejected');
+          ws.send(JSON.stringify({ 
+            type: 'error', 
+            message: 'Message too large' 
+          }));
+          return;
+        }
         
         // Echo back for now (actual implementation will be more complex)
         ws.send(JSON.stringify({ type: 'echo', data: message.toString() }));
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
+      } catch (error: any) {
+        console.error('Error handling WebSocket message:', error?.message || 'Unknown error');
+        // Send error response when possible
+        try {
+          ws.send(JSON.stringify({ 
+            type: 'error', 
+            message: 'Error processing message' 
+          }));
+        } catch (sendError: any) {
+          console.error('Failed to send error response:', sendError?.message || 'Unknown error');
+        }
       }
     });
     
@@ -1135,15 +1188,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
   
-  // Upgrade HTTP connections to WebSocket when requested
+  // Upgrade HTTP connections to WebSocket with rate limiting and better error handling
   server.on('upgrade', (request, socket, head) => {
+    // Get client IP for rate limiting
+    const ip = request.headers['x-forwarded-for'] || socket.remoteAddress;
+    
+    // Implement basic rate limiting per IP
+    if (!connectionAttempts.has(ip)) {
+      connectionAttempts.set(ip, { count: 0, timestamp: Date.now() });
+    }
+    
+    const ipData = connectionAttempts.get(ip);
+    const now = Date.now();
+    
+    // Reset count if window expired
+    if (now - ipData.timestamp > CONNECTION_WINDOW_MS) {
+      ipData.count = 0;
+      ipData.timestamp = now;
+    }
+    
+    // Increment connection attempt count
+    ipData.count++;
+    connectionAttempts.set(ip, ipData);
+    
+    // Reject if too many connection attempts
+    if (ipData.count > MAX_CONNECTIONS_PER_IP) {
+      console.warn(`Connection rate limit exceeded for IP: ${ip}`);
+      socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    
     try {
+      // Handle connection upgrade with enhanced error handling
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });
     } catch (error) {
       console.error('WebSocket upgrade error:', error);
       // Prevent uncaught exceptions from crashing the server
+      try {
+        socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+      } catch (writeError) {
+        console.error('Error sending upgrade rejection:', writeError);
+      }
       socket.destroy();
     }
   });
@@ -1152,6 +1240,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on('error', (error) => {
     console.error('WebSocket server error:', error);
     // Continue operation, don't crash the server
+  });
+  
+  // Heartbeat to keep connections alive and cleanup dead connections
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws: any) => {
+      if (ws.isAlive === false) {
+        console.log('Terminating inactive WebSocket connection');
+        return ws.terminate();
+      }
+      
+      ws.isAlive = false;
+      try {
+        ws.ping();
+      } catch (error: any) {
+        console.error('Ping error:', error.message || 'Unknown error');
+        ws.terminate();
+      }
+    });
+  }, PING_INTERVAL);
+  
+  // Clean up interval on server close
+  server.on('close', () => {
+    clearInterval(heartbeatInterval);
   });
   
   return server;
