@@ -15,11 +15,11 @@ export interface ModelPresets {
 
 // Default model presets with verified valid model IDs from OpenRouter
 const defaultPresets: ModelPresets = {
-  preset1: 'openai/gpt-4.5-preview',       // All models preset 1
-  preset2: 'anthropic/claude-3.7-sonnet',  // All models preset 2
-  preset3: 'openai/o3-mini-high',          // Reasoning preset
-  preset4: 'openai/gpt-4o',                // Multimodal preset
-  preset5: 'perplexity/sonar-pro'          // Search preset
+  preset1: 'google/gemini-2.5-pro-exp-03-25:free', // Changed from GPT-4.5 to Gemini 2.5 Pro (free version)
+  preset2: 'anthropic/claude-3.7-sonnet',          // All models preset 2
+  preset3: 'openai/o3-mini-high',                  // Reasoning preset
+  preset4: 'openai/gpt-4o',                        // Multimodal preset
+  preset5: 'perplexity/sonar-pro'                  // Search preset
 };
 
 interface ModelPresetsContextType {
