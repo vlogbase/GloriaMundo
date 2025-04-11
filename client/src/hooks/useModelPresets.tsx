@@ -58,7 +58,7 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       preset5: data?.preset5ModelId || defaultPresets.preset5
     })
   });
-
+  
   // Update presets state when data changes
   useEffect(() => {
     if (data) {
@@ -139,6 +139,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       return 'Claude 3.7 Sonnet';
     } else if (normalizedId.includes('deepseek/deepseek-r1')) {
       return 'Deepseek R1';
+    } else if (normalizedId.includes('google/gemini-2.5-pro')) {
+      return 'Gemini 2.5 Pro'; // Added for new preset 1 default
     } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
     } else if (normalizedId === 'perplexity/sonar-pro') {
@@ -338,6 +340,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       return 'Claude 3.7 Sonnet';
     } else if (normalizedId.includes('deepseek/deepseek-r1')) {
       return 'Deepseek R1';
+    } else if (normalizedId.includes('google/gemini-2.5-pro')) {
+      return 'Gemini 2.5 Pro'; // Added for new preset 1 default
     } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
     } else if (normalizedId === 'perplexity/sonar-pro') {
