@@ -213,6 +213,10 @@ export const Sidebar = ({
                   </Button>
                 </div>
               </div>
+            ) : !Array.isArray(conversations) ? (
+              <p className="text-center text-destructive text-sm py-8">
+                Error loading conversations.
+              </p>
             ) : conversations.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-8">
                 No conversations yet

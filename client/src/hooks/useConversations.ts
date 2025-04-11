@@ -40,7 +40,8 @@ export const useConversations = () => {
         throw new Error("Failed to fetch conversations");
       }
       const data = await response.json();
-      setConversations(data);
+      // Ensure data is treated as an array before setting state
+      setConversations(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching conversations:", error);
       toast({

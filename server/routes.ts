@@ -177,6 +177,21 @@ function isValidApiKey(key: string | undefined | null): boolean {
 // Register API routes
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Health check endpoint for deployment
+  app.get("/health", (req, res) => {
+    res.status(200).send("OK");
+  });
+  
+  // Root endpoint health check
+  app.get("/", (req, res, next) => {
+    // If this is a health check or API request, just return OK
+    if (req.headers["user-agent"]?.includes("health-check") || req.query.health === "check") {
+      return res.status(200).send("OK");
+    }
+    // Otherwise, pass to the next middleware (which will serve the static index.html)
+    next();
+  });
+  
   // Config endpoint to expose public environment variables for the client
   app.get("/api/config", (req, res) => {
     res.json({
