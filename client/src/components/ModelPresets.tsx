@@ -69,9 +69,6 @@ export const ModelPresets = () => {
     formatModelName
   } = useModelPresets();
   
-  // Define preferred free model ID
-  const preferredFreeModelId = "google/gemini-2.0-flash-exp";
-  
   const { models, selectedModelId, setSelectedModelId } = useOpenRouterModels();
   const { setSelectedModel, setCustomOpenRouterModelId } = useModelSelection();
   const [, navigate] = useLocation();
@@ -110,22 +107,6 @@ export const ModelPresets = () => {
   
   // State for filtered models based on preset type
   const [filteredPresetModels, setFilteredPresetModels] = useState<any[]>([]);
-  
-  // Effect to auto-select preferred free model when available
-  useEffect(() => {
-    // Check if our preferred model exists in the free models
-    if (freeModels.length > 0 && !activeFreeTierModel && !activePreset) {
-      const preferredModel = freeModels.find(model => model.id === preferredFreeModelId);
-      
-      if (preferredModel) {
-        console.log(`Auto-selecting preferred free model: ${preferredFreeModelId}`);
-        activateFreeTierModel(preferredFreeModelId);
-        setSelectedModelId(preferredFreeModelId);
-        setSelectedModel('openrouter');
-        setCustomOpenRouterModelId(preferredFreeModelId);
-      }
-    }
-  }, [freeModels, activeFreeTierModel, activePreset, preferredFreeModelId]);
   
   // Filter models based on search term and current preset type
   const filteredModels = (filteredPresetModels.length > 0 ? filteredPresetModels : models)
