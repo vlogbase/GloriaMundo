@@ -1509,7 +1509,7 @@ Format your responses using markdown for better readability and organization.`;
         }
         
         // Send the error event to the client
-        console.log(`[STREAM HANDLER] Sending error event to client: "${errorMessage}"`);
+        console.log(`[STREAM DEBUG] [${errorTimestamp}] Sending error event to client: "${errorMessage}"`);
         try {
           res.write(`data: ${JSON.stringify({ 
             type: "error", 
@@ -1518,16 +1518,17 @@ Format your responses using markdown for better readability and organization.`;
           })}\n\n`);
           
           res.end();
-          console.log(`[STREAM HANDLER] Error response successfully sent`);
+          console.log(`[STREAM DEBUG] [${errorTimestamp}] Error response successfully sent`);
         } catch (writeError) {
-          console.error(`[STREAM HANDLER] Failed to write error response:`, writeError);
+          console.error(`[STREAM DEBUG] [${errorTimestamp}] Failed to write error response:`, writeError);
         }
       }
     } catch (error) {
-      console.error('[STREAM HANDLER] Outer error handler caught exception:', error);
+      const outerErrorTimestamp = new Date().toISOString();
+      console.error(`[STREAM DEBUG] [${outerErrorTimestamp}] Outer error handler caught exception:`, error);
       // Provide more detailed error information for debugging
       const errorDetail = error instanceof Error ? error.message : String(error);
-      console.error(`[STREAM HANDLER] Error details: ${errorDetail}`);
+      console.error(`[STREAM DEBUG] [${outerErrorTimestamp}] Error details: ${errorDetail}`);
       
       // Try to send a properly formatted error response
       try {
@@ -1538,7 +1539,7 @@ Format your responses using markdown for better readability and organization.`;
         });
       } catch (responseError) {
         // In case response has already been sent/ended
-        console.error('[STREAM HANDLER] Could not send error response:', responseError);
+        console.error(`[STREAM DEBUG] [${outerErrorTimestamp}] Could not send error response:`, responseError);
       }
     }
   });
