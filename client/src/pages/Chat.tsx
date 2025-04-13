@@ -364,8 +364,8 @@ export default function Chat() {
               
 
               
-              {/* Loading indicator for AI response */}
-              {isLoadingResponse && (
+              {/* Loading indicator for AI response (only shown when there's no streaming message yet) */}
+              {isLoadingResponse && !messages.some(m => m.role === 'assistant' && messages.indexOf(m) === messages.length - 1) && (
                 <motion.div 
                   className="w-full max-w-4xl mx-auto px-4 sm:px-6"
                   initial={{ opacity: 0, y: 10 }}
@@ -377,6 +377,9 @@ export default function Chat() {
                       <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-0"></div>
                       <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-150"></div>
                       <div className="h-2 w-2 bg-primary rounded-full animate-bounce delay-300"></div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Streaming response...
                     </div>
                   </div>
                 </motion.div>

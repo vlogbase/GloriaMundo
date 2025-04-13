@@ -196,3 +196,28 @@
     margin: 0.75rem auto;
   }
 }
+
+/* Streaming chat message animations */
+.streaming-message {
+  transition: all 0.3s ease-in-out;
+}
+
+.streaming-content {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.typing-cursor {
+  display: inline-block;
+  opacity: 1;
+  margin-left: 1px;
+  font-weight: 500;
+  color: currentColor;
+  animation: typing-cursor 0.8s infinite;
+}
+
+@keyframes typing-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
