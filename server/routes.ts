@@ -1878,7 +1878,7 @@ Format your responses using markdown for better readability and organization.`;
           messages: cleanMessages,
           temperature: 0.2,
           top_p: 0.9,
-          stream: shouldStream
+          stream: false
         };
         
         // Log the actual model being used for debugging
@@ -1981,11 +1981,10 @@ Format your responses using markdown for better readability and organization.`;
           throw fetchError;
         }
 
-        // Handle streaming vs non-streaming responses
-        let assistantContent = "";
+        // Handle API responses
         let citations = null;
         
-        // Initial message with empty content (will be updated with streaming data)
+        // Initial message with empty content (will be updated with API response data)
         let assistantMessage = await storage.createMessage({
           conversationId,
           role: "assistant",
