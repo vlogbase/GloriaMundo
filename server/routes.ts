@@ -1395,7 +1395,46 @@ Format your responses using markdown for better readability and organization.`;
                 const parsed = JSON.parse(data);
                 const delta = parsed.choices[0]?.delta?.content || "";
                 
-                if (delta) {
+                // Check if this is potentially a reasoning data chunk from OpenRouter
+                // Look for tool_calls or tool_use or function_call in the delta object
+                const hasReasoningData = parsed.choices[0]?.delta?.tool_calls || 
+                                        parsed.choices[0]?.delta?.tool_use || 
+                                        parsed.choices[0]?.delta?.function_call;
+                
+                if (hasReasoningData) {
+                  // This is a reasoning data chunk
+                  console.log("Detected reasoning data in streaming response:", hasReasoningData);
+                  
+                  // Extract and process reasoning data
+                  try {
+                    const reasoningData: Record<string, any> = {};
+                    
+                    // Process tool_calls (newer OpenAI format)
+                    if (parsed.choices[0]?.delta?.tool_calls) {
+                      reasoningData.toolCalls = parsed.choices[0].delta.tool_calls;
+                    }
+                    
+                    // Process tool_use (Claude/Anthropic format)
+                    if (parsed.choices[0]?.delta?.tool_use) {
+                      reasoningData.toolUse = parsed.choices[0].delta.tool_use;
+                    }
+                    
+                    // Process function_call (older OpenAI format)
+                    if (parsed.choices[0]?.delta?.function_call) {
+                      reasoningData.functionCall = parsed.choices[0].delta.function_call;
+                    }
+                    
+                    // Send the reasoning data to the client
+                    res.write(`data: ${JSON.stringify({ 
+                      type: "reasoning", 
+                      content: reasoningData,
+                      id: assistantMessage.id
+                    })}\n\n`);
+                  } catch (reasoningError) {
+                    console.error("Error processing reasoning data:", reasoningError);
+                  }
+                } else if (delta) {
+                  // This is a regular content delta
                   assistantContent += delta;
                   res.write(`data: ${JSON.stringify({ 
                     type: "chunk", 
@@ -1410,16 +1449,26 @@ Format your responses using markdown for better readability and organization.`;
           }
         }
         
-        // Update the stored message with the full content
+        // Create a variable to store accumulated reasoning data
+        const reasoningData: Record<string, any> = {};
+        
+        // Check if there's any reasoning data from OpenRouter streaming
+        if (Object.keys(reasoningData).length > 0) {
+          console.log("Storing reasoning data with message");
+        }
+        
+        // Update the stored message with the full content and reasoning data
         const updatedMessage = await storage.getMessage(assistantMessage.id);
         if (updatedMessage) {
           assistantMessage = {
             ...updatedMessage,
-            content: assistantContent
+            content: assistantContent,
+            reasoningData: Object.keys(reasoningData).length > 0 ? reasoningData : undefined
           };
-          // Update the message in storage
+          // Update the message in storage with content and reasoning data
           await storage.updateMessage(assistantMessage.id, {
-            content: assistantContent
+            content: assistantContent,
+            reasoningData: Object.keys(reasoningData).length > 0 ? reasoningData : undefined
           });
         }
         

@@ -118,10 +118,10 @@ export const useStreamingChat = () => {
                           !window.location.host.includes('localhost');
       
       // Enable streaming for both reasoning models and OpenRouter models
-      // In production environments, we still want to limit streaming to avoid issues
+      // Always enable streaming for OpenRouter models, regardless of environment
       const isOpenRouterModel = selectedModel.includes('/') || selectedModel === 'openrouter';
-      if ((selectedModel === "reasoning" || isOpenRouterModel) && !isProduction) {
-        // We're using streaming in a development environment
+      if (selectedModel === "reasoning" || isOpenRouterModel) {
+        // We're using streaming for this model
         streamingMessageRef.current = null;
         
         // Create a new EventSource connection
