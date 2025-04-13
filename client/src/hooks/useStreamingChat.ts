@@ -65,7 +65,7 @@ export const useStreamingChat = () => {
     }
   }, [setLocation, toast]);
 
-  // Send a message (with streaming for reasoning model)
+  // Send a message (with streaming for text messages, non-streaming for images)
   const sendMessage = useCallback(async (conversationId: number, content: string, image?: string) => {
     // If not the active conversation, load it first
     if (activeConversationId !== conversationId) {
@@ -73,6 +73,9 @@ export const useStreamingChat = () => {
       setLocation(`/chat/${conversationId}`);
     }
 
+    // Determine if the request should attempt streaming (stream unless an image is present)
+    const shouldAttemptStream = !image;
+    
     setIsLoadingResponse(true);
     
     // Check if content accidentally contains stringified JSON data (from previous bug)
@@ -117,8 +120,8 @@ export const useStreamingChat = () => {
                           window.location.host.includes('.gloriamundo.com') ||
                           !window.location.host.includes('localhost');
       
-      // Determine if the request should attempt streaming (stream unless an image is present)
-      if (!image) {
+      // If we should attempt streaming, set it up
+      if (shouldAttemptStream) {
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
@@ -382,7 +385,7 @@ export const useStreamingChat = () => {
         return;
       }
       
-      // For non-streaming approach (when images are present), use regular fetch
+      // For non-streaming approach (when images are present), use regular fetch via fallbackToNonStreaming
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
@@ -396,9 +399,9 @@ export const useStreamingChat = () => {
       // Remove the optimistic message on error
       setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessage.id));
     } finally {
-      // For non-streaming requests, we need to set loading to false here
-      // (For streaming requests, this is done in the event handler)
-      if (image || eventSourceRef.current === null) {
+      // For non-streaming requests (!shouldAttemptStream) or failed streaming attempts, 
+      // we need to set loading to false here (for successful streaming, it's done in the event handler)
+      if (!shouldAttemptStream || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
