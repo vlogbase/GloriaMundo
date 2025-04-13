@@ -1327,8 +1327,8 @@ Format your responses using markdown for better readability and organization.`;
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         
-        // Make the API request with extended timeout (300 seconds = 5 minutes)
-        console.log(`[STREAM DEBUG] [${logTimestamp}] Initiating fetch to OpenRouter with extended timeout (300s)...`);
+        // Make the API request
+        console.log(`[STREAM DEBUG] [${logTimestamp}] Initiating fetch to OpenRouter...`);
         console.log(`[STREAM DEBUG] [${logTimestamp}] Request payload:`, {
           model: payload.model,
           stream: payload.stream,
@@ -1337,29 +1337,27 @@ Format your responses using markdown for better readability and organization.`;
           modelType: modelType
         });
         
-        // Use AbortController for timeout functionality
+        // Set up timeout with AbortController (300 seconds = 5 minutes)
         const abortController = new AbortController();
         const timeoutId = setTimeout(() => {
           abortController.abort();
           console.error(`[STREAM DEBUG] [${new Date().toISOString()}] Request timed out after 300s`);
-        }, 300000); // 300 seconds in milliseconds
+        }, 300000); // 300 seconds
         
-        try {
-          // Make the API request
-          const response = await fetch(modelConfig.apiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${modelConfig.apiKey}`
-            },
-            body: JSON.stringify(payload),
-            signal: abortController.signal
-          });
-          
-          // Clear the timeout since we received a response
-          clearTimeout(timeoutId);
-
-          if (!response.ok) {
+        const response = await fetch(modelConfig.apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${modelConfig.apiKey}`
+          },
+          body: JSON.stringify(payload),
+          signal: abortController.signal
+        });
+        
+        // Clear the timeout
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
           const errorText = await response.text();
           const timestamp = new Date().toISOString();
           console.error(`[STREAM DEBUG] [${timestamp}] ${modelConfig.apiProvider} API streaming error: ${errorText}`);
