@@ -3,6 +3,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOpenRouterModels } from './useOpenRouterModels';
 import { useToast } from './use-toast';
+import { cookieUtils } from '@/lib/utils';
 
 // Define the ModelPresets type
 export interface ModelPresets {
@@ -48,10 +49,16 @@ interface ModelPresetsContextType {
 
 const ModelPresetsContext = createContext<ModelPresetsContextType | undefined>(undefined);
 
+// Cookie name for storing the last selected free model
+const LAST_FREE_MODEL_COOKIE = 'gloriaLastFreeModel';
+
 export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [presets, setPresets] = useState<ModelPresets>(defaultPresets);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeFreeTierModel, setActiveFreeTierModel] = useState<string | null>(null);
+  const [lastUsedFreeModel, setLastUsedFreeModel] = useState<string | null>(
+    cookieUtils.get(LAST_FREE_MODEL_COOKIE) || null
+  );
   const { models } = useOpenRouterModels();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -108,22 +115,46 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       !isProcessingModelChange.current &&
       !isLoading
     ) {
-      console.log('Initializing default free model from priority list...');
-      const defaultFreeModel = findDefaultFreeModel(freeModels);
+      console.log('Initializing default free model...');
       
-      if (defaultFreeModel) {
+      // Check for previously used free model from cookie
+      let modelToUse: string | null = null;
+      
+      // If we have a last used free model in cookie, check if it's still available
+      if (lastUsedFreeModel) {
+        const isModelStillAvailable = freeModels.some(model => model.id === lastUsedFreeModel);
+        if (isModelStillAvailable) {
+          console.log(`Using last used free model from cookie: ${lastUsedFreeModel}`);
+          modelToUse = lastUsedFreeModel;
+        } else {
+          console.log(`Last used free model ${lastUsedFreeModel} is no longer available, using fallback`);
+        }
+      }
+      
+      // If no stored model or stored model isn't available, use priority list
+      if (!modelToUse) {
+        console.log('Finding default free model from priority list...');
+        modelToUse = findDefaultFreeModel(freeModels);
+      }
+      
+      if (modelToUse) {
         hasInitializedFreeModel.current = true;
         isProcessingModelChange.current = true;
         
         // Set a small delay to avoid potential race conditions
         setTimeout(() => {
-          setActiveFreeTierModel(defaultFreeModel);
-          console.log(`Default free model set to: ${defaultFreeModel}`);
+          setActiveFreeTierModel(modelToUse!);
+          
+          // Also store this as the last used free model
+          setLastUsedFreeModel(modelToUse);
+          cookieUtils.set(LAST_FREE_MODEL_COOKIE, modelToUse, { expires: 365 }); // Save for 1 year
+          
+          console.log(`Default free model set to: ${modelToUse}`);
           isProcessingModelChange.current = false;
         }, 100);
       }
     }
-  }, [freeModels, activeFreeTierModel, isLoading]);
+  }, [freeModels, activeFreeTierModel, isLoading, lastUsedFreeModel]);
 
   // Mutation to update presets
   const { mutate, isPending } = useMutation({
@@ -253,7 +284,10 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const activatePreset = (presetKey: keyof ModelPresets): string | null => {
     const modelId = presets[presetKey];
     setActivePreset(presetKey);
-    setActiveFreeTierModel(null); // Deactivate free tier when preset is activated
+    
+    // We don't clear the activeFreeTierModel anymore to keep track of the last used free model
+    // But we do visually deactivate it in the UI by setting activePreset
+    
     return modelId;
   };
 
@@ -261,6 +295,13 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const activateFreeTierModel = (modelId: string): void => {
     setActiveFreeTierModel(modelId);
     setActivePreset(null); // Deactivate preset when free tier is activated
+    
+    // Store the free model ID in a cookie for persistence
+    if (modelId) {
+      setLastUsedFreeModel(modelId);
+      cookieUtils.set(LAST_FREE_MODEL_COOKIE, modelId, { expires: 365 }); // Save for 1 year
+      console.log(`Saved free model to cookie: ${modelId}`);
+    }
   };
 
   const value = {
@@ -357,6 +398,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       !isLoading
     ) {
       console.log('Initializing default free model from priority list (standalone)...');
+      
+      // For standalone we don't need to check the cookie - it will work the same way
       const defaultFreeModel = findDefaultFreeModel(freeModels);
       
       if (defaultFreeModel) {
