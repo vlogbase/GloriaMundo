@@ -1348,86 +1348,18 @@ Format your responses using markdown for better readability and organization.`;
           );
         }
 
-        // Create initial message with placeholder content (will be updated with streaming data)
-        let assistantMessage = await storage.createMessage({
-          conversationId,
-          role: "assistant",
-          content: "...", // Placeholder content that will be replaced
-          citations: null,
-          modelId: modelId && modelId !== "" ? modelId : modelType, // Use empty fallback if modelId is empty
+        // Set headers for SSE
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
         });
-        
-        // Send the initial user message to setup the UI
-        res.write(`data: ${JSON.stringify({ 
-          type: "initial", 
-          userMessage,
-          assistantMessageId: assistantMessage.id 
-        })}\n\n`);
-        
-        // Process the stream
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error("Failed to get reader from response");
-        }
-        
-        let assistantContent = "";
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          // Decode the chunk and add to buffer
-          buffer += decoder.decode(value, { stream: true });
-          
-          // Process complete lines from the buffer
-          let lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // The last line might be incomplete
-          
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6);
-              if (data === "[DONE]") continue;
-              
-              try {
-                const parsed = JSON.parse(data);
-                const delta = parsed.choices[0]?.delta?.content || "";
-                
-                if (delta) {
-                  assistantContent += delta;
-                  res.write(`data: ${JSON.stringify({ 
-                    type: "chunk", 
-                    content: delta,
-                    id: assistantMessage.id
-                  })}\n\n`);
-                }
-              } catch (e) {
-                console.error("Error parsing streaming response:", e);
-              }
-            }
-          }
-        }
-        
-        // Update the stored message with the full content
-        const updatedMessage = await storage.getMessage(assistantMessage.id);
-        if (updatedMessage) {
-          assistantMessage = {
-            ...updatedMessage,
-            content: assistantContent
-          };
-          // Update the message in storage
-          await storage.updateMessage(assistantMessage.id, {
-            content: assistantContent
-          });
-        }
-        
-        // Final message to signal completion
-        res.write(`data: ${JSON.stringify({ 
-          type: "done", 
-          userMessage,
-          assistantMessage
-        })}\n\n`);
+
+        // Directly pipe the raw OpenRouter response stream to the client response object 'res'
+        response.body.pipe(res);
+
+        // Add a return statement immediately after piping, if not already the end of the function block
+        return;
         
         // Update the conversation title if needed
         const conversation = await storage.getConversation(conversationId);
