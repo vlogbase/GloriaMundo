@@ -75,7 +75,8 @@ export const useStreamingChat = () => {
 
     // Determine if the request should attempt streaming (stream unless an image is present)
     const shouldAttemptStream = !image;
-    console.log('[STREAM DEBUG] Checking if should stream...', { shouldAttemptStream, image, selectedModel, customOpenRouterModelId });
+    const initialTimestamp = new Date().toISOString();
+    console.log(`[STREAM DEBUG] [${initialTimestamp}] Checking if should stream...`, { shouldAttemptStream, image, selectedModel, customOpenRouterModelId });
     
     setIsLoadingResponse(true);
     
@@ -123,7 +124,8 @@ export const useStreamingChat = () => {
       
       // If we should attempt streaming, set it up
       if (shouldAttemptStream) {
-        console.log('[STREAM DEBUG] >>> Attempting STREAMING path <<<');
+        const streamingPathTimestamp = new Date().toISOString();
+        console.log(`[STREAM DEBUG] [${streamingPathTimestamp}] >>> Attempting STREAMING path <<<`);
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
@@ -145,10 +147,12 @@ export const useStreamingChat = () => {
         
         eventSource.onmessage = (event) => {
           try {
-            console.log('[STREAM DEBUG] eventSource.onmessage: Received event', { eventData: event.data });
+            const onMessageTimestamp = new Date().toISOString();
+            console.log(`[STREAM DEBUG] [${onMessageTimestamp}] eventSource.onmessage: Received event`, { eventData: event.data });
             // Check for the standard end-of-stream signal from OpenRouter
             if (event.data === '[DONE]') {
-              console.log("[STREAM DEBUG] Stream [DONE] received. Finalizing response.");
+              const doneTimestamp = new Date().toISOString();
+              console.log(`[STREAM DEBUG] [${doneTimestamp}] Stream [DONE] received. Finalizing response.`);
 
               // --- Finalization Logic ---
               // Retrieve the final accumulated content (if needed)
@@ -297,20 +301,35 @@ export const useStreamingChat = () => {
             const delta = parsedData.choices?.[0]?.delta;
             let extractedReasoningChunk = null;
 
+            // Get current timestamp for logs
+            const logTimestamp = new Date().toISOString();
+            
             // Check for standard reasoning/tool fields in the delta first
             if (delta?.tool_calls) {
                 extractedReasoningChunk = { toolCalls: delta.tool_calls };
-                console.log("[STREAM DEBUG] Detected reasoning chunk (tool_calls):", extractedReasoningChunk);
+                console.log(`[STREAM DEBUG] [${logTimestamp}] Detected reasoning chunk (tool_calls):`, extractedReasoningChunk);
             } else if (delta?.function_call) {
                 extractedReasoningChunk = { functionCall: delta.function_call };
-                console.log("[STREAM DEBUG] Detected reasoning chunk (function_call):", extractedReasoningChunk);
+                console.log(`[STREAM DEBUG] [${logTimestamp}] Detected reasoning chunk (function_call):`, extractedReasoningChunk);
             } else {
                 // Fallback check: Check for reasoning field at the message level (outside delta)
                 // Structure might be choices[0].message.reasoning or choices[0].reasoning
                 const reasoningContent = parsedData.choices?.[0]?.message?.reasoning || parsedData.choices?.[0]?.reasoning;
+                
+                // Log the full parsed data structure for debugging (only the first time)
+                if (!streamingMessageRef.current?.reasoningData && parsedData.choices && parsedData.choices.length > 0) {
+                    console.log(`[STREAM DEBUG] [${logTimestamp}] Examining response structure for reasoning data:`, {
+                        hasMessageField: !!parsedData.choices[0].message,
+                        messageKeys: parsedData.choices[0].message ? Object.keys(parsedData.choices[0].message) : [],
+                        choiceKeys: Object.keys(parsedData.choices[0]),
+                        hasReasoningInMessage: !!parsedData.choices[0]?.message?.reasoning,
+                        hasReasoningAtChoiceLevel: !!parsedData.choices[0]?.reasoning
+                    });
+                }
+                
                 if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
                     extractedReasoningChunk = { thinking_process: reasoningContent }; // Store under a custom key
-                    console.log("[STREAM DEBUG] Detected reasoning chunk (string field):", reasoningContent);
+                    console.log(`[STREAM DEBUG] [${logTimestamp}] Detected reasoning chunk (string field):`, reasoningContent);
                 }
             }
             // TODO: Add checks for other potential fields like logprobs based on testing
