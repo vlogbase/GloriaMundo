@@ -288,7 +288,16 @@ export const ModelPresets = () => {
 
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
-    const modelId = activatePreset(presetKey);
+    let modelId = activatePreset(presetKey);
+    
+    // Map legacy model types to actual OpenRouter model IDs
+    if (modelId === 'reasoning') {
+      modelId = 'openai/o3-mini-high'; // Map reasoning to o3 Mini
+      console.log(`Mapped legacy 'reasoning' type to OpenRouter model: ${modelId}`);
+    } else if (modelId === 'search') {
+      modelId = 'perplexity/sonar-pro'; // Map search to Sonar Pro
+      console.log(`Mapped legacy 'search' type to OpenRouter model: ${modelId}`);
+    }
     
     // Only proceed if there's an actual model assigned to this preset
     if (modelId) {
@@ -432,7 +441,11 @@ export const ModelPresets = () => {
                 >
                   {getPresetIcon(presetKey, modelId || '')}
                   {modelId ? (
-                    <span className="truncate max-w-[100px]">{formatModelName(modelId)}</span>
+                    <span className="truncate max-w-[100px]">
+                      {modelId === 'reasoning' ? 'o3 Mini' : 
+                       modelId === 'search' ? 'Sonar Pro' : 
+                       formatModelName(modelId)}
+                    </span>
                   ) : (
                     <span className="text-muted-foreground">Preset {getPresetNumber(key)}</span>
                   )}
