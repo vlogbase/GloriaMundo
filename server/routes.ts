@@ -1146,7 +1146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the model configuration based on the requested model type
-      const modelConfig = MODEL_CONFIGS.reasoning; // Always use reasoning for streaming
+      const modelConfig = MODEL_CONFIGS[modelType] || MODEL_CONFIGS.reasoning; // Allow any model type for streaming
       
       // Always use streaming for this endpoint
       const shouldStream = true;
