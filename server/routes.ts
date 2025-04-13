@@ -1310,6 +1310,7 @@ Format your responses using markdown for better readability and organization.`;
           console.log('Created clean messages for OpenRouter streaming API');
         }
         
+        console.log('[STREAM HANDLER] Preparing API payload...');
         const payload = {
           model: modelParam,
           messages: cleanMessages,
@@ -1324,6 +1325,7 @@ Format your responses using markdown for better readability and organization.`;
         res.setHeader('Connection', 'keep-alive');
         
         // Make the API request
+        console.log('[STREAM HANDLER] Initiating fetch to OpenRouter...');
         const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
@@ -1335,16 +1337,22 @@ Format your responses using markdown for better readability and organization.`;
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`${modelConfig.apiProvider} API streaming error: ${errorText}`);
+          console.error(`[STREAM HANDLER] ${modelConfig.apiProvider} API streaming error: ${errorText}`);
+          console.error(`[STREAM HANDLER] Response status: ${response.status}, headers:`, response.headers);
           
           // Parse the error using our enhanced error handler
           const apiError = parseOpenRouterError(response.status, errorText);
+          
+          // Log the structured error information
+          console.error(`[STREAM HANDLER] Parsed error category: ${apiError.category}, details:`, apiError.details);
           
           // Throw a more detailed error message
           throw new Error(
             `${modelConfig.apiProvider} API error: ${apiError.message} (Status: ${response.status}, Category: ${apiError.category})`
           );
         }
+        
+        console.log(`[STREAM HANDLER] ${modelConfig.apiProvider} response successful: ${response.status} ${response.statusText}`);
 
         // Set headers for SSE
         res.writeHead(200, {
@@ -1354,7 +1362,15 @@ Format your responses using markdown for better readability and organization.`;
         });
 
         // Directly pipe the raw OpenRouter response stream to the client response object 'res'
-        response.body.pipe(res);
+        console.log('[STREAM HANDLER] Stream response received successfully, piping to client...');
+        if (response.body) {
+          // Safe casting to avoid TypeScript errors with pipe method
+          const nodeReadable = response.body as unknown as NodeJS.ReadableStream;
+          nodeReadable.pipe(res);
+          console.log('[STREAM HANDLER] Stream piping initiated');
+        } else {
+          throw new Error('Response body is null or undefined');
+        }
 
         // Add a return statement immediately after piping, if not already the end of the function block
         return;
@@ -1464,8 +1480,22 @@ Format your responses using markdown for better readability and organization.`;
         res.end();
       }
     } catch (error) {
-      console.error('Server streaming error:', error);
-      res.status(500).json({ message: "Failed to process streaming message" });
+      console.error('[STREAM HANDLER] Outer error handler caught exception:', error);
+      // Provide more detailed error information for debugging
+      const errorDetail = error instanceof Error ? error.message : String(error);
+      console.error(`[STREAM HANDLER] Error details: ${errorDetail}`);
+      
+      // Try to send a properly formatted error response
+      try {
+        res.status(500).json({
+          message: "Failed to process streaming message",
+          error: errorDetail,
+          timestamp: new Date().toISOString()
+        });
+      } catch (responseError) {
+        // In case response has already been sent/ended
+        console.error('[STREAM HANDLER] Could not send error response:', responseError);
+      }
     }
   });
 
