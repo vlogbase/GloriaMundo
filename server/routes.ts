@@ -1312,7 +1312,8 @@ Format your responses using markdown for better readability and organization.`;
           console.log('Created clean messages for OpenRouter streaming API');
         }
         
-        console.log('[STREAM HANDLER] Preparing API payload...');
+        const logTimestamp = new Date().toISOString();
+        console.log(`[STREAM DEBUG] [${logTimestamp}] Preparing API payload...`);
         const payload = {
           model: modelParam,
           messages: cleanMessages,
@@ -1327,7 +1328,7 @@ Format your responses using markdown for better readability and organization.`;
         res.setHeader('Connection', 'keep-alive');
         
         // Make the API request
-        console.log('[STREAM HANDLER] Initiating fetch to OpenRouter...');
+        console.log(`[STREAM DEBUG] [${logTimestamp}] Initiating fetch to OpenRouter...`);
         const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
@@ -1377,7 +1378,7 @@ Format your responses using markdown for better readability and organization.`;
           );
         }
         
-        console.log(`[STREAM HANDLER] ${modelConfig.apiProvider} response successful: ${response.status} ${response.statusText}`);
+        console.log(`[STREAM DEBUG] [${logTimestamp}] ${modelConfig.apiProvider} response successful: ${response.status} ${response.statusText}`);
 
         // Set headers for SSE
         res.writeHead(200, {
@@ -1387,12 +1388,12 @@ Format your responses using markdown for better readability and organization.`;
         });
 
         // Directly pipe the raw OpenRouter response stream to the client response object 'res'
-        console.log('[STREAM HANDLER] Stream response received successfully, piping to client...');
+        console.log(`[STREAM DEBUG] [${logTimestamp}] Stream response received successfully, piping to client...`);
         if (response.body) {
           // Safe casting to avoid TypeScript errors with pipe method
           const nodeReadable = response.body as unknown as NodeJS.ReadableStream;
           nodeReadable.pipe(res);
-          console.log('[STREAM HANDLER] Stream piping initiated');
+          console.log(`[STREAM DEBUG] [${logTimestamp}] Stream piping initiated`);
         } else {
           throw new Error('Response body is null or undefined');
         }
@@ -1457,12 +1458,13 @@ Format your responses using markdown for better readability and organization.`;
         // Create a detailed error message for the client using our error categorization system
         let errorMessage = "Failed to process streaming response";
         
+        const errorTimestamp = new Date().toISOString();
         if (error instanceof Error) {
-          console.error(`[STREAM HANDLER] Error in streaming response:`, error.message);
-          console.error(`[STREAM HANDLER] Error stack trace:`, error.stack);
+          console.error(`[STREAM DEBUG] [${errorTimestamp}] Error in streaming response:`, error.message);
+          console.error(`[STREAM DEBUG] [${errorTimestamp}] Error stack trace:`, error.stack);
           
           // Log more details about the error context
-          console.error(`[STREAM HANDLER] Error context: modelType=${modelType}, conversationId=${conversationId}`);
+          console.error(`[STREAM DEBUG] [${errorTimestamp}] Error context: modelType=${modelType}, conversationId=${conversationId}`);
           
           let apiError: ApiError;
           
@@ -1473,12 +1475,12 @@ Format your responses using markdown for better readability and organization.`;
             const categoryMatch = errorText.match(/Category:\s+(\w+)/);
             const category = categoryMatch ? categoryMatch[1] as ErrorCategory : ErrorCategory.UNKNOWN;
             
-            console.log(`[STREAM HANDLER] Parsed error category: ${category}`);
+            console.log(`[STREAM DEBUG] [${errorTimestamp}] Parsed error category: ${category}`);
             // Get user-friendly message based on category
             errorMessage = getUserMessageForCategory(category, modelType);
-            console.log(`[STREAM HANDLER] User-friendly error message: ${errorMessage}`);
+            console.log(`[STREAM DEBUG] [${errorTimestamp}] User-friendly error message: ${errorMessage}`);
           } else if (error.message.includes("Failed to get reader")) {
-            console.log(`[STREAM HANDLER] Reader error detected`);
+            console.log(`[STREAM DEBUG] [${errorTimestamp}] Reader error detected`);
             apiError = {
               status: 500,
               category: ErrorCategory.INTERNAL_SERVER,
@@ -1488,13 +1490,13 @@ Format your responses using markdown for better readability and organization.`;
             errorMessage = apiError.userMessage;
           } else {
             // Use handleInternalError to categorize other types of errors
-            console.log(`[STREAM HANDLER] Uncategorized error, using handleInternalError()`);
+            console.log(`[STREAM DEBUG] [${errorTimestamp}] Uncategorized error, using handleInternalError()`);
             apiError = handleInternalError(error, modelConfig.apiProvider);
             errorMessage = apiError.userMessage;
-            console.log(`[STREAM HANDLER] Categorized as: ${apiError.category}`);
+            console.log(`[STREAM DEBUG] [${errorTimestamp}] Categorized as: ${apiError.category}`);
           }
         } else {
-          console.error(`[STREAM HANDLER] Unknown error in streaming response (not an Error instance):`, error);
+          console.error(`[STREAM DEBUG] [${errorTimestamp}] Unknown error in streaming response (not an Error instance):`, error);
           // Handle unknown errors
           const apiError = {
             status: 500,
@@ -1503,7 +1505,7 @@ Format your responses using markdown for better readability and organization.`;
             userMessage: getUserMessageForCategory(ErrorCategory.UNKNOWN, modelType)
           };
           errorMessage = apiError.userMessage;
-          console.log(`[STREAM HANDLER] Using generic error message: ${errorMessage}`);
+          console.log(`[STREAM DEBUG] [${errorTimestamp}] Using generic error message: ${errorMessage}`);
         }
         
         // Send the error event to the client
