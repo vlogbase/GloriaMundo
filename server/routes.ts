@@ -1337,14 +1337,37 @@ Format your responses using markdown for better readability and organization.`;
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`[STREAM HANDLER] ${modelConfig.apiProvider} API streaming error: ${errorText}`);
-          console.error(`[STREAM HANDLER] Response status: ${response.status}, headers:`, response.headers);
+          const timestamp = new Date().toISOString();
+          console.error(`[STREAM DEBUG] [${timestamp}] ${modelConfig.apiProvider} API streaming error: ${errorText}`);
+          console.error(`[STREAM DEBUG] [${timestamp}] Response status: ${response.status}, headers:`, response.headers);
           
           // Parse the error using our enhanced error handler
           const apiError = parseOpenRouterError(response.status, errorText);
           
           // Log the structured error information
-          console.error(`[STREAM HANDLER] Parsed error category: ${apiError.category}, details:`, apiError.details);
+          console.error(`[STREAM DEBUG] [${timestamp}] Parsed error category: ${apiError.category}, details:`, apiError.details);
+          
+          // Send a structured error event to the client before closing the stream
+          try {
+            // Send a special error event with details that the client can handle
+            res.write(`data: ${JSON.stringify({
+              error: true,
+              status: response.status,
+              message: apiError.userMessage,
+              category: apiError.category,
+              timestamp
+            })}\n\n`);
+            
+            // Send a final [DONE] event to signal the end of the stream
+            res.write('data: [DONE]\n\n');
+            res.end();
+            console.log(`[STREAM DEBUG] [${timestamp}] Sent structured error event to client`);
+            
+            // Return early to prevent further execution
+            return;
+          } catch (sendError) {
+            console.error(`[STREAM DEBUG] [${timestamp}] Failed to send error event to client:`, sendError);
+          }
           
           // Throw a more detailed error message
           throw new Error(

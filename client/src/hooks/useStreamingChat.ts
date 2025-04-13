@@ -227,6 +227,12 @@ export const useStreamingChat = () => {
             const deltaContent = parsedData.choices?.[0]?.delta?.content;
 
             if (deltaContent && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
+              // Log every 10th content chunk to avoid flooding the console
+              const currentLength = streamingMessageRef.current.content.length;
+              if (currentLength % 100 === 0 || currentLength < 20) {
+                console.log(`[STREAM DEBUG] Content chunk received at position ${currentLength}, chunk length: ${deltaContent.length}`);
+              }
+              
               // Append the content chunk to our tracked content
               streamingMessageRef.current.content += deltaContent;
 
@@ -242,8 +248,8 @@ export const useStreamingChat = () => {
 
 
             // --- Reasoning Data Handling ---
-            // Ensure assistantMessageId is available from the outer scope or ref
-            const assistantMessageId = streamingMessageRef.current?.id;
+            // We're reusing the assistantMessageId from the earlier scope (scope collision fix)
+            // const assistantMessageId = streamingMessageRef.current?.id;
             const delta = parsedData.choices?.[0]?.delta;
             let extractedReasoningChunk = null;
 
@@ -274,7 +280,12 @@ export const useStreamingChat = () => {
 
                 // Accumulate simple 'thinking_process' string
                 if (extractedReasoningChunk.thinking_process) {
+                    console.log("[STREAM DEBUG] Accumulating thinking_process chunk:", {
+                        existingLength: (updatedReasoning.thinking_process || "").length,
+                        newChunkLength: extractedReasoningChunk.thinking_process.length
+                    });
                     updatedReasoning.thinking_process = (updatedReasoning.thinking_process || "") + extractedReasoningChunk.thinking_process;
+                    console.log("[STREAM DEBUG] Updated thinking_process total length:", updatedReasoning.thinking_process.length);
                 }
 
                 // Accumulate toolCalls (using previous intelligent merge logic)
