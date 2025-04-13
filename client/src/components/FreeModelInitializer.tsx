@@ -5,13 +5,14 @@ import { useModelSelection } from '@/hooks/useModelSelection';
 /**
  * This component connects the free model selection logic to the model selection context
  * It ensures that a free model is automatically selected on initial load
- * and maintains the free model selection even when switching to/from paid models
+ * and maintains the free model selection only when explicitly using the free tier button
  */
 export const FreeModelInitializer: React.FC = () => {
-  const { freeModels, activeFreeTierModel } = useModelPresets();
+  const { freeModels, activeFreeTierModel, activePreset } = useModelPresets();
   const { selectedModel, customOpenRouterModelId, setSelectedModel, setCustomOpenRouterModelId } = useModelSelection();
   const hasSetInitialModel = useRef(false);
   const previousModelType = useRef<string | null>(null);
+  const isFreeTierExplicitlySelected = useRef(false);
 
   // On mount and when free models or the active free tier model changes,
   // set the default model to the free model if it hasn't been set yet
@@ -20,7 +21,8 @@ export const FreeModelInitializer: React.FC = () => {
     // 1. We have free models
     // 2. We have an active free tier model (selected either automatically or by the user)
     // 3. We haven't already set the initial model
-    if (freeModels.length > 0 && activeFreeTierModel && !hasSetInitialModel.current) {
+    // 4. No specific preset is active
+    if (freeModels.length > 0 && activeFreeTierModel && !hasSetInitialModel.current && !activePreset) {
       console.log(`Setting initial model to free model: ${activeFreeTierModel}`);
       
       // Set the OpenRouter model type
@@ -33,25 +35,37 @@ export const FreeModelInitializer: React.FC = () => {
       hasSetInitialModel.current = true;
       previousModelType.current = 'openrouter';
     }
-  }, [freeModels, activeFreeTierModel, setSelectedModel, setCustomOpenRouterModelId]);
+  }, [freeModels, activeFreeTierModel, activePreset, setSelectedModel, setCustomOpenRouterModelId]);
 
   // Monitor selectedModel changes to handle transitions between free and paid models
   useEffect(() => {
-    // If we're switching back to openrouter model type (likely from the free tier button)
+    // If we're switching back to openrouter model type AND a preset is not active
+    // (this handles the case where the free tier button was explicitly clicked)
     // and we have an active free tier model
     if (
       selectedModel === 'openrouter' && 
       previousModelType.current !== 'openrouter' && 
       activeFreeTierModel && 
-      customOpenRouterModelId !== activeFreeTierModel
+      customOpenRouterModelId !== activeFreeTierModel &&
+      !activePreset &&  // Don't override a preset selection
+      isFreeTierExplicitlySelected.current  // Only apply when free tier is explicitly selected
     ) {
       console.log(`Switching back to free model: ${activeFreeTierModel}`);
       setCustomOpenRouterModelId(activeFreeTierModel);
     }
     
+    // Track if we explicitly selected the free tier
+    // This happens when we switch to 'openrouter' type with no active preset
+    if (selectedModel === 'openrouter' && !activePreset) {
+      isFreeTierExplicitlySelected.current = true;
+    } else if (activePreset) {
+      // When a preset is active, we're not using the free tier button
+      isFreeTierExplicitlySelected.current = false;
+    }
+    
     // Update previous model type for next comparison
     previousModelType.current = selectedModel;
-  }, [selectedModel, activeFreeTierModel, customOpenRouterModelId, setCustomOpenRouterModelId]);
+  }, [selectedModel, activeFreeTierModel, activePreset, customOpenRouterModelId, setCustomOpenRouterModelId]);
 
   // This component doesn't render anything
   return null;

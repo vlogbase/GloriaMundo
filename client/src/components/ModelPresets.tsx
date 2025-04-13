@@ -289,7 +289,21 @@ export const ModelPresets = () => {
   // Handle click to activate a preset
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     const modelId = activatePreset(presetKey);
-    handleActivation(presetKey, modelId);
+    
+    // Only proceed if there's an actual model assigned to this preset
+    if (modelId) {
+      // If this preset has a model assigned to it, use that model
+      handleActivation(presetKey, modelId);
+      
+      console.log(`Preset ${presetKey} activated with model: ${modelId}`);
+    } else {
+      // If no model is assigned, show a toast notification
+      toast({
+        title: "No Model Assigned",
+        description: `Preset ${getPresetNumber(presetKey)} doesn't have a model assigned yet. Click the edit button to assign a model.`,
+        variant: "destructive",
+      });
+    }
   };
   
 
