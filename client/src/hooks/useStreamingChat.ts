@@ -146,146 +146,73 @@ export const useStreamingChat = () => {
         eventSourceRef.current = eventSource;
         
         eventSource.onmessage = (event) => {
+          // --- Simplified onmessage Handler ---
           try {
-            const onMessageTimestamp = new Date().toISOString();
-            console.log(`[STREAM DEBUG] [${onMessageTimestamp}] eventSource.onmessage: Received event`, { eventData: event.data });
-            // Check for the standard end-of-stream signal from OpenRouter
+            // Check for the standard end-of-stream signal
             if (event.data === '[DONE]') {
-              const doneTimestamp = new Date().toISOString();
-              console.log(`[STREAM DEBUG] [${doneTimestamp}] Stream [DONE] received. Finalizing response.`);
+              console.log("[STREAM DEBUG] Simplified: Stream [DONE] received.");
 
-              // --- Finalization Logic ---
-              // Retrieve the final accumulated content (if needed)
-              const finalContent = streamingMessageRef.current?.content || '';
-              const finalReasoning = streamingMessageRef.current?.reasoningData; // We'll handle this later
-              
-              // Log final state for debugging
-              console.log("[STREAM DEBUG] Final content length:", finalContent.length);
-              console.log("[STREAM DEBUG] Final reasoning data:", finalReasoning ? 
-                          Object.keys(finalReasoning).map(key => `${key}: ${typeof finalReasoning[key]}`).join(', ') : 
-                          "none");
+              // Finalization Logic (minimal)
               const assistantMsgId = streamingMessageRef.current?.id;
+              // TODO: Add back optional API call to save final content if needed
 
-              // Optional: Make API call to save final content/reasoning if needed
-              // Example: (ensure apiRequest function exists and handles PATCH)
-              /*
-              if (assistantMsgId) {
-                apiRequest("PATCH", `/api/conversations/${conversationId}/messages/${assistantMsgId}`, {
-                  content: finalContent,
-                  // reasoningData: finalReasoning // Add later when reasoning is handled
-                }).catch(error => {
-                  console.error("Error saving final message content:", error);
-                });
-              }
-              */
+              // Ensure these state setters are accessible in this scope
+              setIsLoadingResponse(false);
+              setStreamingComplete(true);
+              setTimeout(() => setStreamingComplete(false), 100);
 
-              // Update state to indicate loading/streaming finished
-              setIsLoadingResponse(false); // Ensure this state setter exists
-              setStreamingComplete(true); // Ensure this state setter exists
-              setTimeout(() => setStreamingComplete(false), 100); // Reset UI indicator
-
-              // Close the EventSource connection
               if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
-                console.log("EventSource closed.");
+                console.log("[STREAM DEBUG] Simplified: EventSource closed.");
               }
-              streamingMessageRef.current = null; // Clear the streaming message ref
+              streamingMessageRef.current = null;
 
-              // Optional: Notify other parts of the app if needed
               // Ensure conversationId is accessible in this scope
-              window.dispatchEvent(new CustomEvent('message-sent', {
-                detail: { conversationId }
-              }));
-
+              window.dispatchEvent(new CustomEvent('message-sent', { detail: { conversationId } }));
               return; // Stop processing this event
             }
 
-            // If not '[DONE]', parse the JSON payload from OpenRouter
-            console.log('[STREAM DEBUG] Parsing event data:', event.data.substring(0, 100) + (event.data.length > 100 ? '...' : ''));
-            
-            // Check if this is an error event from the server
-            try {
-              if (event.data.includes('"error":true') || event.data.includes('"type":"error"')) {
-                const errorData = JSON.parse(event.data);
-                console.error('[STREAM DEBUG] Received error event from server:', errorData);
-                
-                // Show the error to the user
-                toast({
-                  variant: "destructive",
-                  title: "AI Model Error",
-                  description: errorData.message || "An error occurred while generating the response"
-                });
-                
-                // Cleanup and exit
-                setIsLoadingResponse(false);
-                if (eventSourceRef.current) {
-                  eventSourceRef.current.close();
-                  eventSourceRef.current = null;
-                }
-                
-                // If we have a partial message, consider removing it
-                if (streamingMessageRef.current) {
-                  if (errorData.status >= 400 && errorData.status !== 429) {
-                    // Only remove for permanent errors, not rate limiting
-                    setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
-                  }
-                  streamingMessageRef.current = null;
-                }
-                
-                return; // Stop processing this event
-              }
-            } catch (errorCheckError) {
-              // If we can't parse it as an error, continue normal processing
-              console.log('[STREAM DEBUG] Error check failed, continuing with normal processing:', errorCheckError);
-            }
-            
+            // If not '[DONE]', parse the JSON payload
             const parsedData = JSON.parse(event.data);
+            console.log("[STREAM DEBUG] Simplified: Received event data"); // Simplified log
 
-            // --- Handle first chunk ---
+            // --- Handle first chunk & initialize placeholder message ---
+            // Ensure streamingMessageRef, parsedData.id, Message type, conversationId, selectedModel,
+            // customOpenRouterModelId, setMessages, and tempUserMessage are accessible
             let assistantMessageId = streamingMessageRef.current?.id;
             if (!assistantMessageId && parsedData.id) {
-                // This seems to be the first chunk containing an ID for the assistant message
-                const newMessagePlaceholder: Message = { // Ensure Message type is imported/correct
-                   id: parsedData.id, // Use ID from stream
-                   conversationId: conversationId, // Ensure conversationId is accessible
+                const newMessagePlaceholder: Message = {
+                   id: parsedData.id,
+                   conversationId: conversationId,
                    role: "assistant",
-                   content: "", // Start empty
+                   content: "",
                    citations: null,
+                   reasoningData: {}, // Keep empty for now
                    createdAt: new Date().toISOString(),
-                   // Ensure modelId is set if needed/available, e.g., from selectedModel
-                   modelId: selectedModel || undefined // Ensure selectedModel is accessible here
+                   modelId: customOpenRouterModelId || selectedModel || undefined
                 };
-                // Add the placeholder to the messages state
-                setMessages((prev) => [...prev, newMessagePlaceholder]);
-                // Initialize the ref to track this message
+                // Ensure setMessages and tempUserMessage are accessible
+                // This logic assumes tempUserMessage might need to be replaced/handled correctly
+                setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, newMessagePlaceholder]);
                 streamingMessageRef.current = {
                    id: newMessagePlaceholder.id,
                    content: "",
                    reasoningData: {}
                 };
                 assistantMessageId = newMessagePlaceholder.id;
-                console.log("[STREAM DEBUG] Initialized streaming message with ID:", assistantMessageId);
+                console.log("[STREAM DEBUG] Simplified: Initialized message placeholder:", assistantMessageId);
             }
-            // --- End Handle first chunk ---
 
-
-            // --- Process content delta ---
-            // Extract the actual text content from the standard OpenRouter format
+            // --- Process content delta (Simplified) ---
             const deltaContent = parsedData.choices?.[0]?.delta?.content;
 
             if (deltaContent && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
-              // Log every 10th content chunk to avoid flooding the console
-              const currentLength = streamingMessageRef.current.content.length;
-              if (currentLength % 100 === 0 || currentLength < 20) {
-                console.log(`[STREAM DEBUG] Content chunk received at position ${currentLength}, chunk length: ${deltaContent.length}`);
-              }
-              
-              // Append the content chunk to our tracked content
+              // Append the content chunk to ref
               streamingMessageRef.current.content += deltaContent;
 
-              // Update the corresponding message in the React state
-              // Ensure setMessages is accessible here
+              // Update the message state
+              // Ensure setMessages is accessible
               setMessages((prev) => prev.map(msg =>
                 msg.id === assistantMessageId
                   ? { ...msg, content: streamingMessageRef.current!.content }
@@ -294,136 +221,26 @@ export const useStreamingChat = () => {
             }
             // --- End Process content delta ---
 
-
-            // --- Reasoning Data Handling ---
-            // We're reusing the assistantMessageId from the earlier scope (scope collision fix)
-            // const assistantMessageId = streamingMessageRef.current?.id;
-            const delta = parsedData.choices?.[0]?.delta;
-            let extractedReasoningChunk = null;
-
-            // Get current timestamp for logs
-            const logTimestamp = new Date().toISOString();
-            
-            // Check for standard reasoning/tool fields in the delta first
-            if (delta?.tool_calls) {
-                extractedReasoningChunk = { toolCalls: delta.tool_calls };
-                console.log(`[STREAM DEBUG] [${logTimestamp}] Detected reasoning chunk (tool_calls):`, extractedReasoningChunk);
-            } else if (delta?.function_call) {
-                extractedReasoningChunk = { functionCall: delta.function_call };
-                console.log(`[STREAM DEBUG] [${logTimestamp}] Detected reasoning chunk (function_call):`, extractedReasoningChunk);
-            } else {
-                // Fallback check: Check for reasoning field at the message level (outside delta)
-                // Structure might be choices[0].message.reasoning or choices[0].reasoning
-                const reasoningContent = parsedData.choices?.[0]?.message?.reasoning || parsedData.choices?.[0]?.reasoning;
-                
-                // Log the full parsed data structure for debugging (only the first time)
-                if (!streamingMessageRef.current?.reasoningData && parsedData.choices && parsedData.choices.length > 0) {
-                    console.log(`[STREAM DEBUG] [${logTimestamp}] Examining response structure for reasoning data:`, {
-                        hasMessageField: !!parsedData.choices[0].message,
-                        messageKeys: parsedData.choices[0].message ? Object.keys(parsedData.choices[0].message) : [],
-                        choiceKeys: Object.keys(parsedData.choices[0]),
-                        hasReasoningInMessage: !!parsedData.choices[0]?.message?.reasoning,
-                        hasReasoningAtChoiceLevel: !!parsedData.choices[0]?.reasoning
-                    });
-                }
-                
-                if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
-                    extractedReasoningChunk = { thinking_process: reasoningContent }; // Store under a custom key
-                    console.log(`[STREAM DEBUG] [${logTimestamp}] Detected reasoning chunk (string field):`, reasoningContent);
-                }
-            }
-            // TODO: Add checks for other potential fields like logprobs based on testing
-
-            if (extractedReasoningChunk && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
-                // --- Accumulate Reasoning Data ---
-                // NOTE: Simple accumulation might not be sufficient for complex cases like
-                // arguments arriving in multiple chunks. More sophisticated merging might be needed based on testing.
-                const currentReasoning = streamingMessageRef.current.reasoningData || {};
-                const updatedReasoning = { ...currentReasoning };
-
-                // Accumulate simple 'thinking_process' string
-                if (extractedReasoningChunk.thinking_process) {
-                    const accumulateTimestamp = new Date().toISOString();
-                    console.log(`[STREAM DEBUG] [${accumulateTimestamp}] Accumulating thinking_process chunk:`, {
-                        existingLength: (updatedReasoning.thinking_process || "").length,
-                        newChunkLength: extractedReasoningChunk.thinking_process.length
-                    });
-                    updatedReasoning.thinking_process = (updatedReasoning.thinking_process || "") + extractedReasoningChunk.thinking_process;
-                    console.log(`[STREAM DEBUG] [${accumulateTimestamp}] Updated thinking_process total length:`, updatedReasoning.thinking_process.length);
-                }
-
-                // Accumulate toolCalls (using previous intelligent merge logic)
-                if (extractedReasoningChunk.toolCalls && Array.isArray(extractedReasoningChunk.toolCalls)) {
-                    if (!updatedReasoning.toolCalls) updatedReasoning.toolCalls = [];
-                     extractedReasoningChunk.toolCalls.forEach((newToolCall: any) => {
-                       const existingCallIndex = newToolCall.index !== undefined ? updatedReasoning.toolCalls.findIndex((c: any) => c.index === newToolCall.index) : -1;
-                       const existingCallIndexById = (existingCallIndex === -1 && newToolCall.id) ? updatedReasoning.toolCalls.findIndex((c: any) => c.id === newToolCall.id) : -1;
-                       const finalIndex = existingCallIndex !== -1 ? existingCallIndex : existingCallIndexById;
-                       if (finalIndex > -1) {
-                         const existingCall = updatedReasoning.toolCalls[finalIndex];
-                         const functionUpdate = { ...(existingCall.function || {}), ...(newToolCall.function || {}) };
-                         if (newToolCall.function?.arguments && typeof existingCall.function?.arguments === 'string') {
-                           functionUpdate.arguments = existingCall.function.arguments + newToolCall.function.arguments;
-                         } else if (newToolCall.function?.arguments) {
-                            functionUpdate.arguments = newToolCall.function.arguments;
-                         }
-                         updatedReasoning.toolCalls[finalIndex] = { ...existingCall, ...newToolCall, function: functionUpdate };
-                       } else {
-                         updatedReasoning.toolCalls.push(newToolCall);
-                       }
-                     });
-                }
-                // Accumulate functionCall (using previous intelligent merge logic)
-                if (extractedReasoningChunk.functionCall) {
-                     if (!updatedReasoning.functionCall) {
-                         updatedReasoning.functionCall = extractedReasoningChunk.functionCall;
-                     } else {
-                         if (extractedReasoningChunk.functionCall.arguments &&
-                             typeof extractedReasoningChunk.functionCall.arguments === 'string' &&
-                             updatedReasoning.functionCall.arguments &&
-                             typeof updatedReasoning.functionCall.arguments === 'string')
-                         {
-                             updatedReasoning.functionCall.arguments += extractedReasoningChunk.functionCall.arguments;
-                         } else if (extractedReasoningChunk.functionCall.arguments) {
-                            updatedReasoning.functionCall.arguments = extractedReasoningChunk.functionCall.arguments;
-                         }
-                         updatedReasoning.functionCall = {...updatedReasoning.functionCall, ...extractedReasoningChunk.functionCall};
-                     }
-                }
-                // TODO: Add merging logic for other reasoning types here (e.g., logprobs)
-
-                streamingMessageRef.current.reasoningData = updatedReasoning;
-                // --- End Accumulate ---
-
-                // Update message state with the new reasoning data
-                // Ensure setMessages is accessible here
-                setMessages((prev) => prev.map(msg =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, reasoningData: { ...(streamingMessageRef.current!.reasoningData) } } // Ensure new object ref for react update
-                    : msg
-                ));
-            }
-            // --- End Reasoning Data Handling ---
+            // --- Reasoning Handling REMOVED for simplification ---
 
           } catch (parseError) {
-            // Keep existing error handling logic here (or adapt as needed)
-            console.error("[STREAM DEBUG] Error parsing SSE message:", parseError, "Raw data:", event.data);
-            // Ensure toast function is accessible here
+            // Ensure toast, eventSourceRef, setIsLoadingResponse, streamingMessageRef,
+            // setMessages, fallbackToNonStreaming (if used) are accessible
+            console.error("[STREAM DEBUG] Simplified: Error parsing SSE message:", parseError, "Raw data:", event.data);
             toast({ variant: "destructive", title: "Response Format Error", description: "Received invalid data from server." });
-            // Add fallback logic if needed
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
             }
-            // Ensure setIsLoadingResponse is accessible here
             setIsLoadingResponse(false);
-            // Maybe remove partial message if necessary
             if (streamingMessageRef.current) {
-              setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
-              streamingMessageRef.current = null;
-              fallbackToNonStreaming(conversationId, messageContent, image, content);
+                // Remove potentially incomplete message
+                setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
+                streamingMessageRef.current = null;
+                // fallbackToNonStreaming(...); // Consider if fallback is needed here
             }
           }
+          // --- End Simplified onmessage Handler ---
         };
         
         eventSource.onerror = (error) => {
