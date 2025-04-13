@@ -13,7 +13,7 @@ export const useStreamingChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
-  const { selectedModel } = useModelSelection();
+  const { selectedModel, selectedModelId } = useModelSelection();
   
   // Reference to the currently streaming message
   const streamingMessageRef = useRef<{
@@ -122,8 +122,20 @@ export const useStreamingChat = () => {
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
-        // Create a new EventSource connection
-        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?content=${encodeURIComponent(content)}${image ? `&image=${encodeURIComponent(image)}` : ''}&modelType=${selectedModel}`);
+        // Create a new EventSource connection with proper URL parameters
+        // Create a URLSearchParams object for proper parameter encoding
+        const params = new URLSearchParams();
+        params.append('content', content);
+        params.append('modelType', selectedModel);
+        
+        // Add optional parameters if they exist
+        if (image) params.append('image', image);
+        
+        // Add modelId parameter if available
+        if (selectedModelId) params.append('modelId', selectedModelId);
+        
+        // Create the EventSource with the properly encoded URL
+        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?${params.toString()}`);
         eventSourceRef.current = eventSource;
         
         eventSource.onmessage = (event) => {
