@@ -148,12 +148,18 @@ export const useStreamingChat = () => {
             console.log('[STREAM DEBUG] eventSource.onmessage: Received event', { eventData: event.data });
             // Check for the standard end-of-stream signal from OpenRouter
             if (event.data === '[DONE]') {
-              console.log("Stream [DONE] received.");
+              console.log("[STREAM DEBUG] Stream [DONE] received. Finalizing response.");
 
               // --- Finalization Logic ---
               // Retrieve the final accumulated content (if needed)
               const finalContent = streamingMessageRef.current?.content || '';
               const finalReasoning = streamingMessageRef.current?.reasoningData; // We'll handle this later
+              
+              // Log final state for debugging
+              console.log("[STREAM DEBUG] Final content length:", finalContent.length);
+              console.log("[STREAM DEBUG] Final reasoning data:", finalReasoning ? 
+                          Object.keys(finalReasoning).map(key => `${key}: ${typeof finalReasoning[key]}`).join(', ') : 
+                          "none");
               const assistantMsgId = streamingMessageRef.current?.id;
 
               // Optional: Make API call to save final content/reasoning if needed
@@ -192,6 +198,44 @@ export const useStreamingChat = () => {
             }
 
             // If not '[DONE]', parse the JSON payload from OpenRouter
+            console.log('[STREAM DEBUG] Parsing event data:', event.data.substring(0, 100) + (event.data.length > 100 ? '...' : ''));
+            
+            // Check if this is an error event from the server
+            try {
+              if (event.data.includes('"error":true') || event.data.includes('"type":"error"')) {
+                const errorData = JSON.parse(event.data);
+                console.error('[STREAM DEBUG] Received error event from server:', errorData);
+                
+                // Show the error to the user
+                toast({
+                  variant: "destructive",
+                  title: "AI Model Error",
+                  description: errorData.message || "An error occurred while generating the response"
+                });
+                
+                // Cleanup and exit
+                setIsLoadingResponse(false);
+                if (eventSourceRef.current) {
+                  eventSourceRef.current.close();
+                  eventSourceRef.current = null;
+                }
+                
+                // If we have a partial message, consider removing it
+                if (streamingMessageRef.current) {
+                  if (errorData.status >= 400 && errorData.status !== 429) {
+                    // Only remove for permanent errors, not rate limiting
+                    setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
+                  }
+                  streamingMessageRef.current = null;
+                }
+                
+                return; // Stop processing this event
+              }
+            } catch (errorCheckError) {
+              // If we can't parse it as an error, continue normal processing
+              console.log('[STREAM DEBUG] Error check failed, continuing with normal processing:', errorCheckError);
+            }
+            
             const parsedData = JSON.parse(event.data);
 
             // --- Handle first chunk ---
@@ -363,21 +407,35 @@ export const useStreamingChat = () => {
         };
         
         eventSource.onerror = (error) => {
-          console.error('[STREAM DEBUG] eventSource.onerror: Error event received', { error });
-          console.error("[STREAM DEBUG] EventSource full error object:", error);
+          const timestamp = new Date().toISOString();
+          console.error(`[STREAM DEBUG] [${timestamp}] eventSource.onerror: Error event received`, { error });
+          console.error(`[STREAM DEBUG] [${timestamp}] EventSource full error object:`, error);
           
           // Check if this is a connection error or server error
           let errorDescription = "Streaming failed. Falling back to standard mode.";
+          let errorCategory = "connection";
           
           // Try to determine the reason for the error
           if (error instanceof Event) {
             const target = error.target as EventSource;
             if (target && target.readyState === EventSource.CLOSED) {
               errorDescription = "Connection closed unexpectedly. Trying standard mode.";
+              errorCategory = "closed";
+              console.log(`[STREAM DEBUG] [${timestamp}] Connection CLOSED unexpectedly`);
             } else if (target && target.readyState === EventSource.CONNECTING) {
               errorDescription = "Connection interrupted. Trying standard mode.";
+              errorCategory = "interrupted";
+              console.log(`[STREAM DEBUG] [${timestamp}] Connection INTERRUPTED`);
             }
           }
+          
+          // Log additional diagnostics
+          console.log(`[STREAM DEBUG] [${timestamp}] Error diagnostics:`, {
+            streamingMessageId: streamingMessageRef.current?.id,
+            contentAccumulatedLength: streamingMessageRef.current?.content?.length || 0,
+            hasReasoningData: !!streamingMessageRef.current?.reasoningData,
+            errorCategory
+          });
           
           toast({
             variant: "destructive",
@@ -409,11 +467,38 @@ export const useStreamingChat = () => {
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
-      console.error("Error sending message:", error);
+      const timestamp = new Date().toISOString();
+      console.error(`[STREAM DEBUG] [${timestamp}] Error sending message:`, error);
+      
+      // Extract meaningful error information
+      let errorMessage = "Failed to send message";
+      let errorCategory = "unknown";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("network") || error.message.includes("fetch")) {
+          errorCategory = "network";
+          errorMessage = "Network error. Please check your connection.";
+        } else if (error.message.includes("timeout")) {
+          errorCategory = "timeout";
+          errorMessage = "Request timed out. Server is taking too long to respond.";
+        } else if (error.message.includes("model")) {
+          errorCategory = "model";
+          errorMessage = error.message;
+        } else if (error.message.length > 0) {
+          errorMessage = error.message;
+        }
+      }
+      
+      console.log(`[STREAM DEBUG] [${timestamp}] Categorized error:`, {
+        category: errorCategory,
+        message: errorMessage,
+        originalError: error instanceof Error ? error.message : String(error)
+      });
+      
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to send message",
+        description: errorMessage,
       });
       
       // Remove the optimistic message on error
@@ -505,24 +590,43 @@ export const useStreamingChat = () => {
         detail: { conversationId }
       }));
     } catch (error) {
-      console.error("Error in fallback request:", error);
+      const timestamp = new Date().toISOString();
+      console.error(`[STREAM DEBUG] [${timestamp}] Error in fallback request:`, error);
       
       // Create a more helpful error message
       let errorMessage = "Failed to send message";
+      let errorCategory = "unknown";
       
       if (error instanceof Error) {
         // Check for specific error patterns
         const errorText = error.message.toLowerCase();
         
         if (error.message.includes("Failed to fetch") || errorText.includes("network")) {
+          errorCategory = "network";
           errorMessage = "Network connection error. Please check your internet connection.";
         } else if (errorText.includes("timeout")) {
+          errorCategory = "timeout";
           errorMessage = "Request timed out. The server is taking too long to respond.";
+        } else if (errorText.includes("insufficient credits")) {
+          errorCategory = "credits";
+          errorMessage = "Insufficient credits. Please purchase more credits to continue.";
+        } else if (errorText.includes("model") && errorText.includes("not found")) {
+          errorCategory = "model_not_found";
+          errorMessage = "The selected AI model is not available. Please try a different model.";
+        } else if (errorText.includes("context length") || errorText.includes("token limit")) {
+          errorCategory = "context_length";
+          errorMessage = "Your message is too long for this model's context window. Please try a shorter message or a different model.";
         } else if (error.message.length > 0 && !error.message.includes("[object")) {
           // Use the error message if it's not just a generic object toString
           errorMessage = error.message;
         }
       }
+      
+      console.log(`[STREAM DEBUG] [${timestamp}] Categorized fallback error:`, {
+        category: errorCategory,
+        message: errorMessage,
+        originalError: error instanceof Error ? error.message : String(error)
+      });
       
       // Show toast with specific error message
       toast({

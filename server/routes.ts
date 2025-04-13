@@ -1103,7 +1103,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Streaming endpoint for chat messages
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
     try {
-      console.log('[STREAM HANDLER] Starting GET /stream request processing.');
+      const timestamp = new Date().toISOString();
+      console.log(`[STREAM DEBUG] [${timestamp}] Starting GET /stream request processing.`);
       const conversationId = parseInt(req.params.id);
       
       // Get the conversation first to check permissions
@@ -1126,7 +1127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      console.log('[STREAM HANDLER] Permissions checked, proceeding.');
+      console.log(`[STREAM DEBUG] [${timestamp}] Permissions checked, proceeding.`);
       
       const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
         content?: string;
@@ -1149,7 +1150,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the model configuration based on the requested model type
-      const modelConfig = MODEL_CONFIGS[modelType] || MODEL_CONFIGS.reasoning; // Allow any model type for streaming
+      // Allow any model type for streaming, ensuring type safety
+      const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       
       // Always use streaming for this endpoint
       const shouldStream = true;
