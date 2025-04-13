@@ -1136,12 +1136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
-      // Only allow reasoning model for streaming (fail fast for other models)
-      if (modelType !== "reasoning") {
-        return res.status(400).json({ 
-          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
-        });
-      }
+
       
       // If an image is present, don't allow streaming (since we need to use multimodal model)
       if (image) {
