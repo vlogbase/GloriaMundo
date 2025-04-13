@@ -2820,7 +2820,8 @@ Format your responses using markdown for better readability and organization.`;
           // Get conversationId from the associated message if available
           let conversationId = 'N/A';
           if (log.messageId && log.metadata && typeof log.metadata === 'object' && 'conversationId' in log.metadata) {
-            conversationId = log.metadata.conversationId;
+            const metadataObj = log.metadata as Record<string, any>;
+            conversationId = String(metadataObj.conversationId);
           }
           
           return `"${date}","${time}","${log.modelId}","${messageId}","${conversationId}",${log.promptTokens},${log.completionTokens},${log.imageCount},${log.creditsUsed},${costUSD}`;

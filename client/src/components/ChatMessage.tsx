@@ -162,20 +162,85 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
                   <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="reasoning">
                       <AccordionTrigger className="text-primary font-medium">
-                        View Reasoning
+                        View Model Reasoning
                       </AccordionTrigger>
                       <AccordionContent>
-                        {Object.entries(message.reasoningData).map(([key, value], index) => (
-                          <div key={index} className="mb-3">
-                            <h5 className="font-medium text-muted-foreground capitalize mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}:</h5>
-                            <div className="bg-muted/20 p-3 rounded whitespace-pre-wrap text-sm">
-                              {typeof value === 'string' 
-                                ? value 
-                                : JSON.stringify(value, null, 2)
+                        <div className="rounded-md border p-4 bg-muted/10">
+                          {/* Display tool calls if available (OpenAI format) */}
+                          {message.reasoningData.toolCalls && (
+                            <div className="mb-4">
+                              <h5 className="font-medium text-primary mb-2">Tool Calls:</h5>
+                              {Array.isArray(message.reasoningData.toolCalls) ? 
+                                message.reasoningData.toolCalls.map((toolCall: any, idx: number) => (
+                                  <div key={idx} className="mb-3 border-l-2 border-primary pl-3">
+                                    <div className="font-medium">{toolCall.function?.name || 'Unknown Tool'}</div>
+                                    {toolCall.function?.arguments && (
+                                      <div className="bg-muted/20 p-3 mt-1 rounded whitespace-pre-wrap text-sm font-mono">
+                                        {typeof toolCall.function.arguments === 'string' 
+                                          ? toolCall.function.arguments 
+                                          : JSON.stringify(toolCall.function.arguments, null, 2)
+                                        }
+                                      </div>
+                                    )}
+                                  </div>
+                                )) : (
+                                  <div className="bg-muted/20 p-3 rounded whitespace-pre-wrap text-sm font-mono">
+                                    {JSON.stringify(message.reasoningData.toolCalls, null, 2)}
+                                  </div>
+                                )
                               }
                             </div>
-                          </div>
-                        ))}
+                          )}
+
+                          {/* Display tool use if available (Claude/Anthropic format) */}
+                          {message.reasoningData.toolUse && (
+                            <div className="mb-4">
+                              <h5 className="font-medium text-primary mb-2">Tool Use:</h5>
+                              <div className="bg-muted/20 p-3 rounded whitespace-pre-wrap text-sm font-mono">
+                                {typeof message.reasoningData.toolUse === 'string' 
+                                  ? message.reasoningData.toolUse 
+                                  : JSON.stringify(message.reasoningData.toolUse, null, 2)
+                                }
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Display function call if available (older OpenAI format) */}
+                          {message.reasoningData.functionCall && (
+                            <div className="mb-4">
+                              <h5 className="font-medium text-primary mb-2">Function Call:</h5>
+                              <div className="font-medium">{typeof message.reasoningData.functionCall === 'object' && message.reasoningData.functionCall.name 
+                                ? message.reasoningData.functionCall.name 
+                                : 'Function'}</div>
+                              <div className="bg-muted/20 p-3 mt-1 rounded whitespace-pre-wrap text-sm font-mono">
+                                {typeof message.reasoningData.functionCall === 'string' 
+                                  ? message.reasoningData.functionCall 
+                                  : typeof message.reasoningData.functionCall === 'object' && message.reasoningData.functionCall.arguments
+                                    ? typeof message.reasoningData.functionCall.arguments === 'string'
+                                      ? message.reasoningData.functionCall.arguments
+                                      : JSON.stringify(message.reasoningData.functionCall.arguments, null, 2)
+                                    : JSON.stringify(message.reasoningData.functionCall, null, 2)
+                                }
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Display any other reasoning data keys */}
+                          {Object.entries(message.reasoningData)
+                            .filter(([key]) => !['toolCalls', 'toolUse', 'functionCall'].includes(key))
+                            .map(([key, value], index) => (
+                              <div key={index} className="mb-3">
+                                <h5 className="font-medium text-primary capitalize mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}:</h5>
+                                <div className="bg-muted/20 p-3 rounded whitespace-pre-wrap text-sm font-mono">
+                                  {typeof value === 'string' 
+                                    ? value 
+                                    : JSON.stringify(value, null, 2)
+                                  }
+                                </div>
+                              </div>
+                            ))
+                          }
+                        </div>
                       </AccordionContent>
                     </AccordionItem>
                   </Accordion>
