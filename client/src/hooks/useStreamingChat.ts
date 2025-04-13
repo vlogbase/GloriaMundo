@@ -75,6 +75,7 @@ export const useStreamingChat = () => {
 
     // Determine if the request should attempt streaming (stream unless an image is present)
     const shouldAttemptStream = !image;
+    console.log('[STREAM DEBUG] Checking if should stream...', { shouldAttemptStream, image, selectedModel, customOpenRouterModelId });
     
     setIsLoadingResponse(true);
     
@@ -122,6 +123,7 @@ export const useStreamingChat = () => {
       
       // If we should attempt streaming, set it up
       if (shouldAttemptStream) {
+        console.log('[STREAM DEBUG] >>> Attempting STREAMING path <<<');
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
@@ -143,6 +145,7 @@ export const useStreamingChat = () => {
         
         eventSource.onmessage = (event) => {
           try {
+            console.log('[STREAM DEBUG] eventSource.onmessage: Received event', { eventData: event.data });
             // Check for the standard end-of-stream signal from OpenRouter
             if (event.data === '[DONE]') {
               console.log("Stream [DONE] received.");
@@ -349,6 +352,7 @@ export const useStreamingChat = () => {
         };
         
         eventSource.onerror = (error) => {
+          console.error('[STREAM DEBUG] eventSource.onerror: Error event received', { error });
           console.error("EventSource error:", error);
           
           // Check if this is a connection error or server error
@@ -390,6 +394,7 @@ export const useStreamingChat = () => {
       }
       
       // For non-streaming approach (when images are present), use regular fetch via fallbackToNonStreaming
+      console.log('[STREAM DEBUG] >>> Taking NON-STREAMING fallback path <<<');
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
