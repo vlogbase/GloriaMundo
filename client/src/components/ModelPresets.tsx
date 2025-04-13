@@ -295,11 +295,22 @@ export const ModelPresets = () => {
   const handleFreeTierClick = () => {
     // If no free tier model is active, open the selection dialog
     if (!activeFreeTierModel) {
+      // First check if we have any free models available
+      if (freeModels.length === 0) {
+        toast({
+          title: "No Free Models Available",
+          description: "There are currently no free models available. Check back later or select a different model.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       setIsFreeTierDialogOpen(true);
     } else {
-      // If a free tier model is already active, activate it again
-      // Treat free tier models as preset1 type (general)
-      handleActivation('preset1', activeFreeTierModel);
+      // If a free tier model is already active, switch to it immediately
+      // This will cause the FreeModelInitializer to detect the switch back to 'openrouter'
+      // and use the active free tier model
+      setSelectedModel('openrouter');
       console.log(`Free tier model activated: ${activeFreeTierModel}`);
     }
   };
