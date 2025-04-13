@@ -174,22 +174,6 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
             </div>
             
             <div className="flex flex-col mt-1">
-              {/* Model information and token usage for AI messages */}
-              {message.modelId && (
-                <div className="text-xs text-muted-foreground font-mono mb-1">
-                  <span className="text-primary-foreground/60">Model: </span>
-                  <span className="font-semibold">{message.modelId}</span>
-                  {(message.promptTokens || message.completionTokens) && (
-                    <span className="ml-2">
-                      <span className="text-primary-foreground/60">Tokens: </span>
-                      <span className="font-semibold">
-                        {message.promptTokens || 0} in / {message.completionTokens || 0} out
-                      </span>
-                    </span>
-                  )}
-                </div>
-              )}
-              
               <div className="flex items-center">
                 <div className="text-xs text-muted-foreground">
                   {formatTime(message.createdAt)}
