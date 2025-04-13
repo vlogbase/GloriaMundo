@@ -139,8 +139,16 @@ export const useStreamingChat = () => {
         if (customOpenRouterModelId) params.append('modelId', customOpenRouterModelId);
         
         // Create the EventSource with the properly encoded URL
-        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?${params.toString()}`);
+        console.log("Creating EventSource for streaming with URL params:", params.toString());
+        const streamUrl = `/api/conversations/${conversationId}/messages/stream?${params.toString()}`;
+        console.log("Full streaming URL:", streamUrl);
+        const eventSource = new EventSource(streamUrl);
         eventSourceRef.current = eventSource;
+        
+        // Add onopen handler
+        eventSource.onopen = (event) => {
+          console.log("EventSource connection opened successfully:", event);
+        };
         
         eventSource.onmessage = (event) => {
           try {
@@ -354,16 +362,34 @@ export const useStreamingChat = () => {
           
           // Check if this is a connection error or server error
           let errorDescription = "Streaming failed. Falling back to standard mode.";
+          let readyState = "unknown";
           
           // Try to determine the reason for the error
           if (error instanceof Event) {
             const target = error.target as EventSource;
-            if (target && target.readyState === EventSource.CLOSED) {
-              errorDescription = "Connection closed unexpectedly. Trying standard mode.";
-            } else if (target && target.readyState === EventSource.CONNECTING) {
-              errorDescription = "Connection interrupted. Trying standard mode.";
+            if (target) {
+              readyState = target.readyState === 0 ? "CONNECTING" :
+                          target.readyState === 1 ? "OPEN" :
+                          target.readyState === 2 ? "CLOSED" : "UNKNOWN";
+              
+              console.log(`EventSource readyState: ${readyState} (${target.readyState})`);
+              
+              if (target.readyState === EventSource.CLOSED) {
+                errorDescription = "Connection closed unexpectedly. Trying standard mode.";
+              } else if (target.readyState === EventSource.CONNECTING) {
+                errorDescription = "Connection interrupted. Trying standard mode.";
+              }
             }
           }
+          
+          // Print more detailed debugging information
+          console.log(`EventSource error details:
+            - ReadyState: ${readyState}
+            - URL: ${streamUrl}
+            - User message content length: ${messageContent?.length || 0}
+            - Has image: ${image ? 'Yes' : 'No'}
+            - Has content: ${content ? 'Yes' : 'No'}
+          `);
           
           toast({
             variant: "destructive",
@@ -382,6 +408,7 @@ export const useStreamingChat = () => {
             streamingMessageRef.current = null;
             
             // Fall back to non-streaming request
+            console.log("Falling back to non-streaming mode due to EventSource error");
             fallbackToNonStreaming(conversationId, messageContent, image, content);
           }
         };
