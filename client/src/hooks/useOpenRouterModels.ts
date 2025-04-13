@@ -126,7 +126,9 @@ export const useOpenRouterModels = () => {
     if (!modelId) return "";
     
     // Apply specific formatting rules for required models
-    if (modelId.includes('openai/o3-mini')) {
+    if (modelId.includes('openai/o3-mini-high')) {
+      return 'o3 Mini H';  // Changed to "o3 Mini H" for high-tier version
+    } else if (modelId.includes('openai/o3-mini')) {
       return 'o3 Mini';
     } else if (modelId.includes('anthropic/claude-3.7-sonnet')) {
       return 'Claude 3.7 Sonnet';
