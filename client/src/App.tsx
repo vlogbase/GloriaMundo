@@ -7,6 +7,7 @@ import { ModelSelectionProvider } from "@/hooks/useModelSelection";
 import { ModelPresetsProvider } from "@/hooks/useModelPresets";
 import { Footer } from "@/components/Footer";
 import { CookieConsent } from "@/components/CookieConsent";
+import { FreeModelInitializer } from "@/components/FreeModelInitializer";
 import { useState, useEffect, lazy, Suspense } from "react";
 
 // Lazy-loaded components for code splitting
@@ -106,6 +107,8 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <ModelSelectionProvider>
           <ModelPresetsProvider>
+            {/* This component connects the free model selection to the model selection context */}
+            <FreeModelInitializer />
             <div className="flex flex-col min-h-screen">
               <div className="flex-grow">
                 <Router />
