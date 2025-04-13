@@ -84,7 +84,7 @@ async function generateAndSaveConversationTitle(conversationId: number): Promise
     }
     
     // Filter for free models
-    const freeModels = openRouterModels.filter(model => model.isFree === true);
+    const freeModels = openRouterModels.filter((model: { isFree: boolean }) => model.isFree === true);
     
     if (!freeModels.length) {
       console.warn("No free models available for title generation.");
@@ -103,7 +103,7 @@ async function generateAndSaveConversationTitle(conversationId: number): Promise
     // Find the first preferred model that's available for free
     let selectedModelId = null;
     for (const preferredModelId of preferredTitleModels) {
-      if (freeModels.some(model => model.id === preferredModelId)) {
+      if (freeModels.some((model: { id: string }) => model.id === preferredModelId)) {
         selectedModelId = preferredModelId;
         break;
       }
@@ -1613,7 +1613,8 @@ Format your responses using markdown for better readability and organization.`;
       
       // We've decided to completely remove streaming functionality
       // This simplifies the code and reduces potential bugs
-      const shouldStream = false; // Always false - streaming is disabled
+      // Enable streaming for OpenRouter models, which support it
+      const shouldStream = modelConfig.apiProvider === "openrouter";
 
       // Create user message
       const userMessage = await storage.createMessage({
@@ -2053,6 +2054,7 @@ Format your responses using markdown for better readability and organization.`;
         // Handle streaming vs non-streaming responses
         let assistantContent = "";
         let citations = null;
+        let reasoningData = null;
         
         // Initial message with empty content (will be updated with streaming data)
         let assistantMessage = await storage.createMessage({
@@ -2060,12 +2062,166 @@ Format your responses using markdown for better readability and organization.`;
           role: "assistant",
           content: " ", // Use space instead of empty string to pass validation
           citations: null,
+          reasoningData: null,
           modelId: modelId && modelId !== "" ? modelId : modelType, // Store the model ID correctly
         });
+
+        // If streaming is enabled, process the response as a stream
+        if (shouldStream) {
+          console.log(`Processing streaming response from ${modelConfig.apiProvider}`);
+          
+          // Send an initial message to the client that streaming has started
+          // We'll include the assistant message ID so the frontend can update it
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+          });
+
+          // Send the userMessage and assistantMessageId to the client
+          res.write(`data: ${JSON.stringify({ 
+            type: "initial", 
+            userMessage: userMessage,
+            assistantMessageId: assistantMessage.id 
+          })}\n\n`);
+          
+          // Process the stream
+          if (!response.body) {
+            throw new Error("Response body is undefined, cannot process stream");
+          }
+          
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let buffer = "";
+          
+          // Function to extract reasoning data from a streamed message
+          const extractReasoningData = (chunk: Record<string, any>): {reasoningText: string | null, isReasoningChunk: boolean} => {
+            // Check if this is a reasoning chunk
+            let isReasoningChunk = false;
+            let reasoningText = null;
+            
+            // Check if the chunk contains a tool_call with name "reasoning"
+            if (chunk?.delta?.tool_calls) {
+              const toolCalls = chunk.delta.tool_calls;
+              for (const toolCall of toolCalls) {
+                if (toolCall.function?.name === "reasoning") {
+                  isReasoningChunk = true;
+                  reasoningText = toolCall.function?.arguments || null;
+                  break;
+                }
+              }
+            }
+            
+            return { reasoningText, isReasoningChunk };
+          };
+          
+          // Process the stream
+          try {
+            let currentReasoningData = {};
+            
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              // Decode the chunk and add to buffer
+              buffer += decoder.decode(value, { stream: true });
+              
+              // Process complete lines from the buffer
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || ""; // The last line might be incomplete
+              
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6);
+                  
+                  // Check for the end of the stream
+                  if (data === "[DONE]") {
+                    continue;
+                  }
+                  
+                  try {
+                    const parsed = JSON.parse(data);
+                    
+                    // Check if this is a reasoning chunk
+                    const { reasoningText, isReasoningChunk } = extractReasoningData(parsed.choices[0]);
+                    
+                    if (isReasoningChunk && reasoningText) {
+                      try {
+                        // Try to parse reasoning as JSON
+                        const parsedReasoning = JSON.parse(reasoningText);
+                        currentReasoningData = {
+                          ...currentReasoningData,
+                          ...parsedReasoning
+                        };
+                        
+                        // Send reasoning update to client
+                        res.write(`data: ${JSON.stringify({ 
+                          type: "reasoning", 
+                          content: parsedReasoning,
+                          id: assistantMessage.id
+                        })}\n\n`);
+                      } catch (e) {
+                        // If not valid JSON, treat as text
+                        console.log("Failed to parse reasoning data as JSON:", e);
+                      }
+                      continue;
+                    }
+                    
+                    // Extract delta content for normal text chunks
+                    const delta = parsed.choices[0]?.delta?.content || "";
+                    
+                    if (delta) {
+                      assistantContent += delta;
+                      res.write(`data: ${JSON.stringify({ 
+                        type: "chunk", 
+                        content: delta,
+                        id: assistantMessage.id
+                      })}\n\n`);
+                    }
+                  } catch (e) {
+                    console.error("Error parsing streaming response:", e);
+                  }
+                }
+              }
+            }
+            
+            // Save reasoning data if present
+            if (Object.keys(currentReasoningData).length > 0) {
+              reasoningData = currentReasoningData;
+            }
+            
+            // Update the message in the database with the complete content
+            await storage.updateMessage(assistantMessage.id, {
+              content: assistantContent,
+              citations: citations,
+              reasoningData: reasoningData
+            });
+            
+            // Get the updated message to send the final response
+            const updatedMessage = await storage.getMessage(assistantMessage.id);
+            if (updatedMessage) {
+              // Send final message to client
+              res.write(`data: ${JSON.stringify({ 
+                type: "done", 
+                message: updatedMessage
+              })}\n\n`);
+            }
+            
+            res.end();
+            return; // End the request handler here for streaming responses
+          } catch (streamError: unknown) {
+            console.error("Error processing stream:", streamError);
+            // Send error message to client
+            res.write(`data: ${JSON.stringify({ 
+              type: "error", 
+              error: streamError instanceof Error ? streamError.message : "Unknown streaming error"
+            })}\n\n`);
+            res.end();
+            return;
+          }
+        }
         
-        // We've removed the streaming code for simplicity and reliability
-        // Only non-streaming responses are supported
-        
+        // If not streaming, handle as a regular response
         // Ensure response exists and is valid
         if (!response) {
           console.error("Error: Response object is not available");
@@ -2092,6 +2248,20 @@ Format your responses using markdown for better readability and organization.`;
             if (data.choices[0].message) {
               // OpenAI-compatible format (Groq and some Perplexity responses)
               messageContent = data.choices[0].message.content || "";
+              
+              // Check for reasoning data in tool_calls
+              if (data.choices[0].message.tool_calls) {
+                const toolCalls = data.choices[0].message.tool_calls;
+                for (const toolCall of toolCalls) {
+                  if (toolCall.function?.name === "reasoning") {
+                    try {
+                      reasoningData = JSON.parse(toolCall.function.arguments);
+                    } catch (e) {
+                      console.error("Failed to parse reasoning data:", e);
+                    }
+                  }
+                }
+              }
             } else if (data.choices[0].text) {
               // Alternative format sometimes used
               messageContent = data.choices[0].text || "";
@@ -2115,6 +2285,7 @@ Format your responses using markdown for better readability and organization.`;
           await storage.updateMessage(assistantMessage.id, {
             content: messageContent,
             citations: messageCitations,
+            reasoningData: reasoningData,
             modelId: modelId && modelId !== "" ? modelId : modelType, // Ensure consistent modelId storage
             promptTokens: data.usage?.prompt_tokens,
             completionTokens: data.usage?.completion_tokens
