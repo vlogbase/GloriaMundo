@@ -482,7 +482,8 @@ export const ModelPresets = () => {
       );
     }
     
-    const isActive = !!activeFreeTierModel;
+    // Only consider the free tier model active if there's a selected model AND no preset is active
+    const isActive = !!activeFreeTierModel && !activePreset;
     
     // Configure long press for mobile
     const longPressProps = useLongPress(() => {
@@ -499,8 +500,8 @@ export const ModelPresets = () => {
               <Button
                 onClick={handleFreeTierClick}
                 variant={isActive ? "default" : "outline"}
-                className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 border-green-500 ${
-                  isActive ? 'bg-green-600 text-white' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                className={`flex items-center gap-1 py-2 px-3 text-sm transition-all duration-200 ${
+                  isActive ? 'bg-green-600 text-white border-green-500' : 'text-green-600 border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
                 }`}
                 {...longPressProps}
               >
