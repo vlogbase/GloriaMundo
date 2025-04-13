@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOpenRouterModels } from './useOpenRouterModels';
@@ -12,6 +12,15 @@ export interface ModelPresets {
   preset4: string | null;
   preset5: string | null;
 }
+
+// Priority list for free models
+export const DEFAULT_FREE_MODEL_PRIORITIES = [
+  "google/gemini-2.0-flash-exp:free",
+  "qwen/qwq-32b:free",
+  "deepseek/deepseek-r1-distill-qwen-32b:free", 
+  "deepseek/deepseek-r1-distill-llama-70b:free",
+  "openrouter/optimus-alpha"
+];
 
 // Default model presets with verified valid model IDs from OpenRouter
 const defaultPresets: ModelPresets = {
@@ -46,6 +55,8 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const { models } = useOpenRouterModels();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const hasInitializedFreeModel = useRef(false);
+  const isProcessingModelChange = useRef(false);
 
   // Query to fetch user presets
   const { data, isLoading } = useQuery({
@@ -68,6 +79,51 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Filter for free models
   const freeModels = models.filter(model => model.isFree === true);
+  
+  // Function to find the first available free model from the priority list
+  const findDefaultFreeModel = (availableFreeModels: any[]): string | null => {
+    // Try to find models from the priority list first
+    for (const modelId of DEFAULT_FREE_MODEL_PRIORITIES) {
+      const foundModel = availableFreeModels.find(model => model.id === modelId);
+      if (foundModel) {
+        return foundModel.id;
+      }
+    }
+    
+    // If no priority models are available, return the first free model as fallback
+    return availableFreeModels.length > 0 ? availableFreeModels[0].id : null;
+  };
+  
+  // Initialize default free model when free models are loaded
+  useEffect(() => {
+    // Only proceed if:
+    // 1. We have free models
+    // 2. We haven't already initialized
+    // 3. No free tier model is currently active
+    // 4. We're not in the middle of processing a model change
+    if (
+      freeModels.length > 0 && 
+      !hasInitializedFreeModel.current && 
+      !activeFreeTierModel &&
+      !isProcessingModelChange.current &&
+      !isLoading
+    ) {
+      console.log('Initializing default free model from priority list...');
+      const defaultFreeModel = findDefaultFreeModel(freeModels);
+      
+      if (defaultFreeModel) {
+        hasInitializedFreeModel.current = true;
+        isProcessingModelChange.current = true;
+        
+        // Set a small delay to avoid potential race conditions
+        setTimeout(() => {
+          setActiveFreeTierModel(defaultFreeModel);
+          console.log(`Default free model set to: ${defaultFreeModel}`);
+          isProcessingModelChange.current = false;
+        }, 100);
+      }
+    }
+  }, [freeModels, activeFreeTierModel, isLoading]);
 
   // Mutation to update presets
   const { mutate, isPending } = useMutation({
@@ -247,6 +303,8 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
   const { models } = useOpenRouterModels();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const hasInitializedFreeModel = useRef(false);
+  const isProcessingModelChange = useRef(false);
 
   // Query to fetch user presets
   const { data, isLoading } = useQuery({
@@ -269,6 +327,51 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
 
   // Filter for free models
   const freeModels = models.filter(model => model.isFree === true);
+  
+  // Function to find the first available free model from the priority list
+  const findDefaultFreeModel = (availableFreeModels: any[]): string | null => {
+    // Try to find models from the priority list first
+    for (const modelId of DEFAULT_FREE_MODEL_PRIORITIES) {
+      const foundModel = availableFreeModels.find(model => model.id === modelId);
+      if (foundModel) {
+        return foundModel.id;
+      }
+    }
+    
+    // If no priority models are available, return the first free model as fallback
+    return availableFreeModels.length > 0 ? availableFreeModels[0].id : null;
+  };
+  
+  // Initialize default free model when free models are loaded
+  useEffect(() => {
+    // Only proceed if:
+    // 1. We have free models
+    // 2. We haven't already initialized
+    // 3. No free tier model is currently active
+    // 4. We're not in the middle of processing a model change
+    if (
+      freeModels.length > 0 && 
+      !hasInitializedFreeModel.current && 
+      !activeFreeTierModel &&
+      !isProcessingModelChange.current &&
+      !isLoading
+    ) {
+      console.log('Initializing default free model from priority list (standalone)...');
+      const defaultFreeModel = findDefaultFreeModel(freeModels);
+      
+      if (defaultFreeModel) {
+        hasInitializedFreeModel.current = true;
+        isProcessingModelChange.current = true;
+        
+        // Set a small delay to avoid potential race conditions
+        setTimeout(() => {
+          setActiveFreeTierModel(defaultFreeModel);
+          console.log(`Default free model set to: ${defaultFreeModel} (standalone)`);
+          isProcessingModelChange.current = false;
+        }, 100);
+      }
+    }
+  }, [freeModels, activeFreeTierModel, isLoading]);
 
   // Mutation to update presets
   const { mutate, isPending } = useMutation({

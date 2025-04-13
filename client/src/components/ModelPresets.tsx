@@ -29,7 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from '@/components/ui/input';
-import { Network, Edit, Check, Lock, Search, Image, Brain, Sparkles } from 'lucide-react';
+import { Network, Edit, Check, Lock, Search, Image, Brain, Sparkles, AlertTriangle } from 'lucide-react';
 
 // Helper function to get the preset number from the key
 const getPresetNumber = (key: string): string => {
@@ -431,6 +431,31 @@ export const ModelPresets = () => {
   
   // Render free tier button (now with same design pattern as presets)
   const renderFreeTierButton = () => {
+    // If no free models are available, show disabled button
+    if (freeModels.length === 0) {
+      return (
+        <div className="relative group">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  disabled
+                  variant="outline"
+                  className="flex items-center gap-1 py-2 px-3 text-sm border-gray-400 text-gray-500"
+                >
+                  <AlertTriangle size={16} className="mr-1" />
+                  <span>No Free Models</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>No free models are currently available on OpenRouter</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      );
+    }
+    
     const isActive = !!activeFreeTierModel;
     
     // Configure long press for mobile
