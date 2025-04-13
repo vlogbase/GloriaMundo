@@ -118,8 +118,7 @@ export const useStreamingChat = () => {
                           !window.location.host.includes('localhost');
       
       // Determine if the request should attempt streaming (stream unless an image is present)
-      const shouldAttemptStream = !image;
-      if (shouldAttemptStream) {
+      if (!image) {
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
@@ -236,30 +235,90 @@ export const useStreamingChat = () => {
             // --- End Process content delta ---
 
 
-            // --- Placeholder for Reasoning Data Handling ---
-            // TODO LATER: Add logic here to check parsedData.choices[0].delta for reasoning fields
-            // (e.g., tool_calls, function_call) and update
-            // streamingMessageRef.current.reasoningData and the message state accordingly.
-            // Example structure check (needs refinement based on actual data):
-            /*
-            const deltaReasoning = parsedData.choices?.[0]?.delta?.tool_calls || parsedData.choices?.[0]?.delta?.function_call;
-            if (deltaReasoning && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
-                console.log("Detected potential reasoning data chunk:", deltaReasoning);
-                // Accumulate reasoning data (complex merging might be needed)
-                streamingMessageRef.current.reasoningData = {
-                    ...streamingMessageRef.current.reasoningData,
-                    // Simple merge example, needs refinement
-                    ...(streamingMessageRef.current.reasoningData.tool_calls = [...(streamingMessageRef.current.reasoningData.tool_calls || []), deltaReasoning])
-                };
-                // Update message state with reasoning data
+            // --- Reasoning Data Handling ---
+            const delta = parsedData.choices?.[0]?.delta;
+            let extractedReasoningChunk = null;
+
+            if (delta?.tool_calls) {
+                // Handle tool calls format
+                extractedReasoningChunk = { toolCalls: delta.tool_calls };
+                console.log("Detected reasoning chunk (tool_calls):", extractedReasoningChunk);
+            } else if (delta?.function_call) {
+                // Handle function call format
+                extractedReasoningChunk = { functionCall: delta.function_call };
+                console.log("Detected reasoning chunk (function_call):", extractedReasoningChunk);
+            } // TODO: Add checks for other potential fields like logprobs based on testing
+
+            if (extractedReasoningChunk && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
+                // --- Accumulate Reasoning Data ---
+                // NOTE: Simple accumulation might not be sufficient for complex cases like
+                // arguments arriving in multiple chunks. More sophisticated merging might be needed.
+                const currentReasoning = streamingMessageRef.current.reasoningData || {};
+                const updatedReasoning = { ...currentReasoning };
+
+                // Example: Merge toolCalls arrays intelligently
+                if (extractedReasoningChunk.toolCalls && Array.isArray(extractedReasoningChunk.toolCalls)) {
+                    if (!updatedReasoning.toolCalls) updatedReasoning.toolCalls = [];
+                     extractedReasoningChunk.toolCalls.forEach((newToolCall: any) => {
+                       // Find existing tool call by index if available, otherwise assume append or match by ID if present
+                       const existingCallIndex = newToolCall.index !== undefined ? updatedReasoning.toolCalls.findIndex((c: any) => c.index === newToolCall.index) : -1;
+                       // Fallback: Find by ID if index is missing but ID exists
+                       const existingCallIndexById = (existingCallIndex === -1 && newToolCall.id) ? updatedReasoning.toolCalls.findIndex((c: any) => c.id === newToolCall.id) : -1;
+                       const finalIndex = existingCallIndex !== -1 ? existingCallIndex : existingCallIndexById;
+
+                       if (finalIndex > -1) {
+                         // Deep merge existing call
+                         const existingCall = updatedReasoning.toolCalls[finalIndex];
+                         // Ensure 'function' exists on both before merging
+                         const functionUpdate = { ...(existingCall.function || {}), ...(newToolCall.function || {}) };
+                         // Handle argument streaming safely
+                         if (newToolCall.function?.arguments && typeof existingCall.function?.arguments === 'string') {
+                           functionUpdate.arguments = existingCall.function.arguments + newToolCall.function.arguments;
+                         } else if (newToolCall.function?.arguments) {
+                            // If existing is not string or new is not string, prefer new args
+                            functionUpdate.arguments = newToolCall.function.arguments;
+                         }
+                         updatedReasoning.toolCalls[finalIndex] = { ...existingCall, ...newToolCall, function: functionUpdate };
+                       } else {
+                         // Add as new tool call if no match found
+                         updatedReasoning.toolCalls.push(newToolCall);
+                       }
+                     });
+                }
+                // Example: Merge functionCall data
+                if (extractedReasoningChunk.functionCall) {
+                     if (!updatedReasoning.functionCall) {
+                         updatedReasoning.functionCall = extractedReasoningChunk.functionCall;
+                     } else {
+                         // Safely check types before concatenating arguments
+                         if (extractedReasoningChunk.functionCall.arguments &&
+                             typeof extractedReasoningChunk.functionCall.arguments === 'string' &&
+                             updatedReasoning.functionCall.arguments &&
+                             typeof updatedReasoning.functionCall.arguments === 'string')
+                         {
+                             updatedReasoning.functionCall.arguments += extractedReasoningChunk.functionCall.arguments;
+                         } else if (extractedReasoningChunk.functionCall.arguments) {
+                            // Otherwise, prefer the arguments from the new chunk if they exist
+                            updatedReasoning.functionCall.arguments = extractedReasoningChunk.functionCall.arguments;
+                         }
+                         // Merge other properties, ensuring functionCall object exists
+                         updatedReasoning.functionCall = {...updatedReasoning.functionCall, ...extractedReasoningChunk.functionCall};
+                     }
+                }
+                // TODO: Add merging logic for other reasoning types here (e.g., logprobs)
+
+                streamingMessageRef.current.reasoningData = updatedReasoning;
+                // --- End Accumulate ---
+
+                // Update message state with the new reasoning data
+                // Ensure setMessages and assistantMessageId are accessible
                 setMessages((prev) => prev.map(msg =>
                   msg.id === assistantMessageId
-                    ? { ...msg, reasoningData: streamingMessageRef.current!.reasoningData }
+                    ? { ...msg, reasoningData: { ...(streamingMessageRef.current!.reasoningData) } } // Ensure new object ref for react update
                     : msg
                 ));
             }
-            */
-            // --- End Placeholder for Reasoning Data Handling ---
+            // --- End Reasoning Data Handling ---
 
           } catch (parseError) {
             // Keep existing error handling logic here (or adapt as needed)
@@ -339,7 +398,7 @@ export const useStreamingChat = () => {
     } finally {
       // For non-streaming requests, we need to set loading to false here
       // (For streaming requests, this is done in the event handler)
-      if (!shouldAttemptStream || eventSourceRef.current === null) {
+      if (image || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
