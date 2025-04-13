@@ -13,7 +13,7 @@ export const useStreamingChat = () => {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
-  const { selectedModel, selectedModelId } = useModelSelection();
+  const { selectedModel, customOpenRouterModelId } = useModelSelection();
   
   // Reference to the currently streaming message
   const streamingMessageRef = useRef<{
@@ -131,8 +131,8 @@ export const useStreamingChat = () => {
         // Add optional parameters if they exist
         if (image) params.append('image', image);
         
-        // Add modelId parameter if available
-        if (selectedModelId) params.append('modelId', selectedModelId);
+        // Add modelId parameter if available (for OpenRouter models)
+        if (customOpenRouterModelId) params.append('modelId', customOpenRouterModelId);
         
         // Create the EventSource with the properly encoded URL
         const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?${params.toString()}`);
@@ -308,7 +308,7 @@ export const useStreamingChat = () => {
         setIsLoadingResponse(false);
       }
     }
-  }, [activeConversationId, selectedModel, setLocation, toast]);
+  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
   
   // Helper function to handle non-streaming requests
   const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
@@ -323,7 +323,8 @@ export const useStreamingChat = () => {
         body: JSON.stringify({ 
           content,
           image,
-          modelType: selectedModel
+          modelType: selectedModel,
+          modelId: customOpenRouterModelId || undefined
         }),
       });
       
