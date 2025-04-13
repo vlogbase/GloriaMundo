@@ -117,9 +117,9 @@ export const useStreamingChat = () => {
                           window.location.host.includes('.gloriamundo.com') ||
                           !window.location.host.includes('localhost');
       
-      // In production environments or with non-reasoning models, don't use streaming
-      // This avoids streaming issues in deployed environments
-      if (selectedModel === "reasoning" && !isProduction) {
+      // Determine if the request should attempt streaming (stream unless an image is present)
+      const shouldAttemptStream = !image;
+      if (shouldAttemptStream) {
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
@@ -199,7 +199,6 @@ export const useStreamingChat = () => {
                    role: "assistant",
                    content: "", // Start empty
                    citations: null,
-                   reasoningData: {}, // Initialize empty
                    createdAt: new Date().toISOString(),
                    // Ensure modelId is set if needed/available, e.g., from selectedModel
                    modelId: selectedModel || undefined // Ensure selectedModel is accessible here
@@ -324,7 +323,7 @@ export const useStreamingChat = () => {
         return;
       }
       
-      // For non-streaming approach (production or non-reasoning models), use regular fetch
+      // For non-streaming approach (when images are present), use regular fetch
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
@@ -339,8 +338,8 @@ export const useStreamingChat = () => {
       setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessage.id));
     } finally {
       // For non-streaming requests, we need to set loading to false here
-      // (For streaming requests, this is done in the "done" event handler)
-      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
+      // (For streaming requests, this is done in the event handler)
+      if (!shouldAttemptStream || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }
