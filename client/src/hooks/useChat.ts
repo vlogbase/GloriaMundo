@@ -14,10 +14,21 @@ export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
+  const [streamingComplete, setStreamingComplete] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>(undefined);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedModel, customOpenRouterModelId } = useModelSelection();
+  
+  // Reference to the currently streaming message
+  const streamingMessageRef = useRef<{
+    id: number;
+    content: string;
+    reasoningData?: Record<string, any>;
+  } | null>(null);
+  
+  // Reference to the EventSource for cleanup
+  const eventSourceRef = useRef<EventSource | null>(null);
   
   // Track hook initialization count to prevent unnecessary re-renders
   const initCountRef = useRef(0);
@@ -27,6 +38,16 @@ export const useChat = () => {
       // console.log('[useChat] Hook initialized (first time)');
     }
     initCountRef.current++;
+  }, []);
+  
+  // Clean up event source on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
   }, []);
   
   // For debugging the first message issue
@@ -208,6 +229,140 @@ export const useChat = () => {
         console.error('[useChat] Error getting document context:', contextError);
         // Continue without document context if there's an error
       }
+      
+      // Determine if we should use streaming (don't stream for image inputs)
+      const shouldAttemptStream = !image;
+      
+      // Close any existing event source
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      
+      if (shouldAttemptStream) {
+        console.log('[useChat] Using streaming API for this message');
+        // Reset streaming message reference
+        streamingMessageRef.current = null;
+        
+        // Create a URLSearchParams object for proper parameter encoding
+        const params = new URLSearchParams();
+        params.append('content', messageContent);
+        params.append('modelType', selectedModel);
+        
+        // Add optional parameters if they exist
+        if (documentContext) params.append('documentContext', documentContext);
+        
+        // Add modelId parameter if available (for OpenRouter models)
+        if ('modelId' in modelMetadata) params.append('modelId', modelMetadata.modelId as string);
+        
+        // Create the EventSource with the properly encoded URL
+        const eventSource = new EventSource(`/api/conversations/${conversationId}/messages/stream?${params.toString()}`);
+        eventSourceRef.current = eventSource;
+        
+        eventSource.onmessage = (event) => {
+          try {
+            // Check for the standard end-of-stream signal from OpenRouter
+            if (event.data === '[DONE]') {
+              console.log("Stream [DONE] received.");
+              
+              // Update state to indicate loading/streaming finished
+              setIsLoadingResponse(false);
+              setStreamingComplete(true);
+              setTimeout(() => setStreamingComplete(false), 100);
+              
+              // Close the EventSource connection
+              if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+                eventSourceRef.current = null;
+                console.log("EventSource closed.");
+              }
+              streamingMessageRef.current = null; // Clear the streaming message ref
+              
+              // Notify other parts of the app if needed
+              window.dispatchEvent(new CustomEvent('message-sent', {
+                detail: { conversationId }
+              }));
+              
+              // Refresh links
+              setTimeout(() => {
+                refreshSkimlinks();
+              }, 1000);
+              
+              return; // Stop processing this event
+            }
+            
+            // If not '[DONE]', parse the JSON payload
+            const parsedData = JSON.parse(event.data);
+            
+            // Handle first chunk with message ID
+            let assistantMessageId = streamingMessageRef.current?.id;
+            if (!assistantMessageId && parsedData.id) {
+              // This is the first chunk containing an ID for the assistant message
+              const newMessagePlaceholder: Message = {
+                id: parsedData.id,
+                conversationId: conversationId,
+                role: "assistant",
+                content: "", // Start empty
+                citations: null,
+                createdAt: new Date().toISOString(),
+                modelId: selectedModel || undefined
+              };
+              
+              // Add the placeholder to the messages state
+              setMessages((prev) => [...prev, newMessagePlaceholder]);
+              
+              // Initialize the ref to track this message
+              streamingMessageRef.current = {
+                id: newMessagePlaceholder.id,
+                content: "",
+                reasoningData: {}
+              };
+              assistantMessageId = newMessagePlaceholder.id;
+              console.log("Initialized streaming message with ID:", assistantMessageId);
+            }
+            
+            // Process content delta
+            const deltaContent = parsedData.choices?.[0]?.delta?.content;
+            
+            if (deltaContent && streamingMessageRef.current) {
+              // Append the content chunk to our tracked content
+              streamingMessageRef.current.content += deltaContent;
+              
+              // Update the corresponding message in the React state
+              setMessages((prev) => prev.map(msg =>
+                msg.id === streamingMessageRef.current!.id
+                  ? { ...msg, content: streamingMessageRef.current!.content }
+                  : msg
+              ));
+            }
+            
+          } catch (error) {
+            console.error("Error processing stream event:", error);
+          }
+        };
+        
+        eventSource.onerror = (error) => {
+          console.error("EventSource error:", error);
+          // Close the connection on error
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+          }
+          setIsLoadingResponse(false);
+          
+          toast({
+            variant: "destructive",
+            title: "Streaming Error",
+            description: "Failed to stream the AI response. Please try again.",
+          });
+        };
+        
+        // Return early since we're handling the response via streaming
+        return;
+      }
+      
+      // If we're not streaming (e.g., for image inputs), use the regular API
+      console.log('[useChat] Using regular API for this message (no streaming)');
       
       // Define the proper type for our payload
       interface MessagePayload {
