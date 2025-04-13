@@ -582,6 +582,7 @@ export const useChat = () => {
     messages,
     isLoadingMessages,
     isLoadingResponse,
+    streamingComplete,
     activeConversationId,
     loadConversation,
     sendMessage,
