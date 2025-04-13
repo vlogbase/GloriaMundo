@@ -1136,10 +1136,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
-      // Only allow reasoning model for streaming (fail fast for other models)
-      if (modelType !== "reasoning") {
+      // Support streaming for reasoning model and OpenRouter models
+      const isOpenRouterModel = modelId && (modelId.includes('/') || modelType === 'openrouter');
+      if (modelType !== "reasoning" && !isOpenRouterModel) {
         return res.status(400).json({ 
-          message: `Streaming is only supported for the reasoning model, not for ${modelType}.`
+          message: `Streaming is only supported for the reasoning model and OpenRouter models, not for ${modelType}.`
         });
       }
       

@@ -8,6 +8,12 @@ import { AdSense } from "@/components/AdSense";
 import { Document } from "@/hooks/useDocuments";
 import { DocumentItem } from "./DocumentItem";
 import { DocumentPreviewModal } from "./DocumentPreviewModal";
+import { 
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger 
+} from "@/components/ui/accordion";
 
 // Custom hook for intersection observer (lazy loading)
 function useIntersectionObserver(options = {}) {
@@ -149,6 +155,32 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
             <div className="markdown break-words">
               {/* Pass citations to MarkdownRenderer for processing reference links */}
               <MarkdownRenderer citations={message.citations}>{message.content}</MarkdownRenderer>
+              
+              {/* Display reasoning data if available */}
+              {message.reasoningData && Object.keys(message.reasoningData).length > 0 && (
+                <div className="mt-4 border-t pt-3 text-sm">
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="reasoning">
+                      <AccordionTrigger className="text-primary font-medium">
+                        View Reasoning
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        {Object.entries(message.reasoningData).map(([key, value], index) => (
+                          <div key={index} className="mb-3">
+                            <h5 className="font-medium text-muted-foreground capitalize mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}:</h5>
+                            <div className="bg-muted/20 p-3 rounded whitespace-pre-wrap text-sm">
+                              {typeof value === 'string' 
+                                ? value 
+                                : JSON.stringify(value, null, 2)
+                              }
+                            </div>
+                          </div>
+                        ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              )}
               
               {/* Display citations if available */}
               {message.citations && message.citations.length > 0 && (
