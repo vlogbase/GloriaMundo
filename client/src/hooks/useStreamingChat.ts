@@ -19,6 +19,7 @@ export const useStreamingChat = () => {
   const streamingMessageRef = useRef<{
     id: number;
     content: string;
+    reasoningData?: Record<string, any>;
   } | null>(null);
   
   // Reference to the EventSource for cleanup
@@ -140,105 +141,140 @@ export const useStreamingChat = () => {
         
         eventSource.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data);
-            
-            // Handle different event types
-            switch (data.type) {
-              case "initial":
-                // Set up the streaming message reference
-                streamingMessageRef.current = {
-                  id: data.assistantMessageId,
-                  content: ""
-                };
-                
-                // Add an empty message that will be updated as chunks arrive
-                setMessages((prev) => [...prev, {
-                  id: data.assistantMessageId,
-                  conversationId,
-                  role: "assistant",
-                  content: "",
-                  citations: null,
-                  createdAt: new Date().toISOString(),
-                }]);
-                break;
-                
-              case "chunk":
-                // Update the streaming message reference
-                if (streamingMessageRef.current && streamingMessageRef.current.id === data.id) {
-                  streamingMessageRef.current.content += data.content;
-                  
-                  // Update the message in the state with the new content
-                  setMessages((prev) => prev.map(msg => 
-                    msg.id === data.id 
-                      ? { ...msg, content: streamingMessageRef.current!.content } 
-                      : msg
-                  ));
-                }
-                break;
-                
-              case "done":
-                // Final update with the complete message
-                setMessages((prev) => prev.map(msg => 
-                  msg.id === data.assistantMessage.id ? data.assistantMessage : msg
-                ));
-                
-                setStreamingComplete(true);
-                
-                setTimeout(() => {
-                  setIsLoadingResponse(false);
-                  setTimeout(() => setStreamingComplete(false), 100);
-                }, 50);
-                
-                eventSource.close();
-                eventSourceRef.current = null;
-                streamingMessageRef.current = null;
-                
-                window.dispatchEvent(new CustomEvent('message-sent', {
-                  detail: { conversationId }
-                }));
-                break;
-                
-              case "error":
-                // Handle explicit error events from server
-                console.error("Server streaming error:", data.message);
-                toast({
-                  variant: "destructive",
-                  title: "Server Error",
-                  description: data.message || "An error occurred with the streaming response.",
+            // Check for the standard end-of-stream signal from OpenRouter
+            if (event.data === '[DONE]') {
+              console.log("Stream [DONE] received.");
+
+              // --- Finalization Logic ---
+              // Retrieve the final accumulated content (if needed)
+              const finalContent = streamingMessageRef.current?.content || '';
+              const finalReasoning = streamingMessageRef.current?.reasoningData; // We'll handle this later
+              const assistantMsgId = streamingMessageRef.current?.id;
+
+              // Optional: Make API call to save final content/reasoning if needed
+              // Example: (ensure apiRequest function exists and handles PATCH)
+              /*
+              if (assistantMsgId) {
+                apiRequest("PATCH", `/api/conversations/${conversationId}/messages/${assistantMsgId}`, {
+                  content: finalContent,
+                  // reasoningData: finalReasoning // Add later when reasoning is handled
+                }).catch(error => {
+                  console.error("Error saving final message content:", error);
                 });
-                
-                // Clean up
-                setIsLoadingResponse(false);
-                eventSource.close();
+              }
+              */
+
+              // Update state to indicate loading/streaming finished
+              setIsLoadingResponse(false); // Ensure this state setter exists
+              setStreamingComplete(true); // Ensure this state setter exists
+              setTimeout(() => setStreamingComplete(false), 100); // Reset UI indicator
+
+              // Close the EventSource connection
+              if (eventSourceRef.current) {
+                eventSourceRef.current.close();
                 eventSourceRef.current = null;
-                
-                // If we have a partial message, remove it and fall back to non-streaming
-                if (streamingMessageRef.current) {
-                  setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
-                  streamingMessageRef.current = null;
-                  
-                  // Fall back to non-streaming request
-                  fallbackToNonStreaming(conversationId, messageContent, image, content);
-                }
-                break;
-                
-              default:
-                console.warn("Unknown event type:", data.type);
+                console.log("EventSource closed.");
+              }
+              streamingMessageRef.current = null; // Clear the streaming message ref
+
+              // Optional: Notify other parts of the app if needed
+              // Ensure conversationId is accessible in this scope
+              window.dispatchEvent(new CustomEvent('message-sent', {
+                detail: { conversationId }
+              }));
+
+              return; // Stop processing this event
             }
+
+            // If not '[DONE]', parse the JSON payload from OpenRouter
+            const parsedData = JSON.parse(event.data);
+
+            // --- Handle first chunk ---
+            let assistantMessageId = streamingMessageRef.current?.id;
+            if (!assistantMessageId && parsedData.id) {
+                // This seems to be the first chunk containing an ID for the assistant message
+                const newMessagePlaceholder: Message = { // Ensure Message type is imported/correct
+                   id: parsedData.id, // Use ID from stream
+                   conversationId: conversationId, // Ensure conversationId is accessible
+                   role: "assistant",
+                   content: "", // Start empty
+                   citations: null,
+                   reasoningData: {}, // Initialize empty
+                   createdAt: new Date().toISOString(),
+                   // Ensure modelId is set if needed/available, e.g., from selectedModel
+                   modelId: selectedModel || undefined // Ensure selectedModel is accessible here
+                };
+                // Add the placeholder to the messages state
+                setMessages((prev) => [...prev, newMessagePlaceholder]);
+                // Initialize the ref to track this message
+                streamingMessageRef.current = {
+                   id: newMessagePlaceholder.id,
+                   content: "",
+                   reasoningData: {}
+                };
+                assistantMessageId = newMessagePlaceholder.id;
+                console.log("Initialized streaming message with ID:", assistantMessageId);
+            }
+            // --- End Handle first chunk ---
+
+
+            // --- Process content delta ---
+            // Extract the actual text content from the standard OpenRouter format
+            const deltaContent = parsedData.choices?.[0]?.delta?.content;
+
+            if (deltaContent && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
+              // Append the content chunk to our tracked content
+              streamingMessageRef.current.content += deltaContent;
+
+              // Update the corresponding message in the React state
+              // Ensure setMessages is accessible here
+              setMessages((prev) => prev.map(msg =>
+                msg.id === assistantMessageId
+                  ? { ...msg, content: streamingMessageRef.current!.content }
+                  : msg
+              ));
+            }
+            // --- End Process content delta ---
+
+
+            // --- Placeholder for Reasoning Data Handling ---
+            // TODO LATER: Add logic here to check parsedData.choices[0].delta for reasoning fields
+            // (e.g., tool_calls, function_call) and update
+            // streamingMessageRef.current.reasoningData and the message state accordingly.
+            // Example structure check (needs refinement based on actual data):
+            /*
+            const deltaReasoning = parsedData.choices?.[0]?.delta?.tool_calls || parsedData.choices?.[0]?.delta?.function_call;
+            if (deltaReasoning && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
+                console.log("Detected potential reasoning data chunk:", deltaReasoning);
+                // Accumulate reasoning data (complex merging might be needed)
+                streamingMessageRef.current.reasoningData = {
+                    ...streamingMessageRef.current.reasoningData,
+                    // Simple merge example, needs refinement
+                    ...(streamingMessageRef.current.reasoningData.tool_calls = [...(streamingMessageRef.current.reasoningData.tool_calls || []), deltaReasoning])
+                };
+                // Update message state with reasoning data
+                setMessages((prev) => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, reasoningData: streamingMessageRef.current!.reasoningData }
+                    : msg
+                ));
+            }
+            */
+            // --- End Placeholder for Reasoning Data Handling ---
+
           } catch (parseError) {
+            // Keep existing error handling logic here (or adapt as needed)
             console.error("Error parsing SSE message:", parseError, "Raw data:", event.data);
-            
-            // This is likely a JSON parsing error or malformed data
-            toast({
-              variant: "destructive",
-              title: "Response Format Error",
-              description: "Received invalid data from server. Falling back to standard mode.",
-            });
-            
-            // Clean up and fall back
-            eventSource.close();
-            eventSourceRef.current = null;
-            
+            // Ensure toast function is accessible here
+            toast({ variant: "destructive", title: "Response Format Error", description: "Received invalid data from server." });
+            // Add fallback logic if needed
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+                eventSourceRef.current = null;
+            }
+            // Ensure setIsLoadingResponse is accessible here
+            setIsLoadingResponse(false);
+            // Maybe remove partial message if necessary
             if (streamingMessageRef.current) {
               setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
               streamingMessageRef.current = null;
