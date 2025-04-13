@@ -316,6 +316,11 @@ export const ModelPresets = () => {
       // If a free tier model is already active, switch to it immediately
       // This will cause the FreeModelInitializer to detect the switch back to 'openrouter'
       // and use the active free tier model
+      
+      // First ensure we clear any active preset to fix the visual highlighting
+      activatePreset(null as any);
+      
+      // Now activate the free tier model
       setSelectedModel('openrouter');
       console.log(`Free tier model activated: ${activeFreeTierModel}`);
     }
@@ -323,6 +328,10 @@ export const ModelPresets = () => {
   
   // Handle selecting a free model
   const handleSelectFreeModel = (modelId: string) => {
+    // First clear any active preset to fix the visual highlighting
+    activatePreset(null as any);
+    
+    // Set the active free tier model
     activateFreeTierModel(modelId);
     
     // Set model for use - free models are treated as regular OpenRouter models (preset1)
