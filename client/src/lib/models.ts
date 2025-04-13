@@ -31,4 +31,4 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
   }
 };
 
-export const DEFAULT_MODEL: ModelType = "reasoning";
+export const DEFAULT_MODEL: ModelType = "openrouter";
