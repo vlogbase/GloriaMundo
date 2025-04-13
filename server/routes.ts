@@ -1407,27 +1407,101 @@ Format your responses using markdown for better readability and organization.`;
                   
                   // Extract and process reasoning data
                   try {
-                    const reasoningData: Record<string, any> = {};
+                    // Get current reasoning data from the message
+                    const existingMsg = await storage.getMessage(assistantMessage.id);
+                    let currentReasoningData: Record<string, any> = {};
+                    
+                    // If the message has reasoning data, use it as the base
+                    if (existingMsg && existingMsg.reasoningData) {
+                      currentReasoningData = existingMsg.reasoningData as Record<string, any>;
+                    }
+                    
+                    // Create delta reasoning data to send to client
+                    const deltaReasoningData: Record<string, any> = {};
                     
                     // Process tool_calls (newer OpenAI format)
                     if (parsed.choices[0]?.delta?.tool_calls) {
-                      reasoningData.toolCalls = parsed.choices[0].delta.tool_calls;
+                      deltaReasoningData.toolCalls = parsed.choices[0].delta.tool_calls;
+                      
+                      // Update or initialize the toolCalls array in currentReasoningData
+                      if (!currentReasoningData.toolCalls) {
+                        currentReasoningData.toolCalls = deltaReasoningData.toolCalls;
+                      } else if (Array.isArray(currentReasoningData.toolCalls) && Array.isArray(deltaReasoningData.toolCalls)) {
+                        // Merge the tool calls arrays intelligently
+                        deltaReasoningData.toolCalls.forEach((newToolCall: any, index: number) => {
+                          if (index < currentReasoningData.toolCalls.length) {
+                            // Update existing tool call
+                            currentReasoningData.toolCalls[index] = {
+                              ...currentReasoningData.toolCalls[index],
+                              ...newToolCall
+                            };
+                            
+                            // Special handling for function arguments that are strings (need concatenation)
+                            if (newToolCall.function?.arguments && 
+                                typeof newToolCall.function.arguments === 'string' &&
+                                typeof currentReasoningData.toolCalls[index].function?.arguments === 'string') {
+                              currentReasoningData.toolCalls[index].function.arguments += newToolCall.function.arguments;
+                            }
+                          } else {
+                            // Add new tool call
+                            currentReasoningData.toolCalls.push(newToolCall);
+                          }
+                        });
+                      }
                     }
                     
                     // Process tool_use (Claude/Anthropic format)
                     if (parsed.choices[0]?.delta?.tool_use) {
-                      reasoningData.toolUse = parsed.choices[0].delta.tool_use;
+                      deltaReasoningData.toolUse = parsed.choices[0].delta.tool_use;
+                      
+                      // Merge into current reasoning data
+                      if (!currentReasoningData.toolUse) {
+                        currentReasoningData.toolUse = deltaReasoningData.toolUse;
+                      } else if (typeof currentReasoningData.toolUse === 'object' && typeof deltaReasoningData.toolUse === 'object') {
+                        currentReasoningData.toolUse = {
+                          ...currentReasoningData.toolUse,
+                          ...deltaReasoningData.toolUse
+                        };
+                      }
                     }
                     
                     // Process function_call (older OpenAI format)
                     if (parsed.choices[0]?.delta?.function_call) {
-                      reasoningData.functionCall = parsed.choices[0].delta.function_call;
+                      deltaReasoningData.functionCall = parsed.choices[0].delta.function_call;
+                      
+                      // Handle merging function call data
+                      if (!currentReasoningData.functionCall) {
+                        currentReasoningData.functionCall = deltaReasoningData.functionCall;
+                      } else {
+                        // If there's an arguments field as string, concatenate it
+                        if (typeof deltaReasoningData.functionCall === 'object' && 
+                            typeof currentReasoningData.functionCall === 'object') {
+                          
+                          // Special handling for arguments field
+                          if (deltaReasoningData.functionCall.arguments && 
+                              typeof deltaReasoningData.functionCall.arguments === 'string' &&
+                              typeof currentReasoningData.functionCall.arguments === 'string') {
+                            currentReasoningData.functionCall.arguments += deltaReasoningData.functionCall.arguments;
+                          } else {
+                            // Otherwise merge the objects
+                            currentReasoningData.functionCall = {
+                              ...currentReasoningData.functionCall,
+                              ...deltaReasoningData.functionCall
+                            };
+                          }
+                        }
+                      }
                     }
                     
-                    // Send the reasoning data to the client
+                    // Update the reasoning data in the database
+                    await storage.updateMessage(assistantMessage.id, {
+                      reasoningData: currentReasoningData
+                    });
+                    
+                    // Send the delta reasoning data to the client
                     res.write(`data: ${JSON.stringify({ 
                       type: "reasoning", 
-                      content: reasoningData,
+                      content: deltaReasoningData,
                       id: assistantMessage.id
                     })}\n\n`);
                   } catch (reasoningError) {
@@ -1449,26 +1523,32 @@ Format your responses using markdown for better readability and organization.`;
           }
         }
         
-        // Create a variable to store accumulated reasoning data
-        const reasoningData: Record<string, any> = {};
+        // Retrieve any existing reasoning data from the message
+        const existingMessage = await storage.getMessage(assistantMessage.id);
+        let accumulatedReasoningData: Record<string, any> = {};
+        
+        // Merge any existing reasoning data
+        if (existingMessage && existingMessage.reasoningData) {
+          accumulatedReasoningData = existingMessage.reasoningData as Record<string, any>;
+          console.log("Retrieved existing reasoning data from message:", Object.keys(accumulatedReasoningData));
+        }
         
         // Check if there's any reasoning data from OpenRouter streaming
-        if (Object.keys(reasoningData).length > 0) {
-          console.log("Storing reasoning data with message");
+        if (Object.keys(accumulatedReasoningData).length > 0) {
+          console.log("Storing accumulated reasoning data with message");
         }
         
         // Update the stored message with the full content and reasoning data
-        const updatedMessage = await storage.getMessage(assistantMessage.id);
-        if (updatedMessage) {
+        if (existingMessage) {
           assistantMessage = {
-            ...updatedMessage,
+            ...existingMessage,
             content: assistantContent,
-            reasoningData: Object.keys(reasoningData).length > 0 ? reasoningData : undefined
+            reasoningData: Object.keys(accumulatedReasoningData).length > 0 ? accumulatedReasoningData : undefined
           };
           // Update the message in storage with content and reasoning data
           await storage.updateMessage(assistantMessage.id, {
             content: assistantContent,
-            reasoningData: Object.keys(reasoningData).length > 0 ? reasoningData : undefined
+            reasoningData: Object.keys(accumulatedReasoningData).length > 0 ? accumulatedReasoningData : undefined
           });
         }
         
