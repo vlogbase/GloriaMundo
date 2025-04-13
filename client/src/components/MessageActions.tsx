@@ -101,11 +101,11 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
 
     // Handle legacy model types
     if (modelId === 'reasoning') {
-      return 'Reasoning';  // Reverting back to original display name as requested
+      return 'o3 Mini';
     }
     
     if (modelId === 'search') {
-      return 'Search';  // Reverting back to original display name as requested
+      return 'Sonar Pro';
     }
     
     // Extract the model name from the fully qualified ID
@@ -124,7 +124,6 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
         .replace("gpt-4", "GPT-4")
         .replace("gpt-4o", "GPT-4o")
         .replace("claude-3", "Claude 3")
-        .replace("o3-mini-high", "o3 Mini H") 
         .replace("o3-mini", "o3 Mini")
         .replace("sonar-pro", "Sonar Pro")
         .replace("gpt-3.5", "GPT-3.5")
@@ -234,7 +233,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
             <TooltipContent side="bottom" className="p-3 max-w-xs">
               <p className="font-medium mb-1">Model information</p>
               <p className="text-xs mb-2 text-muted-foreground">
-                {message.modelId === 'reasoning' ? 'openai/o3-mini-high (o3 Mini H)' :
+                {message.modelId === 'reasoning' ? 'openai/o3-mini-high (Reasoning)' :
                  message.modelId === 'search' ? 'perplexity/sonar-pro (Search)' :
                  message.modelId}
               </p>

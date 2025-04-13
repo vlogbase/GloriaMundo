@@ -220,9 +220,7 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
     const normalizedId = normalizeModelId(modelId);
     
     // Apply specific formatting rules for required models
-    if (normalizedId.includes('openai/o3-mini-high')) {
-      return 'o3 Mini H';
-    } else if (normalizedId.includes('openai/o3-mini')) {
+    if (normalizedId.includes('openai/o3-mini')) {
       return 'o3 Mini';
     } else if (normalizedId.includes('anthropic/claude-3.7-sonnet')) {
       return 'Claude 3.7 Sonnet';
