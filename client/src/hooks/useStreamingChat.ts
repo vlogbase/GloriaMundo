@@ -19,7 +19,6 @@ export const useStreamingChat = () => {
   const streamingMessageRef = useRef<{
     id: number;
     content: string;
-    reasoningData?: Record<string, any>;
   } | null>(null);
   
   // Reference to the EventSource for cleanup
@@ -117,11 +116,10 @@ export const useStreamingChat = () => {
                           window.location.host.includes('.gloriamundo.com') ||
                           !window.location.host.includes('localhost');
       
-      // Enable streaming for both reasoning models and OpenRouter models
-      // Always enable streaming for OpenRouter models, regardless of environment
-      const isOpenRouterModel = selectedModel.includes('/') || selectedModel === 'openrouter';
-      if (selectedModel === "reasoning" || isOpenRouterModel) {
-        // We're using streaming for this model
+      // In production environments or with non-reasoning models, don't use streaming
+      // This avoids streaming issues in deployed environments
+      if (selectedModel === "reasoning" && !isProduction) {
+        // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
         // Create a new EventSource connection
@@ -138,8 +136,7 @@ export const useStreamingChat = () => {
                 // Set up the streaming message reference
                 streamingMessageRef.current = {
                   id: data.assistantMessageId,
-                  content: "",
-                  reasoningData: {}
+                  content: ""
                 };
                 
                 // Add an empty message that will be updated as chunks arrive
@@ -149,7 +146,6 @@ export const useStreamingChat = () => {
                   role: "assistant",
                   content: "",
                   citations: null,
-                  reasoningData: {},
                   createdAt: new Date().toISOString(),
                 }]);
                 break;
@@ -165,29 +161,6 @@ export const useStreamingChat = () => {
                       ? { ...msg, content: streamingMessageRef.current!.content } 
                       : msg
                   ));
-                }
-                break;
-                
-              case "reasoning":
-                // Update the reasoning data in the streaming message reference
-                if (streamingMessageRef.current && streamingMessageRef.current.id === data.id) {
-                  // Merge the new reasoning data with existing data
-                  streamingMessageRef.current.reasoningData = {
-                    ...streamingMessageRef.current.reasoningData,
-                    ...data.content
-                  };
-                  
-                  // Update the message in the state with the new reasoning data
-                  setMessages((prev) => prev.map(msg => 
-                    msg.id === data.id 
-                      ? { 
-                          ...msg, 
-                          reasoningData: streamingMessageRef.current!.reasoningData 
-                        } 
-                      : msg
-                  ));
-                  
-                  console.log("Received reasoning data:", data.content);
                 }
                 break;
                 
@@ -319,8 +292,7 @@ export const useStreamingChat = () => {
     } finally {
       // For non-streaming requests, we need to set loading to false here
       // (For streaming requests, this is done in the "done" event handler)
-      const isOpenRouterModel = selectedModel.includes('/') || selectedModel === 'openrouter';
-      if ((selectedModel !== "reasoning" && !isOpenRouterModel) || eventSourceRef.current === null) {
+      if (selectedModel !== "reasoning" || eventSourceRef.current === null) {
         setIsLoadingResponse(false);
       }
     }

@@ -49,7 +49,6 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   image: text("image"), // Store base64 encoded image data for multimodal messages
   citations: jsonb("citations"), // Store API citation data
-  reasoningData: jsonb("reasoning_data"), // Store reasoning data from models that provide it
   modelId: text("model_id"), // Store the model ID used for this message
   promptTokens: integer("prompt_tokens"), // Number of tokens in the prompt
   completionTokens: integer("completion_tokens"), // Number of tokens in the completion
@@ -62,7 +61,6 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   content: true,
   image: true,
   citations: true,
-  reasoningData: true,
   modelId: true,
   promptTokens: true,
   completionTokens: true,
