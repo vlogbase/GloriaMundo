@@ -21,6 +21,7 @@ export interface Message {
   modelId?: string; // The model used for this message
   promptTokens?: number; // Number of tokens in the prompt
   completionTokens?: number; // Number of tokens in the completion
+  reasoningData?: Record<string, any>; // Reasoning data from the model (for models that support it)
   createdAt: string;
 }
 
