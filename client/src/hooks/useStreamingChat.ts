@@ -217,7 +217,7 @@ export const useStreamingChat = () => {
                    reasoningData: {}
                 };
                 assistantMessageId = newMessagePlaceholder.id;
-                console.log("Initialized streaming message with ID:", assistantMessageId);
+                console.log("[STREAM DEBUG] Initialized streaming message with ID:", assistantMessageId);
             }
             // --- End Handle first chunk ---
 
@@ -250,17 +250,17 @@ export const useStreamingChat = () => {
             // Check for standard reasoning/tool fields in the delta first
             if (delta?.tool_calls) {
                 extractedReasoningChunk = { toolCalls: delta.tool_calls };
-                console.log("Detected reasoning chunk (tool_calls):", extractedReasoningChunk);
+                console.log("[STREAM DEBUG] Detected reasoning chunk (tool_calls):", extractedReasoningChunk);
             } else if (delta?.function_call) {
                 extractedReasoningChunk = { functionCall: delta.function_call };
-                console.log("Detected reasoning chunk (function_call):", extractedReasoningChunk);
+                console.log("[STREAM DEBUG] Detected reasoning chunk (function_call):", extractedReasoningChunk);
             } else {
                 // Fallback check: Check for reasoning field at the message level (outside delta)
                 // Structure might be choices[0].message.reasoning or choices[0].reasoning
                 const reasoningContent = parsedData.choices?.[0]?.message?.reasoning || parsedData.choices?.[0]?.reasoning;
                 if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
                     extractedReasoningChunk = { thinking_process: reasoningContent }; // Store under a custom key
-                    console.log("Detected reasoning chunk (string field):", reasoningContent);
+                    console.log("[STREAM DEBUG] Detected reasoning chunk (string field):", reasoningContent);
                 }
             }
             // TODO: Add checks for other potential fields like logprobs based on testing
@@ -332,7 +332,7 @@ export const useStreamingChat = () => {
 
           } catch (parseError) {
             // Keep existing error handling logic here (or adapt as needed)
-            console.error("Error parsing SSE message:", parseError, "Raw data:", event.data);
+            console.error("[STREAM DEBUG] Error parsing SSE message:", parseError, "Raw data:", event.data);
             // Ensure toast function is accessible here
             toast({ variant: "destructive", title: "Response Format Error", description: "Received invalid data from server." });
             // Add fallback logic if needed
@@ -353,7 +353,7 @@ export const useStreamingChat = () => {
         
         eventSource.onerror = (error) => {
           console.error('[STREAM DEBUG] eventSource.onerror: Error event received', { error });
-          console.error("EventSource error:", error);
+          console.error("[STREAM DEBUG] EventSource full error object:", error);
           
           // Check if this is a connection error or server error
           let errorDescription = "Streaming failed. Falling back to standard mode.";

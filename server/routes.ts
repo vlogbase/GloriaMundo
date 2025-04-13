@@ -1433,7 +1433,11 @@ Format your responses using markdown for better readability and organization.`;
         let errorMessage = "Failed to process streaming response";
         
         if (error instanceof Error) {
-          console.error(`Error in streaming response:`, error.message);
+          console.error(`[STREAM HANDLER] Error in streaming response:`, error.message);
+          console.error(`[STREAM HANDLER] Error stack trace:`, error.stack);
+          
+          // Log more details about the error context
+          console.error(`[STREAM HANDLER] Error context: modelType=${modelType}, conversationId=${conversationId}`);
           
           let apiError: ApiError;
           
@@ -1444,9 +1448,12 @@ Format your responses using markdown for better readability and organization.`;
             const categoryMatch = errorText.match(/Category:\s+(\w+)/);
             const category = categoryMatch ? categoryMatch[1] as ErrorCategory : ErrorCategory.UNKNOWN;
             
+            console.log(`[STREAM HANDLER] Parsed error category: ${category}`);
             // Get user-friendly message based on category
             errorMessage = getUserMessageForCategory(category, modelType);
+            console.log(`[STREAM HANDLER] User-friendly error message: ${errorMessage}`);
           } else if (error.message.includes("Failed to get reader")) {
+            console.log(`[STREAM HANDLER] Reader error detected`);
             apiError = {
               status: 500,
               category: ErrorCategory.INTERNAL_SERVER,
@@ -1456,11 +1463,13 @@ Format your responses using markdown for better readability and organization.`;
             errorMessage = apiError.userMessage;
           } else {
             // Use handleInternalError to categorize other types of errors
+            console.log(`[STREAM HANDLER] Uncategorized error, using handleInternalError()`);
             apiError = handleInternalError(error, modelConfig.apiProvider);
             errorMessage = apiError.userMessage;
+            console.log(`[STREAM HANDLER] Categorized as: ${apiError.category}`);
           }
         } else {
-          console.error(`Unknown error in streaming response:`, error);
+          console.error(`[STREAM HANDLER] Unknown error in streaming response (not an Error instance):`, error);
           // Handle unknown errors
           const apiError = {
             status: 500,
@@ -1469,15 +1478,23 @@ Format your responses using markdown for better readability and organization.`;
             userMessage: getUserMessageForCategory(ErrorCategory.UNKNOWN, modelType)
           };
           errorMessage = apiError.userMessage;
+          console.log(`[STREAM HANDLER] Using generic error message: ${errorMessage}`);
         }
         
         // Send the error event to the client
-        res.write(`data: ${JSON.stringify({ 
-          type: "error", 
-          message: errorMessage
-        })}\n\n`);
-        
-        res.end();
+        console.log(`[STREAM HANDLER] Sending error event to client: "${errorMessage}"`);
+        try {
+          res.write(`data: ${JSON.stringify({ 
+            type: "error", 
+            message: errorMessage,
+            timestamp: new Date().toISOString()
+          })}\n\n`);
+          
+          res.end();
+          console.log(`[STREAM HANDLER] Error response successfully sent`);
+        } catch (writeError) {
+          console.error(`[STREAM HANDLER] Failed to write error response:`, writeError);
+        }
       }
     } catch (error) {
       console.error('[STREAM HANDLER] Outer error handler caught exception:', error);
