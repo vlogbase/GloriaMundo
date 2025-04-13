@@ -98,6 +98,15 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
   // Helper to format the model ID to a short name
   const getShortModelName = (modelId?: string) => {
     if (!modelId) return null;
+
+    // Handle legacy model types
+    if (modelId === 'reasoning') {
+      return 'o3 Mini';
+    }
+    
+    if (modelId === 'search') {
+      return 'Sonar Pro';
+    }
     
     // Extract the model name from the fully qualified ID
     if (modelId.includes("/")) {
@@ -108,9 +117,15 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
       return modelName
         .replace("gemini-pro", "Gemini")
         .replace("gemini-1.5-pro", "Gemini 1.5")
+        .replace("gemini-2.0-flash", "Gemini 2.0 Flash")
+        .replace("gemini-2.5-pro", "Gemini 2.5 Pro")
         .replace("llama-3", "Llama 3")
         .replace("mixtral", "Mixtral")
         .replace("gpt-4", "GPT-4")
+        .replace("gpt-4o", "GPT-4o")
+        .replace("claude-3", "Claude 3")
+        .replace("o3-mini", "o3 Mini")
+        .replace("sonar-pro", "Sonar Pro")
         .replace("gpt-3.5", "GPT-3.5")
         .replace("-preview", "")
         .replace("-latest", "")
@@ -217,7 +232,11 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="p-3 max-w-xs">
               <p className="font-medium mb-1">Model information</p>
-              <p className="text-xs mb-2 text-muted-foreground">{message.modelId}</p>
+              <p className="text-xs mb-2 text-muted-foreground">
+                {message.modelId === 'reasoning' ? 'openai/o3-mini-high (Reasoning)' :
+                 message.modelId === 'search' ? 'perplexity/sonar-pro (Search)' :
+                 message.modelId}
+              </p>
               
               <div className="grid grid-cols-2 gap-1 text-sm">
                 {message.promptTokens && (
