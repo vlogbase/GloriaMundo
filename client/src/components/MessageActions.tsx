@@ -101,7 +101,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
 
     // Handle legacy model types
     if (modelId === 'reasoning') {
-      return 'o3 Mini';
+      return 'o3 Mini H';
     }
     
     if (modelId === 'search') {
@@ -124,6 +124,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
         .replace("gpt-4", "GPT-4")
         .replace("gpt-4o", "GPT-4o")
         .replace("claude-3", "Claude 3")
+        .replace("o3-mini-high", "o3 Mini H")
         .replace("o3-mini", "o3 Mini")
         .replace("sonar-pro", "Sonar Pro")
         .replace("gpt-3.5", "GPT-3.5")

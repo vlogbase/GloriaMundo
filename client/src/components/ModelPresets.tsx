@@ -442,8 +442,9 @@ export const ModelPresets = () => {
                   {getPresetIcon(presetKey, modelId || '')}
                   {modelId ? (
                     <span className="truncate max-w-[100px]">
-                      {modelId === 'reasoning' ? 'o3 Mini' : 
+                      {modelId === 'reasoning' ? 'o3 Mini H' : 
                        modelId === 'search' ? 'Sonar Pro' : 
+                       modelId === 'openai/o3-mini-high' ? 'o3 Mini H' :
                        formatModelName(modelId)}
                     </span>
                   ) : (
