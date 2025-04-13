@@ -343,12 +343,13 @@ export const useStreamingChat = () => {
 
                 // Accumulate simple 'thinking_process' string
                 if (extractedReasoningChunk.thinking_process) {
-                    console.log("[STREAM DEBUG] Accumulating thinking_process chunk:", {
+                    const accumulateTimestamp = new Date().toISOString();
+                    console.log(`[STREAM DEBUG] [${accumulateTimestamp}] Accumulating thinking_process chunk:`, {
                         existingLength: (updatedReasoning.thinking_process || "").length,
                         newChunkLength: extractedReasoningChunk.thinking_process.length
                     });
                     updatedReasoning.thinking_process = (updatedReasoning.thinking_process || "") + extractedReasoningChunk.thinking_process;
-                    console.log("[STREAM DEBUG] Updated thinking_process total length:", updatedReasoning.thinking_process.length);
+                    console.log(`[STREAM DEBUG] [${accumulateTimestamp}] Updated thinking_process total length:`, updatedReasoning.thinking_process.length);
                 }
 
                 // Accumulate toolCalls (using previous intelligent merge logic)
