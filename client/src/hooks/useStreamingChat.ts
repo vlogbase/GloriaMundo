@@ -4,6 +4,7 @@ import { Message } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import { refreshSkimlinks } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
 
 export const useStreamingChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -239,8 +240,8 @@ export const useStreamingChat = () => {
 
 
             // --- Reasoning Data Handling ---
-            // Ensure assistantMessageId is available from the outer scope or ref
-            const assistantMessageId = streamingMessageRef.current?.id;
+            // Get the ID from the current streaming message
+            const msgId = streamingMessageRef.current?.id;
             const delta = parsedData.choices?.[0]?.delta;
             let extractedReasoningChunk = null;
 
@@ -262,7 +263,7 @@ export const useStreamingChat = () => {
             }
             // TODO: Add checks for other potential fields like logprobs based on testing
 
-            if (extractedReasoningChunk && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
+            if (extractedReasoningChunk && streamingMessageRef.current && msgId === streamingMessageRef.current.id) {
                 // --- Accumulate Reasoning Data ---
                 // NOTE: Simple accumulation might not be sufficient for complex cases like
                 // arguments arriving in multiple chunks. More sophisticated merging might be needed based on testing.
@@ -320,7 +321,7 @@ export const useStreamingChat = () => {
                 // Update message state with the new reasoning data
                 // Ensure setMessages is accessible here
                 setMessages((prev) => prev.map(msg =>
-                  msg.id === assistantMessageId
+                  msg.id === msgId
                     ? { ...msg, reasoningData: { ...(streamingMessageRef.current!.reasoningData) } } // Ensure new object ref for react update
                     : msg
                 ));
@@ -526,6 +527,85 @@ export const useStreamingChat = () => {
     setLocation("/");
   }, [setLocation]);
 
+  // Upload document for RAG
+  const uploadDocument = useCallback(async (conversationId: number, file: File) => {
+    if (!conversationId) {
+      throw new Error("Conversation ID is required to upload a document");
+    }
+    
+    const formData = new FormData();
+    formData.append('document', file);
+    
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        // Handle different error cases more gracefully
+        if (response.status === 404) {
+          throw new Error("Conversation not found. Please create a new chat and try again.");
+        }
+        
+        // Try to parse error JSON, but handle cases where it might fail
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to upload document");
+        } catch (jsonError) {
+          // If JSON parsing fails, use status text
+          throw new Error(`Upload failed: ${response.statusText || response.status}`);
+        }
+      }
+      
+      try {
+        return await response.json();
+      } catch (jsonError) {
+        console.error("Error parsing success response:", jsonError);
+        // Return a default success object if JSON parsing fails
+        return { success: true, message: "Document uploaded successfully" };
+      }
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      throw error;
+    }
+  }, []);
+  
+  // Upload document wrapper that creates a conversation if needed
+  const handleDocumentUpload = useCallback(async (file: File) => {
+    try {
+      // If no active conversation, create one first
+      if (!activeConversationId) {
+        // Create a new conversation with document name as title
+        const newConversation = await apiRequest(
+          "POST", 
+          "/api/conversations", 
+          { title: `Document: ${file.name}` }
+        );
+        
+        const data = await newConversation.json();
+        
+        // Set the new conversation as active
+        setActiveConversationId(data.id);
+        setLocation(`/chat/${data.id}`);
+        
+        // Upload document to the new conversation
+        return await uploadDocument(data.id, file);
+      }
+      
+      // If we already have an active conversation, use that
+      return await uploadDocument(activeConversationId, file);
+    } catch (error) {
+      console.error("Error handling document upload:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload document",
+      });
+      throw error;
+    }
+  }, [activeConversationId, uploadDocument, setLocation, toast]);
+
   return {
     messages,
     isLoadingMessages,
@@ -535,5 +615,6 @@ export const useStreamingChat = () => {
     loadConversation,
     sendMessage,
     startNewConversation,
+    uploadDocument: handleDocumentUpload,
   };
 };
