@@ -239,61 +239,67 @@ export const useStreamingChat = () => {
 
 
             // --- Reasoning Data Handling ---
+            // Ensure assistantMessageId is available from the outer scope or ref
+            const assistantMessageId = streamingMessageRef.current?.id;
             const delta = parsedData.choices?.[0]?.delta;
             let extractedReasoningChunk = null;
 
+            // Check for standard reasoning/tool fields in the delta first
             if (delta?.tool_calls) {
-                // Handle tool calls format
                 extractedReasoningChunk = { toolCalls: delta.tool_calls };
                 console.log("Detected reasoning chunk (tool_calls):", extractedReasoningChunk);
             } else if (delta?.function_call) {
-                // Handle function call format
                 extractedReasoningChunk = { functionCall: delta.function_call };
                 console.log("Detected reasoning chunk (function_call):", extractedReasoningChunk);
-            } // TODO: Add checks for other potential fields like logprobs based on testing
+            } else {
+                // Fallback check: Check for reasoning field at the message level (outside delta)
+                // Structure might be choices[0].message.reasoning or choices[0].reasoning
+                const reasoningContent = parsedData.choices?.[0]?.message?.reasoning || parsedData.choices?.[0]?.reasoning;
+                if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
+                    extractedReasoningChunk = { thinking_process: reasoningContent }; // Store under a custom key
+                    console.log("Detected reasoning chunk (string field):", reasoningContent);
+                }
+            }
+            // TODO: Add checks for other potential fields like logprobs based on testing
 
             if (extractedReasoningChunk && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
                 // --- Accumulate Reasoning Data ---
                 // NOTE: Simple accumulation might not be sufficient for complex cases like
-                // arguments arriving in multiple chunks. More sophisticated merging might be needed.
+                // arguments arriving in multiple chunks. More sophisticated merging might be needed based on testing.
                 const currentReasoning = streamingMessageRef.current.reasoningData || {};
                 const updatedReasoning = { ...currentReasoning };
 
-                // Example: Merge toolCalls arrays intelligently
+                // Accumulate simple 'thinking_process' string
+                if (extractedReasoningChunk.thinking_process) {
+                    updatedReasoning.thinking_process = (updatedReasoning.thinking_process || "") + extractedReasoningChunk.thinking_process;
+                }
+
+                // Accumulate toolCalls (using previous intelligent merge logic)
                 if (extractedReasoningChunk.toolCalls && Array.isArray(extractedReasoningChunk.toolCalls)) {
                     if (!updatedReasoning.toolCalls) updatedReasoning.toolCalls = [];
                      extractedReasoningChunk.toolCalls.forEach((newToolCall: any) => {
-                       // Find existing tool call by index if available, otherwise assume append or match by ID if present
                        const existingCallIndex = newToolCall.index !== undefined ? updatedReasoning.toolCalls.findIndex((c: any) => c.index === newToolCall.index) : -1;
-                       // Fallback: Find by ID if index is missing but ID exists
                        const existingCallIndexById = (existingCallIndex === -1 && newToolCall.id) ? updatedReasoning.toolCalls.findIndex((c: any) => c.id === newToolCall.id) : -1;
                        const finalIndex = existingCallIndex !== -1 ? existingCallIndex : existingCallIndexById;
-
                        if (finalIndex > -1) {
-                         // Deep merge existing call
                          const existingCall = updatedReasoning.toolCalls[finalIndex];
-                         // Ensure 'function' exists on both before merging
                          const functionUpdate = { ...(existingCall.function || {}), ...(newToolCall.function || {}) };
-                         // Handle argument streaming safely
                          if (newToolCall.function?.arguments && typeof existingCall.function?.arguments === 'string') {
                            functionUpdate.arguments = existingCall.function.arguments + newToolCall.function.arguments;
                          } else if (newToolCall.function?.arguments) {
-                            // If existing is not string or new is not string, prefer new args
                             functionUpdate.arguments = newToolCall.function.arguments;
                          }
                          updatedReasoning.toolCalls[finalIndex] = { ...existingCall, ...newToolCall, function: functionUpdate };
                        } else {
-                         // Add as new tool call if no match found
                          updatedReasoning.toolCalls.push(newToolCall);
                        }
                      });
                 }
-                // Example: Merge functionCall data
+                // Accumulate functionCall (using previous intelligent merge logic)
                 if (extractedReasoningChunk.functionCall) {
                      if (!updatedReasoning.functionCall) {
                          updatedReasoning.functionCall = extractedReasoningChunk.functionCall;
                      } else {
-                         // Safely check types before concatenating arguments
                          if (extractedReasoningChunk.functionCall.arguments &&
                              typeof extractedReasoningChunk.functionCall.arguments === 'string' &&
                              updatedReasoning.functionCall.arguments &&
@@ -301,10 +307,8 @@ export const useStreamingChat = () => {
                          {
                              updatedReasoning.functionCall.arguments += extractedReasoningChunk.functionCall.arguments;
                          } else if (extractedReasoningChunk.functionCall.arguments) {
-                            // Otherwise, prefer the arguments from the new chunk if they exist
                             updatedReasoning.functionCall.arguments = extractedReasoningChunk.functionCall.arguments;
                          }
-                         // Merge other properties, ensuring functionCall object exists
                          updatedReasoning.functionCall = {...updatedReasoning.functionCall, ...extractedReasoningChunk.functionCall};
                      }
                 }
@@ -314,7 +318,7 @@ export const useStreamingChat = () => {
                 // --- End Accumulate ---
 
                 // Update message state with the new reasoning data
-                // Ensure setMessages and assistantMessageId are accessible
+                // Ensure setMessages is accessible here
                 setMessages((prev) => prev.map(msg =>
                   msg.id === assistantMessageId
                     ? { ...msg, reasoningData: { ...(streamingMessageRef.current!.reasoningData) } } // Ensure new object ref for react update
