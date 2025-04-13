@@ -101,11 +101,11 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
 
     // Handle legacy model types
     if (modelId === 'reasoning') {
-      return 'o3 Mini H';  // Changed to "o3 Mini H" to distinguish from regular o3 Mini
+      return 'Reasoning';  // Reverting back to original display name as requested
     }
     
     if (modelId === 'search') {
-      return 'Sonar Pro';
+      return 'Search';  // Reverting back to original display name as requested
     }
     
     // Extract the model name from the fully qualified ID
