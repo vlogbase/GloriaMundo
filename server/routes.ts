@@ -1543,9 +1543,8 @@ Format your responses using markdown for better readability and organization.`;
         modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
       }
       
-      // We've decided to completely remove streaming functionality
-      // This simplifies the code and reduces potential bugs
-      const shouldStream = false; // Always false - streaming is disabled
+      // We've removed streaming functionality entirely
+      // This endpoint is for non-streaming requests only
 
       // Create user message
       const userMessage = await storage.createMessage({
@@ -1779,7 +1778,7 @@ Format your responses using markdown for better readability and organization.`;
           model: modelConfig.modelName,
           temperature: 0.2,
           top_p: 0.9,
-          stream: shouldStream,
+          stream: false,
           messagesCount: messages.length,
           messagesTypes: messages.map(msg => {
             if ('content' in msg && Array.isArray(msg.content)) {
