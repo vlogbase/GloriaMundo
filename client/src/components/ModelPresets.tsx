@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useModelPresets } from '@/hooks/useModelPresets';
 import { useOpenRouterModels } from '@/hooks/useOpenRouterModels';
 import { useModelSelection } from '@/hooks/useModelSelection';
+import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
@@ -290,6 +291,11 @@ export const ModelPresets = () => {
     const modelId = activatePreset(presetKey);
     handleActivation(presetKey, modelId);
   };
+  
+
+  
+  // Access toast
+  const { toast } = useToast();
   
   // Handle free tier button click
   const handleFreeTierClick = () => {
