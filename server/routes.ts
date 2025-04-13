@@ -1103,6 +1103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Streaming endpoint for chat messages
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
     try {
+      console.log('[STREAM HANDLER] Starting GET /stream request processing.');
       const conversationId = parseInt(req.params.id);
       
       // Get the conversation first to check permissions
@@ -1124,6 +1125,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "You don't have permission to access this conversation" });
         }
       }
+      
+      console.log('[STREAM HANDLER] Permissions checked, proceeding.');
       
       const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
         content?: string;
