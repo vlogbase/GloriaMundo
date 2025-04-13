@@ -9,7 +9,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { AdSense } from "@/components/AdSense";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { AuthButtons } from "@/components/AuthButtons";
-import { useChat } from "@/hooks/useChat";
+import { useStreamingChat } from "@/hooks/useStreamingChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useTheme } from "@/hooks/use-theme";
 import { Menu, Globe, Sparkles, Sun, Moon } from "lucide-react";
@@ -72,7 +72,7 @@ export default function Chat() {
     toggleSidebarCollapse
   } = useConversations();
   
-  // Use the standard chat hook for message handling
+  // Use the streaming chat hook for message handling
   const { 
     messages, 
     isLoadingMessages,
@@ -81,8 +81,9 @@ export default function Chat() {
     loadConversation,
     startNewConversation,
     activeConversationId,
-    uploadDocument
-  } = useChat();
+    uploadDocument,
+    streamingComplete
+  } = useStreamingChat();
   
   // Use the documents hook for document management
   const {
@@ -319,6 +320,7 @@ export default function Chat() {
                 const isLatestAssistantMessage = index === messages.length - 1 && message.role === 'assistant';
                 const isLatestUserMessage = index === messages.length - 1 && message.role === 'user' && isLoadingResponse;
                 const isFirstEverMessage = index === 0;
+                const isStreamingMessage = isLatestAssistantMessage && isLoadingResponse;
                 
                 // For debugging, log each message being rendered
                 console.log(`[Chat] Rendering message ${index}:`, {
@@ -327,6 +329,7 @@ export default function Chat() {
                   content: message.content ? message.content.substring(0, 30) + '...' : 'No content',
                   isLatestAssistantMessage,
                   isLatestUserMessage,
+                  isStreamingMessage,
                   isFirstEverMessage
                 });
                 
@@ -345,11 +348,15 @@ export default function Chat() {
                   <div 
                     key={messageKey} 
                     ref={refToUse}
-                    className={isFirstEverMessage ? 'first-message' : ''}
+                    className={cn(
+                      isFirstEverMessage ? 'first-message' : '',
+                      isStreamingMessage ? 'streaming-message' : ''
+                    )}
                   >
                     <ChatMessage 
                       message={message} 
-                      relatedDocuments={message.role === 'user' ? documents : []} 
+                      relatedDocuments={message.role === 'user' ? documents : []}
+                      isStreaming={isStreamingMessage}
                     />
                   </div>
                 );

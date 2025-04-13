@@ -41,9 +41,10 @@ function useIntersectionObserver(options = {}) {
 interface ChatMessageProps {
   message: Message;
   relatedDocuments?: Document[];
+  isStreaming?: boolean;
 }
 
-export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps) => {
+export const ChatMessage = ({ message, relatedDocuments = [], isStreaming = false }: ChatMessageProps) => {
   const isUser = message.role === "user";
   const [previewDocument, setPreviewDocument] = useState<Document | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -148,7 +149,12 @@ export const ChatMessage = ({ message, relatedDocuments = [] }: ChatMessageProps
           <div className="w-full">
             <div className="markdown break-words">
               {/* Pass citations to MarkdownRenderer for processing reference links */}
-              <MarkdownRenderer citations={message.citations}>{message.content}</MarkdownRenderer>
+              <div className={isStreaming ? 'streaming-content' : ''}>
+                <MarkdownRenderer citations={message.citations}>{message.content}</MarkdownRenderer>
+                {isStreaming && (
+                  <span className="typing-cursor">|</span>
+                )}
+              </div>
               
               {/* Display citations if available */}
               {message.citations && message.citations.length > 0 && (
