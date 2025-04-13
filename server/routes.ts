@@ -1103,8 +1103,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Streaming endpoint for chat messages
   app.get("/api/conversations/:id/messages/stream", async (req, res) => {
     try {
-      const timestamp = new Date().toISOString();
-      console.log(`[STREAM DEBUG] [${timestamp}] Starting GET /stream request processing.`);
       const conversationId = parseInt(req.params.id);
       
       // Get the conversation first to check permissions
@@ -1127,8 +1125,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      console.log(`[STREAM DEBUG] [${timestamp}] Permissions checked, proceeding.`);
-      
       const { content, modelType = "reasoning", modelId = "", image } = req.query as { 
         content?: string;
         modelType?: string;
@@ -1150,8 +1146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get the model configuration based on the requested model type
-      // Allow any model type for streaming, ensuring type safety
-      const modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
+      const modelConfig = MODEL_CONFIGS[modelType] || MODEL_CONFIGS.reasoning; // Allow any model type for streaming
       
       // Always use streaming for this endpoint
       const shouldStream = true;
@@ -1312,8 +1307,6 @@ Format your responses using markdown for better readability and organization.`;
           console.log('Created clean messages for OpenRouter streaming API');
         }
         
-        const logTimestamp = new Date().toISOString();
-        console.log(`[STREAM DEBUG] [${logTimestamp}] Preparing API payload...`);
         const payload = {
           model: modelParam,
           messages: cleanMessages,
@@ -1328,76 +1321,27 @@ Format your responses using markdown for better readability and organization.`;
         res.setHeader('Connection', 'keep-alive');
         
         // Make the API request
-        console.log(`[STREAM DEBUG] [${logTimestamp}] Initiating fetch to OpenRouter...`);
-        console.log(`[STREAM DEBUG] [${logTimestamp}] Request payload:`, {
-          model: payload.model,
-          stream: payload.stream,
-          messageCount: payload.messages ? payload.messages.length : 0,
-          temperature: payload.temperature,
-          modelType: modelType
-        });
-        
-        // Set up timeout with AbortController (300 seconds = 5 minutes)
-        const abortController = new AbortController();
-        const timeoutId = setTimeout(() => {
-          abortController.abort();
-          console.error(`[STREAM DEBUG] [${new Date().toISOString()}] Request timed out after 300s`);
-        }, 300000); // 300 seconds
-        
         const response = await fetch(modelConfig.apiUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${modelConfig.apiKey}`
           },
-          body: JSON.stringify(payload),
-          signal: abortController.signal
+          body: JSON.stringify(payload)
         });
-        
-        // Clear the timeout
-        clearTimeout(timeoutId);
-        
+
         if (!response.ok) {
           const errorText = await response.text();
-          const timestamp = new Date().toISOString();
-          console.error(`[STREAM DEBUG] [${timestamp}] ${modelConfig.apiProvider} API streaming error: ${errorText}`);
-          console.error(`[STREAM DEBUG] [${timestamp}] Response status: ${response.status}, headers:`, response.headers);
+          console.error(`${modelConfig.apiProvider} API streaming error: ${errorText}`);
           
           // Parse the error using our enhanced error handler
           const apiError = parseOpenRouterError(response.status, errorText);
-          
-          // Log the structured error information
-          console.error(`[STREAM DEBUG] [${timestamp}] Parsed error category: ${apiError.category}, details:`, apiError.details);
-          
-          // Send a structured error event to the client before closing the stream
-          try {
-            // Send a special error event with details that the client can handle
-            res.write(`data: ${JSON.stringify({
-              error: true,
-              status: response.status,
-              message: apiError.userMessage,
-              category: apiError.category,
-              timestamp
-            })}\n\n`);
-            
-            // Send a final [DONE] event to signal the end of the stream
-            res.write('data: [DONE]\n\n');
-            res.end();
-            console.log(`[STREAM DEBUG] [${timestamp}] Sent structured error event to client`);
-            
-            // Return early to prevent further execution
-            return;
-          } catch (sendError) {
-            console.error(`[STREAM DEBUG] [${timestamp}] Failed to send error event to client:`, sendError);
-          }
           
           // Throw a more detailed error message
           throw new Error(
             `${modelConfig.apiProvider} API error: ${apiError.message} (Status: ${response.status}, Category: ${apiError.category})`
           );
         }
-        
-        console.log(`[STREAM DEBUG] [${logTimestamp}] ${modelConfig.apiProvider} response successful: ${response.status} ${response.statusText}`);
 
         // Set headers for SSE
         res.writeHead(200, {
@@ -1407,15 +1351,7 @@ Format your responses using markdown for better readability and organization.`;
         });
 
         // Directly pipe the raw OpenRouter response stream to the client response object 'res'
-        console.log(`[STREAM DEBUG] [${logTimestamp}] Stream response received successfully, piping to client...`);
-        if (response.body) {
-          // Safe casting to avoid TypeScript errors with pipe method
-          const nodeReadable = response.body as unknown as NodeJS.ReadableStream;
-          nodeReadable.pipe(res);
-          console.log(`[STREAM DEBUG] [${logTimestamp}] Stream piping initiated`);
-        } else {
-          throw new Error('Response body is null or undefined');
-        }
+        response.body.pipe(res);
 
         // Add a return statement immediately after piping, if not already the end of the function block
         return;
@@ -1477,13 +1413,8 @@ Format your responses using markdown for better readability and organization.`;
         // Create a detailed error message for the client using our error categorization system
         let errorMessage = "Failed to process streaming response";
         
-        const errorTimestamp = new Date().toISOString();
         if (error instanceof Error) {
-          console.error(`[STREAM DEBUG] [${errorTimestamp}] Error in streaming response:`, error.message);
-          console.error(`[STREAM DEBUG] [${errorTimestamp}] Error stack trace:`, error.stack);
-          
-          // Log more details about the error context
-          console.error(`[STREAM DEBUG] [${errorTimestamp}] Error context: modelType=${modelType}, conversationId=${conversationId}`);
+          console.error(`Error in streaming response:`, error.message);
           
           let apiError: ApiError;
           
@@ -1494,12 +1425,9 @@ Format your responses using markdown for better readability and organization.`;
             const categoryMatch = errorText.match(/Category:\s+(\w+)/);
             const category = categoryMatch ? categoryMatch[1] as ErrorCategory : ErrorCategory.UNKNOWN;
             
-            console.log(`[STREAM DEBUG] [${errorTimestamp}] Parsed error category: ${category}`);
             // Get user-friendly message based on category
             errorMessage = getUserMessageForCategory(category, modelType);
-            console.log(`[STREAM DEBUG] [${errorTimestamp}] User-friendly error message: ${errorMessage}`);
           } else if (error.message.includes("Failed to get reader")) {
-            console.log(`[STREAM DEBUG] [${errorTimestamp}] Reader error detected`);
             apiError = {
               status: 500,
               category: ErrorCategory.INTERNAL_SERVER,
@@ -1509,13 +1437,11 @@ Format your responses using markdown for better readability and organization.`;
             errorMessage = apiError.userMessage;
           } else {
             // Use handleInternalError to categorize other types of errors
-            console.log(`[STREAM DEBUG] [${errorTimestamp}] Uncategorized error, using handleInternalError()`);
             apiError = handleInternalError(error, modelConfig.apiProvider);
             errorMessage = apiError.userMessage;
-            console.log(`[STREAM DEBUG] [${errorTimestamp}] Categorized as: ${apiError.category}`);
           }
         } else {
-          console.error(`[STREAM DEBUG] [${errorTimestamp}] Unknown error in streaming response (not an Error instance):`, error);
+          console.error(`Unknown error in streaming response:`, error);
           // Handle unknown errors
           const apiError = {
             status: 500,
@@ -1524,42 +1450,19 @@ Format your responses using markdown for better readability and organization.`;
             userMessage: getUserMessageForCategory(ErrorCategory.UNKNOWN, modelType)
           };
           errorMessage = apiError.userMessage;
-          console.log(`[STREAM DEBUG] [${errorTimestamp}] Using generic error message: ${errorMessage}`);
         }
         
         // Send the error event to the client
-        console.log(`[STREAM DEBUG] [${errorTimestamp}] Sending error event to client: "${errorMessage}"`);
-        try {
-          res.write(`data: ${JSON.stringify({ 
-            type: "error", 
-            message: errorMessage,
-            timestamp: new Date().toISOString()
-          })}\n\n`);
-          
-          res.end();
-          console.log(`[STREAM DEBUG] [${errorTimestamp}] Error response successfully sent`);
-        } catch (writeError) {
-          console.error(`[STREAM DEBUG] [${errorTimestamp}] Failed to write error response:`, writeError);
-        }
+        res.write(`data: ${JSON.stringify({ 
+          type: "error", 
+          message: errorMessage
+        })}\n\n`);
+        
+        res.end();
       }
     } catch (error) {
-      const outerErrorTimestamp = new Date().toISOString();
-      console.error(`[STREAM DEBUG] [${outerErrorTimestamp}] Outer error handler caught exception:`, error);
-      // Provide more detailed error information for debugging
-      const errorDetail = error instanceof Error ? error.message : String(error);
-      console.error(`[STREAM DEBUG] [${outerErrorTimestamp}] Error details: ${errorDetail}`);
-      
-      // Try to send a properly formatted error response
-      try {
-        res.status(500).json({
-          message: "Failed to process streaming message",
-          error: errorDetail,
-          timestamp: new Date().toISOString()
-        });
-      } catch (responseError) {
-        // In case response has already been sent/ended
-        console.error(`[STREAM DEBUG] [${outerErrorTimestamp}] Could not send error response:`, responseError);
-      }
+      console.error('Server streaming error:', error);
+      res.status(500).json({ message: "Failed to process streaming message" });
     }
   });
 

@@ -75,8 +75,6 @@ export const useStreamingChat = () => {
 
     // Determine if the request should attempt streaming (stream unless an image is present)
     const shouldAttemptStream = !image;
-    const initialTimestamp = new Date().toISOString();
-    console.log(`[STREAM DEBUG] [${initialTimestamp}] Checking if should stream...`, { shouldAttemptStream, image, selectedModel, customOpenRouterModelId });
     
     setIsLoadingResponse(true);
     
@@ -124,8 +122,6 @@ export const useStreamingChat = () => {
       
       // If we should attempt streaming, set it up
       if (shouldAttemptStream) {
-        const streamingPathTimestamp = new Date().toISOString();
-        console.log(`[STREAM DEBUG] [${streamingPathTimestamp}] >>> Attempting STREAMING path <<<`);
         // We're using streaming in a development environment
         streamingMessageRef.current = null;
         
@@ -146,73 +142,93 @@ export const useStreamingChat = () => {
         eventSourceRef.current = eventSource;
         
         eventSource.onmessage = (event) => {
-          // --- Simplified onmessage Handler ---
           try {
-            // Check for the standard end-of-stream signal
+            // Check for the standard end-of-stream signal from OpenRouter
             if (event.data === '[DONE]') {
-              console.log("[STREAM DEBUG] Simplified: Stream [DONE] received.");
+              console.log("Stream [DONE] received.");
 
-              // Finalization Logic (minimal)
+              // --- Finalization Logic ---
+              // Retrieve the final accumulated content (if needed)
+              const finalContent = streamingMessageRef.current?.content || '';
+              const finalReasoning = streamingMessageRef.current?.reasoningData; // We'll handle this later
               const assistantMsgId = streamingMessageRef.current?.id;
-              // TODO: Add back optional API call to save final content if needed
 
-              // Ensure these state setters are accessible in this scope
-              setIsLoadingResponse(false);
-              setStreamingComplete(true);
-              setTimeout(() => setStreamingComplete(false), 100);
+              // Optional: Make API call to save final content/reasoning if needed
+              // Example: (ensure apiRequest function exists and handles PATCH)
+              /*
+              if (assistantMsgId) {
+                apiRequest("PATCH", `/api/conversations/${conversationId}/messages/${assistantMsgId}`, {
+                  content: finalContent,
+                  // reasoningData: finalReasoning // Add later when reasoning is handled
+                }).catch(error => {
+                  console.error("Error saving final message content:", error);
+                });
+              }
+              */
 
+              // Update state to indicate loading/streaming finished
+              setIsLoadingResponse(false); // Ensure this state setter exists
+              setStreamingComplete(true); // Ensure this state setter exists
+              setTimeout(() => setStreamingComplete(false), 100); // Reset UI indicator
+
+              // Close the EventSource connection
               if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
-                console.log("[STREAM DEBUG] Simplified: EventSource closed.");
+                console.log("EventSource closed.");
               }
-              streamingMessageRef.current = null;
+              streamingMessageRef.current = null; // Clear the streaming message ref
 
+              // Optional: Notify other parts of the app if needed
               // Ensure conversationId is accessible in this scope
-              window.dispatchEvent(new CustomEvent('message-sent', { detail: { conversationId } }));
+              window.dispatchEvent(new CustomEvent('message-sent', {
+                detail: { conversationId }
+              }));
+
               return; // Stop processing this event
             }
 
-            // If not '[DONE]', parse the JSON payload
+            // If not '[DONE]', parse the JSON payload from OpenRouter
             const parsedData = JSON.parse(event.data);
-            console.log("[STREAM DEBUG] Simplified: Received event data"); // Simplified log
 
-            // --- Handle first chunk & initialize placeholder message ---
-            // Ensure streamingMessageRef, parsedData.id, Message type, conversationId, selectedModel,
-            // customOpenRouterModelId, setMessages, and tempUserMessage are accessible
+            // --- Handle first chunk ---
             let assistantMessageId = streamingMessageRef.current?.id;
             if (!assistantMessageId && parsedData.id) {
-                const newMessagePlaceholder: Message = {
-                   id: parsedData.id,
-                   conversationId: conversationId,
+                // This seems to be the first chunk containing an ID for the assistant message
+                const newMessagePlaceholder: Message = { // Ensure Message type is imported/correct
+                   id: parsedData.id, // Use ID from stream
+                   conversationId: conversationId, // Ensure conversationId is accessible
                    role: "assistant",
-                   content: "",
+                   content: "", // Start empty
                    citations: null,
-                   reasoningData: {}, // Keep empty for now
                    createdAt: new Date().toISOString(),
-                   modelId: customOpenRouterModelId || selectedModel || undefined
+                   // Ensure modelId is set if needed/available, e.g., from selectedModel
+                   modelId: selectedModel || undefined // Ensure selectedModel is accessible here
                 };
-                // Ensure setMessages and tempUserMessage are accessible
-                // This logic assumes tempUserMessage might need to be replaced/handled correctly
-                setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, newMessagePlaceholder]);
+                // Add the placeholder to the messages state
+                setMessages((prev) => [...prev, newMessagePlaceholder]);
+                // Initialize the ref to track this message
                 streamingMessageRef.current = {
                    id: newMessagePlaceholder.id,
                    content: "",
                    reasoningData: {}
                 };
                 assistantMessageId = newMessagePlaceholder.id;
-                console.log("[STREAM DEBUG] Simplified: Initialized message placeholder:", assistantMessageId);
+                console.log("Initialized streaming message with ID:", assistantMessageId);
             }
+            // --- End Handle first chunk ---
 
-            // --- Process content delta (Simplified) ---
+
+            // --- Process content delta ---
+            // Extract the actual text content from the standard OpenRouter format
             const deltaContent = parsedData.choices?.[0]?.delta?.content;
 
             if (deltaContent && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
-              // Append the content chunk to ref
+              // Append the content chunk to our tracked content
               streamingMessageRef.current.content += deltaContent;
 
-              // Update the message state
-              // Ensure setMessages is accessible
+              // Update the corresponding message in the React state
+              // Ensure setMessages is accessible here
               setMessages((prev) => prev.map(msg =>
                 msg.id === assistantMessageId
                   ? { ...msg, content: streamingMessageRef.current!.content }
@@ -221,58 +237,132 @@ export const useStreamingChat = () => {
             }
             // --- End Process content delta ---
 
-            // --- Reasoning Handling REMOVED for simplification ---
+
+            // --- Reasoning Data Handling ---
+            // Ensure assistantMessageId is available from the outer scope or ref
+            const assistantMessageId = streamingMessageRef.current?.id;
+            const delta = parsedData.choices?.[0]?.delta;
+            let extractedReasoningChunk = null;
+
+            // Check for standard reasoning/tool fields in the delta first
+            if (delta?.tool_calls) {
+                extractedReasoningChunk = { toolCalls: delta.tool_calls };
+                console.log("Detected reasoning chunk (tool_calls):", extractedReasoningChunk);
+            } else if (delta?.function_call) {
+                extractedReasoningChunk = { functionCall: delta.function_call };
+                console.log("Detected reasoning chunk (function_call):", extractedReasoningChunk);
+            } else {
+                // Fallback check: Check for reasoning field at the message level (outside delta)
+                // Structure might be choices[0].message.reasoning or choices[0].reasoning
+                const reasoningContent = parsedData.choices?.[0]?.message?.reasoning || parsedData.choices?.[0]?.reasoning;
+                if (typeof reasoningContent === 'string' && reasoningContent.length > 0) {
+                    extractedReasoningChunk = { thinking_process: reasoningContent }; // Store under a custom key
+                    console.log("Detected reasoning chunk (string field):", reasoningContent);
+                }
+            }
+            // TODO: Add checks for other potential fields like logprobs based on testing
+
+            if (extractedReasoningChunk && streamingMessageRef.current && assistantMessageId === streamingMessageRef.current.id) {
+                // --- Accumulate Reasoning Data ---
+                // NOTE: Simple accumulation might not be sufficient for complex cases like
+                // arguments arriving in multiple chunks. More sophisticated merging might be needed based on testing.
+                const currentReasoning = streamingMessageRef.current.reasoningData || {};
+                const updatedReasoning = { ...currentReasoning };
+
+                // Accumulate simple 'thinking_process' string
+                if (extractedReasoningChunk.thinking_process) {
+                    updatedReasoning.thinking_process = (updatedReasoning.thinking_process || "") + extractedReasoningChunk.thinking_process;
+                }
+
+                // Accumulate toolCalls (using previous intelligent merge logic)
+                if (extractedReasoningChunk.toolCalls && Array.isArray(extractedReasoningChunk.toolCalls)) {
+                    if (!updatedReasoning.toolCalls) updatedReasoning.toolCalls = [];
+                     extractedReasoningChunk.toolCalls.forEach((newToolCall: any) => {
+                       const existingCallIndex = newToolCall.index !== undefined ? updatedReasoning.toolCalls.findIndex((c: any) => c.index === newToolCall.index) : -1;
+                       const existingCallIndexById = (existingCallIndex === -1 && newToolCall.id) ? updatedReasoning.toolCalls.findIndex((c: any) => c.id === newToolCall.id) : -1;
+                       const finalIndex = existingCallIndex !== -1 ? existingCallIndex : existingCallIndexById;
+                       if (finalIndex > -1) {
+                         const existingCall = updatedReasoning.toolCalls[finalIndex];
+                         const functionUpdate = { ...(existingCall.function || {}), ...(newToolCall.function || {}) };
+                         if (newToolCall.function?.arguments && typeof existingCall.function?.arguments === 'string') {
+                           functionUpdate.arguments = existingCall.function.arguments + newToolCall.function.arguments;
+                         } else if (newToolCall.function?.arguments) {
+                            functionUpdate.arguments = newToolCall.function.arguments;
+                         }
+                         updatedReasoning.toolCalls[finalIndex] = { ...existingCall, ...newToolCall, function: functionUpdate };
+                       } else {
+                         updatedReasoning.toolCalls.push(newToolCall);
+                       }
+                     });
+                }
+                // Accumulate functionCall (using previous intelligent merge logic)
+                if (extractedReasoningChunk.functionCall) {
+                     if (!updatedReasoning.functionCall) {
+                         updatedReasoning.functionCall = extractedReasoningChunk.functionCall;
+                     } else {
+                         if (extractedReasoningChunk.functionCall.arguments &&
+                             typeof extractedReasoningChunk.functionCall.arguments === 'string' &&
+                             updatedReasoning.functionCall.arguments &&
+                             typeof updatedReasoning.functionCall.arguments === 'string')
+                         {
+                             updatedReasoning.functionCall.arguments += extractedReasoningChunk.functionCall.arguments;
+                         } else if (extractedReasoningChunk.functionCall.arguments) {
+                            updatedReasoning.functionCall.arguments = extractedReasoningChunk.functionCall.arguments;
+                         }
+                         updatedReasoning.functionCall = {...updatedReasoning.functionCall, ...extractedReasoningChunk.functionCall};
+                     }
+                }
+                // TODO: Add merging logic for other reasoning types here (e.g., logprobs)
+
+                streamingMessageRef.current.reasoningData = updatedReasoning;
+                // --- End Accumulate ---
+
+                // Update message state with the new reasoning data
+                // Ensure setMessages is accessible here
+                setMessages((prev) => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, reasoningData: { ...(streamingMessageRef.current!.reasoningData) } } // Ensure new object ref for react update
+                    : msg
+                ));
+            }
+            // --- End Reasoning Data Handling ---
 
           } catch (parseError) {
-            // Ensure toast, eventSourceRef, setIsLoadingResponse, streamingMessageRef,
-            // setMessages, fallbackToNonStreaming (if used) are accessible
-            console.error("[STREAM DEBUG] Simplified: Error parsing SSE message:", parseError, "Raw data:", event.data);
+            // Keep existing error handling logic here (or adapt as needed)
+            console.error("Error parsing SSE message:", parseError, "Raw data:", event.data);
+            // Ensure toast function is accessible here
             toast({ variant: "destructive", title: "Response Format Error", description: "Received invalid data from server." });
+            // Add fallback logic if needed
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
             }
+            // Ensure setIsLoadingResponse is accessible here
             setIsLoadingResponse(false);
+            // Maybe remove partial message if necessary
             if (streamingMessageRef.current) {
-                // Remove potentially incomplete message
-                setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
-                streamingMessageRef.current = null;
-                // fallbackToNonStreaming(...); // Consider if fallback is needed here
+              setMessages((prev) => prev.filter(msg => msg.id !== streamingMessageRef.current?.id));
+              streamingMessageRef.current = null;
+              fallbackToNonStreaming(conversationId, messageContent, image, content);
             }
           }
-          // --- End Simplified onmessage Handler ---
         };
         
         eventSource.onerror = (error) => {
-          const timestamp = new Date().toISOString();
-          console.error(`[STREAM DEBUG] [${timestamp}] eventSource.onerror: Error event received`, { error });
-          console.error(`[STREAM DEBUG] [${timestamp}] EventSource full error object:`, error);
+          console.error("EventSource error:", error);
           
           // Check if this is a connection error or server error
           let errorDescription = "Streaming failed. Falling back to standard mode.";
-          let errorCategory = "connection";
           
           // Try to determine the reason for the error
           if (error instanceof Event) {
             const target = error.target as EventSource;
             if (target && target.readyState === EventSource.CLOSED) {
               errorDescription = "Connection closed unexpectedly. Trying standard mode.";
-              errorCategory = "closed";
-              console.log(`[STREAM DEBUG] [${timestamp}] Connection CLOSED unexpectedly`);
             } else if (target && target.readyState === EventSource.CONNECTING) {
               errorDescription = "Connection interrupted. Trying standard mode.";
-              errorCategory = "interrupted";
-              console.log(`[STREAM DEBUG] [${timestamp}] Connection INTERRUPTED`);
             }
           }
-          
-          // Log additional diagnostics
-          console.log(`[STREAM DEBUG] [${timestamp}] Error diagnostics:`, {
-            streamingMessageId: streamingMessageRef.current?.id,
-            contentAccumulatedLength: streamingMessageRef.current?.content?.length || 0,
-            hasReasoningData: !!streamingMessageRef.current?.reasoningData,
-            errorCategory
-          });
           
           toast({
             variant: "destructive",
@@ -300,42 +390,14 @@ export const useStreamingChat = () => {
       }
       
       // For non-streaming approach (when images are present), use regular fetch via fallbackToNonStreaming
-      console.log('[STREAM DEBUG] >>> Taking NON-STREAMING fallback path <<<');
       await fallbackToNonStreaming(conversationId, messageContent, image, content);
       
     } catch (error) {
-      const timestamp = new Date().toISOString();
-      console.error(`[STREAM DEBUG] [${timestamp}] Error sending message:`, error);
-      
-      // Extract meaningful error information
-      let errorMessage = "Failed to send message";
-      let errorCategory = "unknown";
-      
-      if (error instanceof Error) {
-        if (error.message.includes("network") || error.message.includes("fetch")) {
-          errorCategory = "network";
-          errorMessage = "Network error. Please check your connection.";
-        } else if (error.message.includes("timeout")) {
-          errorCategory = "timeout";
-          errorMessage = "Request timed out. Server is taking too long to respond.";
-        } else if (error.message.includes("model")) {
-          errorCategory = "model";
-          errorMessage = error.message;
-        } else if (error.message.length > 0) {
-          errorMessage = error.message;
-        }
-      }
-      
-      console.log(`[STREAM DEBUG] [${timestamp}] Categorized error:`, {
-        category: errorCategory,
-        message: errorMessage,
-        originalError: error instanceof Error ? error.message : String(error)
-      });
-      
+      console.error("Error sending message:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: errorMessage,
+        description: "Failed to send message",
       });
       
       // Remove the optimistic message on error
@@ -427,43 +489,24 @@ export const useStreamingChat = () => {
         detail: { conversationId }
       }));
     } catch (error) {
-      const timestamp = new Date().toISOString();
-      console.error(`[STREAM DEBUG] [${timestamp}] Error in fallback request:`, error);
+      console.error("Error in fallback request:", error);
       
       // Create a more helpful error message
       let errorMessage = "Failed to send message";
-      let errorCategory = "unknown";
       
       if (error instanceof Error) {
         // Check for specific error patterns
         const errorText = error.message.toLowerCase();
         
         if (error.message.includes("Failed to fetch") || errorText.includes("network")) {
-          errorCategory = "network";
           errorMessage = "Network connection error. Please check your internet connection.";
         } else if (errorText.includes("timeout")) {
-          errorCategory = "timeout";
           errorMessage = "Request timed out. The server is taking too long to respond.";
-        } else if (errorText.includes("insufficient credits")) {
-          errorCategory = "credits";
-          errorMessage = "Insufficient credits. Please purchase more credits to continue.";
-        } else if (errorText.includes("model") && errorText.includes("not found")) {
-          errorCategory = "model_not_found";
-          errorMessage = "The selected AI model is not available. Please try a different model.";
-        } else if (errorText.includes("context length") || errorText.includes("token limit")) {
-          errorCategory = "context_length";
-          errorMessage = "Your message is too long for this model's context window. Please try a shorter message or a different model.";
         } else if (error.message.length > 0 && !error.message.includes("[object")) {
           // Use the error message if it's not just a generic object toString
           errorMessage = error.message;
         }
       }
-      
-      console.log(`[STREAM DEBUG] [${timestamp}] Categorized fallback error:`, {
-        category: errorCategory,
-        message: errorMessage,
-        originalError: error instanceof Error ? error.message : String(error)
-      });
       
       // Show toast with specific error message
       toast({
