@@ -6,6 +6,14 @@ import { useModelSelection } from "@/hooks/useModelSelection";
 import { refreshSkimlinks } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 
+// Function to determine if a model is vision-capable based on its name/ID
+const isVisionCapableModel = (modelName: string, hasImage: boolean): boolean => {
+  return !!hasImage || 
+         modelName.includes('vision') || 
+         modelName.includes('4o') || 
+         modelName.includes('claude-3');
+};
+
 export const useStreamingChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -130,13 +138,32 @@ export const useStreamingChat = () => {
         // Create a URLSearchParams object for proper parameter encoding
         const params = new URLSearchParams();
         params.append('content', content);
-        params.append('modelType', selectedModel);
+        params.append('modelType', 'openrouter'); // Always use OpenRouter
         
         // Add optional parameters if they exist
         if (image) params.append('image', image);
         
         // Add modelId parameter if available (for OpenRouter models)
-        if (customOpenRouterModelId) params.append('modelId', customOpenRouterModelId);
+        // Determine which OpenRouter model to use
+        // Check if the selected model is vision-capable from its ID or name
+        const isVisionCapable = !!image || selectedModel.includes('vision') || selectedModel.includes('4o') || selectedModel.includes('claude-3');
+        const modelId = customOpenRouterModelId || 
+                      (isVisionCapable ? 'openai/gpt-4o' : 'openai/o3-mini');
+        params.append('modelId', modelId);
+        
+        // Fetch document context for non-image messages
+        if (!image) {
+          try {
+            const documentContext = await getDocumentContext(conversationId, content);
+            if (documentContext) {
+              params.append('documentContext', documentContext);
+              console.log('[useStreamingChat] Added document context to streaming request');
+            }
+          } catch (contextError) {
+            console.error('[useStreamingChat] Error getting document context:', contextError);
+            // Continue without document context if there's an error
+          }
+        }
         
         // Create the EventSource with the properly encoded URL
         console.log("Creating EventSource for streaming with URL params:", params.toString());
@@ -211,8 +238,8 @@ export const useStreamingChat = () => {
                    content: "", // Start empty
                    citations: null,
                    createdAt: new Date().toISOString(),
-                   // Ensure modelId is set if needed/available, e.g., from selectedModel
-                   modelId: selectedModel || undefined // Ensure selectedModel is accessible here
+                   // Always use OpenRouter with specific model ID
+                   modelId: modelId // Use the determined OpenRouter model ID
                 };
                 // Add the placeholder to the messages state
                 setMessages((prev) => [...prev, newMessagePlaceholder]);
@@ -485,8 +512,11 @@ export const useStreamingChat = () => {
         }
       }
       
-      // Determine the OpenRouter model ID to use
-      const modelId = customOpenRouterModelId || "openai/o3-mini"; // Fallback to a reliable free model
+      // Determine which OpenRouter model to use
+      // Check if the selected model is vision-capable from its ID or name
+      const isVisionCapable = !!image || selectedModel.includes('vision') || selectedModel.includes('4o') || selectedModel.includes('claude-3');
+      const modelId = customOpenRouterModelId || 
+                    (isVisionCapable ? 'openai/gpt-4o' : 'openai/o3-mini');
       console.log(`[useStreamingChat] Using OpenRouter model: ${modelId}`);
       
       const response = await fetch(`/api/conversations/${conversationId}/messages`, {
