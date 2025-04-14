@@ -1342,9 +1342,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let lastRole = "assistant";
       for (const msg of filteredMessages) {
         if (msg.role !== lastRole) {
-          // Handle both text-only and multimodal messages
+          // Handle both text-only and messages with images
           if (msg.image) {
-            // This is a multimodal message with an image
+            // This is a message with an image (for vision-capable models)
             messages.push({
               role: msg.role,
               content: msg.content
@@ -1409,7 +1409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           messagesCount: messages.length,
           messagesTypes: messages.map(msg => {
             if ("content" in msg && Array.isArray(msg.content)) {
-              return "multimodal";
+              return "image+text"; // Message with both image and text
             } else {
               return "text";
             }
@@ -1456,7 +1456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstMessageContentType: typeof firstMsg?.content,
             lastMessageRole: lastMsg?.role,
             lastMessageContentType: typeof lastMsg?.content,
-            isLastMessageMultimodal: Array.isArray(lastMsg?.content)
+            isLastMessageMixedContent: Array.isArray(lastMsg?.content) // Has both image and text
           });
         }
         const payload = {
