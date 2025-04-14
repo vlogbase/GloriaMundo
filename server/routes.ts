@@ -875,6 +875,381 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // === Fixed POST /api/conversations/:id/messages endpoint ===
+  // Streaming endpoint for chat messages
+  app.get("/api/conversations/:id/messages/stream", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id, 10);
+      const { content = "", modelType = "reasoning", modelId = "", image = "" } = req.query as {
+        content?: string;
+        modelType?: string;
+        modelId?: string;
+        image?: string;
+      };
+      
+      if (!content) {
+        return res.status(400).json({ message: "Message content is required" });
+      }
+      
+      // Set headers for SSE
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      
+      // Start with a heartbeat
+      res.write("event: heartbeat\ndata: {}\n\n");
+      
+      // Create OpenRouter API key validation
+      const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
+      const isOpenRouterKeyValid = OPENROUTER_API_KEY.length > 0;
+      
+      // Define model configurations
+      const MODEL_CONFIGS = {
+        reasoning: {
+          apiProvider: "perplexity",
+          modelName: "sonar-medium-chat",
+          apiUrl: "https://api.perplexity.ai/chat/completions",
+          apiKey: process.env.PERPLEXITY_API_KEY || "",
+          systemPrompt: "You are an AI assistant that helps users with concise, accurate, and professional information."
+        },
+        search: {
+          apiProvider: "perplexity",
+          modelName: "sonar-medium-online",
+          apiUrl: "https://api.perplexity.ai/chat/completions",
+          apiKey: process.env.PERPLEXITY_API_KEY || "",
+          systemPrompt: "You are an AI assistant with access to online search. Help users with current and factual information."
+        },
+        multimodal: {
+          apiProvider: "groq",
+          modelName: "llama3-70b-8192",
+          apiUrl: "https://api.groq.com/openai/v1/chat/completions",
+          apiKey: process.env.GROQ_API_KEY || "",
+          systemPrompt: "You are GloriaMundo, an AI assistant that helps users analyze images and provide information."
+        }
+      };
+      
+      // Handle multimodal models
+      let effectiveModelType = modelType as keyof typeof MODEL_CONFIGS;
+      if (image) {
+        console.log("Image detected in streaming request, forcing model type to multimodal");
+        effectiveModelType = "multimodal";
+      }
+      
+      if (modelId === "not set") {
+        console.error("Invalid modelId received in streaming request: 'not set'");
+        modelId = "";
+      }
+      
+      if (effectiveModelType === "multimodal" && (!modelId || modelId === "")) {
+        console.log("Multimodal model selected but no specific modelId provided. Using default multimodal model.");
+        modelId = "openai/gpt-4-vision-preview";
+      }
+      
+      const isOpenRouter = modelId && modelId !== "" && isOpenRouterKeyValid;
+      let modelConfig;
+      
+      if (isOpenRouter) {
+        modelConfig = {
+          apiProvider: "openrouter",
+          modelName: modelId,
+          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+          apiKey: OPENROUTER_API_KEY
+        };
+        console.log(`Using OpenRouter with model: ${modelId} for streaming request`);
+      } else {
+        modelConfig = MODEL_CONFIGS[effectiveModelType] || MODEL_CONFIGS.reasoning;
+      }
+      
+      // Create user message in the database
+      const userMessage = await storage.createMessage({
+        conversationId,
+        role: "user",
+        content: content || "",
+        image: image || undefined,
+        citations: null
+      });
+      
+      // Get previous messages for context
+      const previousMessages = await storage.getMessagesByConversation(conversationId);
+      let filteredMessages = previousMessages.filter(msg => msg.role === "user" || msg.role === "assistant");
+      filteredMessages.sort((a, b) => a.id - b.id);
+      
+      // Prepare RAG context if available
+      let ragContext = "";
+      try {
+        const { chunks, documents } = await findSimilarChunks(content, conversationId);
+        if (chunks.length > 0) {
+          ragContext = formatContextForPrompt(chunks, documents);
+          console.log(`Added RAG context from ${chunks.length} document chunks for streaming request`);
+        }
+      } catch (error) {
+        console.error("Error fetching RAG context for streaming:", error);
+      }
+      
+      // Prepare messages array for API
+      const messages: ApiMessage[] = [];
+      
+      // Add system message with RAG context if available
+      if (ragContext) {
+        const systemContent = `You are an AI assistant responding to a user query. Use the following document context provided below to answer the query. Prioritize information found in the context. If the context does not contain the answer, state that.\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to answer the query.`;
+        if (!(effectiveModelType === "multimodal" && image)) {
+          messages.push({
+            role: "system",
+            content: systemContent
+          });
+        }
+      }
+      
+      // Add conversation history
+      if (effectiveModelType === "search") {
+        if (filteredMessages.length > 1) {
+          const latestMessages = filteredMessages.slice(-2);
+          if (latestMessages.length === 2 && latestMessages[0].role === "user" && latestMessages[1].role === "assistant") {
+            messages.push({
+              role: "user",
+              content: latestMessages[0].content
+            });
+            messages.push({
+              role: "assistant",
+              content: latestMessages[1].content
+            });
+          }
+        }
+      } else {
+        let lastRole = "assistant";
+        for (const msg of filteredMessages) {
+          if (msg.role !== lastRole) {
+            if (modelType === "multimodal" && msg.image) {
+              messages.push({
+                role: msg.role,
+                content: msg.content
+              });
+            } else {
+              messages.push({
+                role: msg.role,
+                content: msg.content
+              });
+            }
+            lastRole = msg.role;
+          }
+        }
+      }
+      
+      // Handle image if provided
+      if (image) {
+        let imageUrl = image;
+        if (image.startsWith("data:")) {
+          console.log("Using provided data URL for multimodal streaming request");
+        } else if (!image.startsWith("http")) {
+          if (!image.startsWith("data:image")) {
+            imageUrl = `data:image/jpeg;base64,${image}`;
+          }
+        }
+        
+        // Add multimodal message
+        messages.push({
+          role: "user",
+          content: [
+            { type: "text", text: content },
+            { type: "image_url", image_url: { url: imageUrl } }
+          ]
+        });
+      } else {
+        // Add simple text message if no image
+        messages.push({
+          role: "user",
+          content: content
+        });
+      }
+      
+      // Create assistant message placeholder
+      const assistantMessage = await storage.createMessage({
+        conversationId,
+        role: "assistant",
+        content: "", // Will be filled through streaming
+        citations: null,
+        modelId: modelId || undefined
+      });
+      
+      // Clean messages for OpenRouter API
+      const cleanMessages = modelConfig.apiProvider === "openrouter"
+        ? messages.map(msg => {
+            if (typeof msg.content === "string") {
+              return {
+                role: msg.role,
+                content: msg.content
+              };
+            }
+            if (Array.isArray(msg.content)) {
+              return {
+                role: msg.role,
+                content: msg.content.map(item => {
+                  if (item.type === "text") {
+                    return { type: "text", text: item.text };
+                  } else if (item.type === "image_url") {
+                    return { type: "image_url", image_url: { url: item.image_url.url } };
+                  }
+                  return item;
+                })
+              };
+            }
+            return msg;
+          })
+        : messages;
+      
+      // Prepare API request payload
+      const payload = {
+        model: isOpenRouter ? modelId : modelConfig.modelName,
+        messages: cleanMessages,
+        temperature: 0.2,
+        top_p: 0.9,
+        stream: true // Enable streaming
+      };
+      
+      console.log(`Streaming API request to ${modelConfig.apiProvider} with model: ${payload.model}`);
+      
+      // Call the API
+      const apiResponse = await fetch(modelConfig.apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${modelConfig.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      // Handle API errors
+      if (!apiResponse.ok) {
+        const errorText = await apiResponse.text();
+        console.error(`Streaming API error from ${modelConfig.apiProvider}: ${errorText}`);
+        
+        let apiError: ApiError;
+        if (modelConfig.apiProvider === "openrouter") {
+          apiError = parseOpenRouterError(apiResponse.status, errorText);
+        } else {
+          apiError = handleInternalError(new Error(`${modelConfig.apiProvider} API error: ${apiResponse.status}`));
+        }
+        
+        // If headers haven't been sent yet, send error response
+        if (!res.headersSent) {
+          sendErrorResponse(res, apiError);
+        } else {
+          // If headers were sent, send error as SSE
+          res.write(`event: error\ndata: ${JSON.stringify({ 
+            error: apiError.userMessage || "Error connecting to AI model"
+          })}\n\n`);
+          res.end();
+        }
+        return;
+      }
+      
+      // Check if response body exists
+      if (!apiResponse.body) {
+        console.error("Streaming API response body is null");
+        // If headers haven't been sent yet, send error response
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Streaming API response body is null" });
+        } else {
+          // If headers were sent, send error as SSE
+          res.write(`event: error\ndata: ${JSON.stringify({ 
+            error: "Server received empty response from AI model"
+          })}\n\n`);
+          res.end();
+        }
+        return;
+      }
+      
+      // Get reader from response body stream
+      const reader = apiResponse.body.getReader();
+      let accumulatedContent = "";
+      
+      try {
+        // Process the stream
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            console.log("Stream complete");
+            
+            // Send final [DONE] marker to client
+            res.write(`data: [DONE]\n\n`);
+            
+            // Update message in database with complete content
+            await storage.updateMessage(assistantMessage.id, {
+              content: accumulatedContent
+            });
+            
+            break;
+          }
+          
+          // Decode the chunk
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n');
+          
+          // Process each line
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            
+            // Handle SSE format (lines starting with "data: ")
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              
+              // Check for [DONE] marker
+              if (data === '[DONE]') {
+                continue; // We'll send our own [DONE] when fully complete
+              }
+              
+              try {
+                // Parse the JSON data
+                const jsonData = JSON.parse(data);
+                
+                // Extract content delta
+                const delta = jsonData.choices?.[0]?.delta?.content;
+                
+                if (delta) {
+                  // Accumulate content
+                  accumulatedContent += delta;
+                  
+                  // Forward the chunk to the client
+                  res.write(`data: ${JSON.stringify({ 
+                    id: assistantMessage.id,
+                    choices: [{ delta: { content: delta } }]
+                  })}\n\n`);
+                  
+                  // Ensure immediate delivery
+                  res.flush?.();
+                }
+              } catch (parseError) {
+                console.error("Error parsing streaming chunk:", parseError, "Raw data:", data);
+                // Forward original data to client in case it's a valid format our parser doesn't handle
+                res.write(`${line}\n\n`);
+              }
+            }
+          }
+        }
+      } catch (streamError) {
+        console.error("Error processing stream:", streamError);
+        res.write(`event: error\ndata: ${JSON.stringify({ 
+          error: "Error processing AI response stream"
+        })}\n\n`);
+      } finally {
+        // Always release the reader lock and end the response
+        reader.releaseLock();
+        res.end();
+      }
+      
+    } catch (error) {
+      console.error("Error in streaming endpoint:", error);
+      // If headers haven't been sent yet, send error response
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Error processing stream" });
+      } else {
+        // If headers were sent, send error as SSE
+        res.write(`event: error\ndata: ${JSON.stringify({ message: "Stream processing error" })}\n\n`);
+        res.end();
+      }
+    }
+  });
+
   // This is the non-streaming endpoint for posting messages.
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
