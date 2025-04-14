@@ -278,15 +278,15 @@ const getModelPricing = (modelId: string) => {
 };
 
 const DEFAULT_MODEL_PRICING = {
-  reasoning: {
+  standard: {
     promptPrice: 0.0000005,
     completionPrice: 0.0000015
   },
-  search: {
+  premium: {
     promptPrice: 0.000001,
     completionPrice: 0.000002
   },
-  multimodal: {
+  vision: {
     promptPrice: 0.000001,
     completionPrice: 0.000002,
     imagePrice: 0.002
@@ -299,7 +299,7 @@ const DEFAULT_OPENROUTER_CONFIG = {
   modelName: "openai/gpt-4o", // Default model if none specified
   apiUrl: "https://openrouter.ai/api/v1/chat/completions",
   apiKey: OPENROUTER_API_KEY,
-  pricing: DEFAULT_MODEL_PRICING.multimodal
+  pricing: DEFAULT_MODEL_PRICING.vision // Use the vision pricing model for all OpenRouter calls
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1271,14 +1271,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Set appropriate model for multimodal (image) requests
+      // Set appropriate model type to OpenRouter and handle image-capable models
+      modelType = "openrouter"; // Always use OpenRouter as the provider
+      
       if (image) {
-        console.log("Image detected, forcing model type to multimodal");
-        modelType = "multimodal";
+        console.log("Image detected, ensuring vision-capable model is selected");
         
-        // If no specific model is provided for image processing, use the default vision model
+        // If no specific model is provided for image processing, use a vision-capable model
         if (!modelId || modelId === "" || modelId === "not set") {
-          console.log("No specific modelId provided for image. Using default multimodal model.");
+          console.log("No specific modelId provided for image. Using default vision model via OpenRouter.");
           modelId = "openai/gpt-4-vision-preview";
         }
       } else if (modelId === "not set" || !modelId || modelId === "") {
