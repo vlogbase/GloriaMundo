@@ -157,14 +157,11 @@ export const ModelPresets = () => {
     );
   };
   
-  // Helper function to check if a model is a search-capable model
-  const isSearchModel = (modelId: string): boolean => {
+  // Helper function to check if a model is a Perplexity search model
+  const isPerplexityModel = (modelId: string): boolean => {
     return (
-      modelId.toLowerCase().includes('anthropic/claude-3-haiku') ||
-      modelId.toLowerCase().includes('sonar') ||
-      modelId.toLowerCase().includes('claude-3-search') ||
-      modelId.toLowerCase().includes('haiku') ||
-      modelId.toLowerCase().includes('opus')
+      modelId.toLowerCase().includes('perplexity') ||
+      modelId.toLowerCase().includes('sonar')
     );
   };
   
@@ -194,7 +191,7 @@ export const ModelPresets = () => {
       // For preset4 (multimodal models), use Image icon
       return <Image size={16} className="mr-1" />;
     } else if (presetKey === 'preset5' || (presetKey === 'preset5' && !modelId)) {
-      // For preset5 (Search models), use Search icon
+      // For preset5 (Perplexity/search models), use Search icon
       return <Search size={16} className="mr-1" />;
     } else {
       // For other presets (preset1, preset2) - All Models, use Network icon
@@ -212,7 +209,7 @@ export const ModelPresets = () => {
       'openai/o1-mini (2024-09-12)',
       'openai/o3-mini',
       'openai/o3-mini-high',
-      'anthropic/claude-3-opus',
+      'perplexity/r1-1776',
       'anthropic/claude-3.7-sonnet-thinking',
       'deepseek/r1-zero',
       'deepseek/r1',
@@ -236,8 +233,8 @@ export const ModelPresets = () => {
       // Only allow multimodal models for preset4
       return models.filter(model => isMultimodalModel(model.id));
     } else if (presetKey === 'preset5') {
-      // Only allow search-capable models for preset5
-      return models.filter(model => isSearchModel(model.id));
+      // Only allow Perplexity models for preset5
+      return models.filter(model => isPerplexityModel(model.id));
     } else {
       // Return all models for preset1 and preset2
       return models;
@@ -258,7 +255,7 @@ export const ModelPresets = () => {
         // Preset 4 is always for multimodal models
         setSelectedModel('multimodal');
       } else if (presetKey === 'preset5') {
-        // Preset 5 is for search-capable models
+        // Preset 5 is for search/Perplexity models
         setSelectedModel('search');
       } else {
         // For presets 1 and 2 (all models), determine type based on the model's capabilities
@@ -298,7 +295,7 @@ export const ModelPresets = () => {
       modelId = 'openai/o3-mini-high'; // Map reasoning to o3 Mini
       console.log(`Mapped legacy 'reasoning' type to OpenRouter model: ${modelId}`);
     } else if (modelId === 'search') {
-      modelId = 'anthropic/claude-3-haiku'; // Map search to Claude 3 Haiku
+      modelId = 'perplexity/sonar-pro'; // Map search to Sonar Pro
       console.log(`Mapped legacy 'search' type to OpenRouter model: ${modelId}`);
     }
     
@@ -450,7 +447,7 @@ export const ModelPresets = () => {
                   {modelId ? (
                     <span className="truncate max-w-[100px]">
                       {modelId === 'reasoning' ? 'o3 Mini H' : 
-                       modelId === 'search' ? 'Claude 3 Haiku' : 
+                       modelId === 'search' ? 'Sonar Pro' : 
                        modelId === 'openai/o3-mini-high' ? 'o3 Mini H' :
                        formatModelName(modelId)}
                     </span>

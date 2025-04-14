@@ -5,14 +5,14 @@ export const MODEL_OPTIONS: Record<ModelType, ModelOption> = {
     id: "reasoning",
     name: "Reasoning",
     description: "Optimized for thoughtful analysis and deep reasoning",
-    apiName: "openai/gpt-4-turbo",
+    apiName: "perplexity/sonar-reasoning-pro",
     apiProvider: "openrouter"
   },
   search: {
     id: "search",
     name: "Search",
     description: "Provides up-to-date information with search capabilities",
-    apiName: "anthropic/claude-3-haiku",
+    apiName: "perplexity/sonar-pro",
     apiProvider: "openrouter"
   },
   multimodal: {
