@@ -1,23 +1,33 @@
-import express from 'express';
-import { streamingEndpoint } from './streaming-fixed';
+import express from "express";
+import { registerRoutes } from "./routes.fixed";
 
 async function startServer() {
-  const app = express();
-  
-  // Basic middleware setup
-  app.use(express.json());
-  
-  // Register the fixed streaming endpoint
-  streamingEndpoint(app);
-  
-  // Start the server
-  const port = process.env.PORT || 3000;
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`Server listening on port ${port}`);
-  });
+  try {
+    // Set up Express
+    const app = express();
+    app.use(express.json());
+    
+    // Register routes
+    await registerRoutes(app);
+    
+    // Start server directly with app
+    const port = process.env.PORT || 3000;
+    const server = app.listen(port, () => {
+      console.log(`Server listening on port ${port}`);
+    });
+    
+    // Handle shutdown gracefully
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received, shutting down');
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
 }
 
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+startServer();
