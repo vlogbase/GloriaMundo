@@ -836,7 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:id/messages/stream", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id, 10);
-      const { content = "", modelType: initialModelType = "reasoning", modelId: initialModelId = "", image = "" } = req.query as {
+      const { content = "", modelType: initialModelType = "openrouter", modelId: initialModelId = "", image = "" } = req.query as {
         content?: string;
         modelType?: string;
         modelId?: string;
@@ -1243,7 +1243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      let { content = "", modelType = "reasoning", modelId = "", image, documentContext = null } = req.body;
+      let { content = "", modelType = "openrouter", modelId = "", image, documentContext = null } = req.body;
       content = content || "";
       if (!content && !image) {
         return res.status(400).json({ message: "Message content or image is required" });
@@ -1325,44 +1325,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let systemContent = "";
       if (ragContext) {
         systemContent = `You are an AI assistant responding to a user query. Use the following document context provided below to answer the query. Prioritize information found in the context. If the context does not contain the answer, state that.\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to answer the query.`;
-        if (!(modelType === "multimodal" && image)) {
+        // Skip system message with context for image requests as some models don't handle it well
+        if (!image) {
           messages.push({
             role: "system",
             content: systemContent
           });
         }
       }
-      if (modelType === "search") {
-        if (filteredMessages.length > 1) {
-          const latestMessages = filteredMessages.slice(-2);
-          if (latestMessages.length === 2 && latestMessages[0].role === "user" && latestMessages[1].role === "assistant") {
+      // For every OpenRouter call, we use the standard message format
+      // Historical special handling for search models is no longer needed
+      let lastRole = "assistant";
+      for (const msg of filteredMessages) {
+        if (msg.role !== lastRole) {
+          // Handle both text-only and multimodal messages
+          if (msg.image) {
+            // This is a multimodal message with an image
             messages.push({
-              role: "user",
-              content: latestMessages[0].content
+              role: msg.role,
+              content: msg.content
             });
+          } else {
+            // This is a standard text message
             messages.push({
-              role: "assistant",
-              content: latestMessages[1].content
+              role: msg.role,
+              content: msg.content
             });
           }
-        }
-      } else {
-        let lastRole = "assistant";
-        for (const msg of filteredMessages) {
-          if (msg.role !== lastRole) {
-            if (modelType === "multimodal" && msg.image) {
-              messages.push({
-                role: msg.role,
-                content: msg.content
-              });
-            } else {
-              messages.push({
-                role: msg.role,
-                content: msg.content
-              });
-            }
-            lastRole = msg.role;
-          }
+          lastRole = msg.role;
         }
       }
       if (image) {

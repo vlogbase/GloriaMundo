@@ -24,14 +24,14 @@ export interface Message {
   createdAt: string;
 }
 
-export type ModelType = "reasoning" | "search" | "multimodal" | "openrouter";
+export type ModelType = "openrouter";
 
 export interface ModelOption {
   id: ModelType | string;
   name: string;
   description: string;
   apiName: string;
-  apiProvider: "groq" | "perplexity" | "openrouter";
+  apiProvider: "openrouter";
 }
 
 export interface OpenRouterModel {
