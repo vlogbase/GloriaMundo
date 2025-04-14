@@ -6,7 +6,7 @@ import { useModelSelection } from "@/hooks/useModelSelection";
 import { refreshSkimlinks } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 
-// Function to determine if a model is vision-capable based on its name/ID
+// Helper function to determine if a model is vision-capable based on its name/ID
 const isVisionCapableModel = (modelName: string, hasImage: boolean): boolean => {
   return !!hasImage || 
          modelName.includes('vision') || 
@@ -43,6 +43,167 @@ export const useStreamingChat = () => {
       }
     };
   }, []);
+
+  // Function to get document context for RAG
+  const getDocumentContext = useCallback(async (conversationId: number, query: string): Promise<string | null> => {
+    if (!conversationId || !query) {
+      return null;
+    }
+    
+    try {
+      // Encode query to safely include in URL
+      const encodedQuery = encodeURIComponent(query);
+      const response = await fetch(`/api/conversations/${conversationId}/rag?query=${encodedQuery}`);
+      
+      if (!response.ok) {
+        console.warn(`RAG retrieval returned status ${response.status}`);
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      if (data && data.context) {
+        return data.context;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error retrieving document context:", error);
+      return null;
+    }
+  }, []);
+
+  // Helper function to handle non-streaming requests
+  const fallbackToNonStreaming = useCallback(async (
+    conversationId: number, 
+    content: string, 
+    image?: string, 
+    originalContent?: string
+  ) => {
+    // originalContent is the raw content before potential JSON parsing
+    const messageContent = content; // Clean content is passed in directly now
+    try {
+      // Try to get document context for this query (non-image messages only)
+      let documentContext = null;
+      if (!image) {
+        try {
+          documentContext = await getDocumentContext(conversationId, messageContent);
+          console.log('[useStreamingChat] Document context for query:', documentContext ? 'Found' : 'None');
+        } catch (contextError) {
+          console.error('[useStreamingChat] Error getting document context:', contextError);
+          // Continue without document context if there's an error
+        }
+      }
+      
+      // Determine which OpenRouter model to use
+      const isVisionCapable = isVisionCapableModel(selectedModel, !!image);
+      const modelId = customOpenRouterModelId || 
+                   (isVisionCapable ? 'openai/gpt-4o' : 'openai/o3-mini');
+      console.log(`[useStreamingChat] Using OpenRouter model: ${modelId}`);
+      
+      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          content,
+          image,
+          modelType: "openrouter", // Always use OpenRouter
+          modelId: modelId, // Always specify a model ID
+          documentContext // Include context for RAG if available
+        }),
+      });
+      
+      // Handle HTTP errors
+      if (!response.ok) {
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          // Try to get a more specific error message from the response
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // If we can't parse the error, just use the status text
+          errorMessage = `${response.statusText || 'Unknown error'} (${response.status})`;
+        }
+        
+        // Throw with a detailed message
+        throw new Error(errorMessage);
+      }
+      
+      // Parse successful response
+      const data = await response.json();
+      
+      // Validate response structure
+      if (!data || !data.userMessage || !data.assistantMessage) {
+        console.error("Invalid response format:", data);
+        throw new Error("Server returned an invalid response format");
+      }
+      
+      // Update messages with the response data
+      setMessages((prev) => {
+        // Find our temporary message and replace it, using either original or parsed content
+        const userMsgIndex = prev.findIndex(msg => 
+          msg.role === "user" && 
+          (msg.content === content || 
+           msg.content === messageContent || 
+           (originalContent && msg.content === originalContent)) && 
+          msg.conversationId === conversationId
+        );
+        
+        if (userMsgIndex === -1) {
+          // If we can't find it, just add both messages
+          return [...prev, data.userMessage, data.assistantMessage];
+        }
+        
+        // Replace the temporary user message and add the assistant message
+        const newMessages = [...prev];
+        newMessages[userMsgIndex] = data.userMessage;
+        
+        // Add the assistant message if it doesn't exist already
+        if (!prev.some(msg => msg.id === data.assistantMessage.id)) {
+          newMessages.push(data.assistantMessage);
+        }
+        
+        return newMessages;
+      });
+      
+      // Notify that a message was sent (for conversation title updates)
+      window.dispatchEvent(new CustomEvent('message-sent', {
+        detail: { conversationId }
+      }));
+    } catch (error) {
+      console.error("Error in fallback request:", error);
+      
+      // Create a more helpful error message
+      let errorMessage = "Failed to send message";
+      
+      if (error instanceof Error) {
+        // Check for specific error patterns
+        const errorText = error.message.toLowerCase();
+        
+        if (error.message.includes("Failed to fetch") || errorText.includes("network")) {
+          errorMessage = "Network connection error. Please check your internet connection.";
+        } else if (errorText.includes("timeout")) {
+          errorMessage = "Request timed out. The server is taking too long to respond.";
+        } else if (error.message.length > 0 && !error.message.includes("[object")) {
+          // Use the error message if it's not just a generic object toString
+          errorMessage = error.message;
+        }
+      }
+      
+      // Show toast with specific error message
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage
+      });
+      
+      throw error; // Re-throw to be caught by the main try/catch
+    }
+  }, [getDocumentContext, customOpenRouterModelId, selectedModel, toast]);
 
   // Load messages for a conversation
   const loadConversation = useCallback(async (conversationId: number) => {
@@ -145,8 +306,7 @@ export const useStreamingChat = () => {
         
         // Add modelId parameter if available (for OpenRouter models)
         // Determine which OpenRouter model to use
-        // Check if the selected model is vision-capable from its ID or name
-        const isVisionCapable = !!image || selectedModel.includes('vision') || selectedModel.includes('4o') || selectedModel.includes('claude-3');
+        const isVisionCapable = isVisionCapableModel(selectedModel, !!image);
         const modelId = customOpenRouterModelId || 
                       (isVisionCapable ? 'openai/gpt-4o' : 'openai/o3-mini');
         params.append('modelId', modelId);
@@ -464,164 +624,7 @@ export const useStreamingChat = () => {
         setIsLoadingResponse(false);
       }
     }
-  }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
-  
-  // Function to get document context for RAG
-  const getDocumentContext = useCallback(async (conversationId: number, query: string): Promise<string | null> => {
-    if (!conversationId || !query) {
-      return null;
-    }
-    
-    try {
-      // Encode query to safely include in URL
-      const encodedQuery = encodeURIComponent(query);
-      const response = await fetch(`/api/conversations/${conversationId}/rag?query=${encodedQuery}`);
-      
-      if (!response.ok) {
-        console.warn(`RAG retrieval returned status ${response.status}`);
-        return null;
-      }
-      
-      const data = await response.json();
-      
-      if (data && data.context) {
-        return data.context;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error retrieving document context:", error);
-      return null;
-    }
-  }, []);
-  
-  // Helper function to handle non-streaming requests
-  const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
-    // originalContent is the raw content before potential JSON parsing
-    const messageContent = content; // Clean content is passed in directly now
-    try {
-      // Try to get document context for this query (non-image messages only)
-      let documentContext = null;
-      if (!image) {
-        try {
-          documentContext = await getDocumentContext(conversationId, messageContent);
-          console.log('[useStreamingChat] Document context for query:', documentContext ? 'Found' : 'None');
-        } catch (contextError) {
-          console.error('[useStreamingChat] Error getting document context:', contextError);
-          // Continue without document context if there's an error
-        }
-      }
-      
-      // Determine which OpenRouter model to use
-      // Check if the selected model is vision-capable from its ID or name
-      const isVisionCapable = !!image || selectedModel.includes('vision') || selectedModel.includes('4o') || selectedModel.includes('claude-3');
-      const modelId = customOpenRouterModelId || 
-                    (isVisionCapable ? 'openai/gpt-4o' : 'openai/o3-mini');
-      console.log(`[useStreamingChat] Using OpenRouter model: ${modelId}`);
-      
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          content,
-          image,
-          modelType: "openrouter", // Always use OpenRouter
-          modelId: modelId, // Always specify a model ID
-          documentContext // Include context for RAG if available
-        }),
-      });
-      
-      // Handle HTTP errors
-      if (!response.ok) {
-        let errorMessage = `Server error (${response.status})`;
-        try {
-          // Try to get a more specific error message from the response
-          const errorData = await response.json();
-          if (errorData && errorData.message) {
-            errorMessage = errorData.message;
-          }
-        } catch (parseError) {
-          // If we can't parse the error, just use the status text
-          errorMessage = `${response.statusText || 'Unknown error'} (${response.status})`;
-        }
-        
-        // Throw with a detailed message
-        throw new Error(errorMessage);
-      }
-      
-      // Parse successful response
-      const data = await response.json();
-      
-      // Validate response structure
-      if (!data || !data.userMessage || !data.assistantMessage) {
-        console.error("Invalid response format:", data);
-        throw new Error("Server returned an invalid response format");
-      }
-      
-      // Update messages with the response data
-      setMessages((prev) => {
-        // Find our temporary message and replace it, using either original or parsed content
-        const userMsgIndex = prev.findIndex(msg => 
-          msg.role === "user" && 
-          (msg.content === content || 
-           msg.content === messageContent || 
-           (originalContent && msg.content === originalContent)) && 
-          msg.conversationId === conversationId
-        );
-        
-        if (userMsgIndex === -1) {
-          // If we can't find it, just add both messages
-          return [...prev, data.userMessage, data.assistantMessage];
-        }
-        
-        // Replace the temporary user message and add the assistant message
-        const newMessages = [...prev];
-        newMessages[userMsgIndex] = data.userMessage;
-        
-        // Add the assistant message if it doesn't exist already
-        if (!prev.some(msg => msg.id === data.assistantMessage.id)) {
-          newMessages.push(data.assistantMessage);
-        }
-        
-        return newMessages;
-      });
-      
-      // Notify that a message was sent (for conversation title updates)
-      window.dispatchEvent(new CustomEvent('message-sent', {
-        detail: { conversationId }
-      }));
-    } catch (error) {
-      console.error("Error in fallback request:", error);
-      
-      // Create a more helpful error message
-      let errorMessage = "Failed to send message";
-      
-      if (error instanceof Error) {
-        // Check for specific error patterns
-        const errorText = error.message.toLowerCase();
-        
-        if (error.message.includes("Failed to fetch") || errorText.includes("network")) {
-          errorMessage = "Network connection error. Please check your internet connection.";
-        } else if (errorText.includes("timeout")) {
-          errorMessage = "Request timed out. The server is taking too long to respond.";
-        } else if (error.message.length > 0 && !error.message.includes("[object")) {
-          // Use the error message if it's not just a generic object toString
-          errorMessage = error.message;
-        }
-      }
-      
-      // Show toast with specific error message
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage
-      });
-      
-      throw error; // Re-throw to be caught by the main try/catch
-    }
-  };
+  }, [activeConversationId, selectedModel, customOpenRouterModelId, getDocumentContext, fallbackToNonStreaming, setLocation, toast]);
 
   const startNewConversation = useCallback(async () => {
     setMessages([]);
