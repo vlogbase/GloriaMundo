@@ -62,7 +62,7 @@ const upload = multer({
 
 export function registerDocumentRoutes(app: Express) {
   // Route to get document content for preview
-  app.get('/api/documents/:id/content', isAuthenticated, async (req: Request, res: Response) => {
+  app.get('/api/documents/:id/content', async (req: Request, res: Response) => {
     try {
       const documentId = parseInt(req.params.id);
       if (isNaN(documentId)) {
