@@ -200,21 +200,15 @@ export const useChat = () => {
       // Prepare model metadata
       let modelMetadata = {};
       
-      // If using OpenRouter, include model ID in the request
-      if (selectedModel === 'openrouter' && customOpenRouterModelId) {
-        console.log(`Using OpenRouter model: ${customOpenRouterModelId}`);
-        // Always pass explicitly the modelId parameter in the expected format
+      // We always use OpenRouter now, just need to determine which model ID to use
+      if (customOpenRouterModelId) {
+        console.log(`Using specific OpenRouter model: ${customOpenRouterModelId}`);
+        // Always pass the modelId parameter explicitly in the expected format
         modelMetadata = { modelId: customOpenRouterModelId };
-      } else if (selectedModel === 'openrouter' && !customOpenRouterModelId) {
-        // Safety catch - if we're set to OpenRouter but don't have a model ID, log warning
-        console.warn("OpenRouter selected but no model ID provided");
-        // Set a default free model to ensure we don't leave modelId undefined
-        console.log("Using default free model as fallback");
-        modelMetadata = { modelId: "openai/o3-mini" }; // Using a more reliable free model
-      } else if (selectedModel === 'multimodal' && customOpenRouterModelId) {
-        // Critical fix: For multimodal models from OpenRouter, we need to include the modelId
-        console.log(`Using multimodal OpenRouter model: ${customOpenRouterModelId}`);
-        modelMetadata = { modelId: customOpenRouterModelId };
+      } else {
+        // Safety catch - if we don't have a specific model ID, use the default
+        console.log("No specific model ID provided, using default free model as fallback");
+        modelMetadata = { modelId: "openai/o3-mini" }; // Using a reliable free model
       }
       
       // Try to get document context for this query
