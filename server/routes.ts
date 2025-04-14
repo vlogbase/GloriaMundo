@@ -145,7 +145,7 @@ async function generateAndSaveConversationTitle(conversationId: number): Promise
   }
 }
 
-type ModelType = "reasoning" | "search" | "multimodal";
+type ModelType = "reasoning" | "search" | "multimodal" | "openrouter";
 import "express-session";
 
 declare global {
