@@ -1053,7 +1053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Prepare API request payload
       const payload = {
-        model: isOpenRouter ? modelId : modelConfig.modelName,
+        model: modelId, // Always use the direct modelId for OpenRouter
         messages: cleanMessages,
         temperature: 0.2,
         top_p: 0.9,
@@ -1302,19 +1302,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Multimodal model selected but no specific modelId provided. Using default multimodal model.");
         modelId = "openai/gpt-4-vision-preview";
       }
-      const isOpenRouter = modelId && modelId !== "" && isOpenRouterKeyValid;
-      let modelConfig;
-      if (isOpenRouter) {
-        modelConfig = {
-          apiProvider: "openrouter",
-          modelName: modelId,
-          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-          apiKey: OPENROUTER_API_KEY
-        };
-        console.log(`Using OpenRouter with model: ${modelId}`);
-      } else {
-        modelConfig = MODEL_CONFIGS[modelType as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS.reasoning;
+      // Always use OpenRouter API
+      if (!isOpenRouterKeyValid) {
+        return res.status(401).json({ 
+          message: "OpenRouter API key is required",
+          details: "A valid OpenRouter API key is required to use this endpoint."
+        });
       }
+      
+      // Default to a multimodal model if an image is present and no modelId specified
+      if (image && (!modelId || modelId === "")) {
+        console.log("Image detected in request, defaulting to GPT-4 Vision");
+        modelId = "openai/gpt-4-vision-preview";
+      }
+      
+      // Use the default model if no specific one is provided
+      if (!modelId || modelId === "") {
+        console.log("No specific modelId provided. Using default OpenRouter model.");
+        modelId = DEFAULT_OPENROUTER_CONFIG.modelName;
+      }
+      
+      // Set up model configuration for OpenRouter
+      const modelConfig = {
+        apiProvider: "openrouter",
+        modelName: modelId,
+        apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+        apiKey: OPENROUTER_API_KEY
+      };
+      
+      console.log(`Using OpenRouter with model: ${modelId}`);
       const userMessage = await storage.createMessage({
         conversationId,
         role: "user",
