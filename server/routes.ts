@@ -198,18 +198,21 @@ export const isAuthenticated = (req: Request, res: Response, next: NextFunction)
   res.status(401).json({ message: "Unauthorized" });
 };
 
-type MultimodalContentItem =
+// Content item type for OpenRouter messages supporting both text and images
+type ContentItem =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-interface MultimodalMessage {
+// Message format for OpenRouter messages with mixed content types (text and images)
+interface MixedContentMessage {
   role: string;
-  content: MultimodalContentItem[];
+  content: ContentItem[];
 }
 
+// OpenRouter message format that supports both plain text and mixed content types
 type ApiMessage =
-  | { role: string; content: string }
-  | MultimodalMessage;
+  | { role: string; content: string } // Standard text-only message
+  | MixedContentMessage; // Message with both text and image content
 
 declare module "express-session" {
   interface SessionData {
@@ -1366,14 +1369,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log("Converting base64 to proper data URL format");
           }
         }
-        const multimodalMessage: MultimodalMessage = {
+        const imageMessage: MixedContentMessage = { // Format for vision-capable models
           role: "user",
           content: [
             { type: "text", text: content || "" },
             { type: "image_url", image_url: { url: imageUrl } }
           ]
         };
-        messages.push(multimodalMessage);
+        messages.push(imageMessage);
       } else {
         messages.push({
           role: "user",
