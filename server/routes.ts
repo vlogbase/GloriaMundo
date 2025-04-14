@@ -419,11 +419,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/debug/keys", (req, res) => {
-    const perplexityKeyStatus = PERPLEXITY_API_KEY ? "exists (length: " + PERPLEXITY_API_KEY.length + ")" : "missing";
-    const groqKeyStatus = GROQ_API_KEY ? "exists (length: " + GROQ_API_KEY.length + ")" : "missing";
+    const openrouterKeyStatus = OPENROUTER_API_KEY ? "exists (length: " + OPENROUTER_API_KEY.length + ")" : "missing";
+    
+    // Look for API-related environment variables
     const apiEnvVars = Object.keys(process.env).filter(key =>
-      key.includes("API") || key.includes("KEY") || key.includes("GROQ") || key.includes("PERPLEXITY")
+      key.includes("API") || key.includes("KEY") || key.includes("OPENROUTER")
     );
+    
+    // Determine if application is running in production environment
     const isDeployed = process.env.REPL_ID && process.env.REPL_OWNER;
     const deploymentInfo = {
       isDeployed,
@@ -432,13 +435,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       nodeEnv: process.env.NODE_ENV || "Not set",
       isProduction: process.env.NODE_ENV === "production"
     };
+    
     console.log(`Debug keys request from ${isDeployed ? "deployed" : "development"} environment`);
-    console.log(`API Key statuses: Perplexity: ${perplexityKeyStatus}, Groq: ${groqKeyStatus}`);
+    console.log(`API Key status: OpenRouter: ${openrouterKeyStatus}`);
+    
     res.json({
-      perplexityKey: perplexityKeyStatus,
-      perplexityKeyValid: isValidApiKey(PERPLEXITY_API_KEY),
-      groqKey: groqKeyStatus,
-      groqKeyValid: isValidApiKey(GROQ_API_KEY),
+      openrouterKey: openrouterKeyStatus,
+      openrouterKeyValid: isValidApiKey(OPENROUTER_API_KEY),
       envVars: apiEnvVars,
       deployment: deploymentInfo
     });
@@ -500,73 +503,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/debug/test-connection/:provider", async (req, res) => {
     const { provider } = req.params;
     try {
-      let apiUrl, apiKey, modelName;
-      if (provider === "groq") {
-        apiUrl = "https://api.groq.com/openai/v1/models";
-        apiKey = GROQ_API_KEY;
-        modelName = "models list";
-      } else if (provider === "perplexity") {
-        apiUrl = "https://api.perplexity.ai/chat/completions";
-        apiKey = PERPLEXITY_API_KEY;
-        modelName = "test connection";
-      } else if (provider === "openrouter") {
-        apiUrl = "https://openrouter.ai/api/v1/models";
-        apiKey = OPENROUTER_API_KEY;
-        modelName = "models list";
-      } else {
-        return res.status(400).json({ error: "Invalid provider. Use 'groq', 'perplexity', or 'openrouter'." });
+      // Now we only support OpenRouter
+      if (provider !== "openrouter") {
+        return res.status(400).json({ 
+          error: "Invalid provider. Use 'openrouter'.",
+          message: "Only OpenRouter is supported for model access in this application."
+        });
       }
+      
+      const apiUrl = "https://openrouter.ai/api/v1/models";
+      const apiKey = OPENROUTER_API_KEY;
+      
       if (!isValidApiKey(apiKey)) {
         return res.status(400).json({
-          error: `No valid API key for ${provider}`,
+          error: "No valid API key for OpenRouter",
           keyValid: false,
           keyExists: !!apiKey,
           keyLength: apiKey ? apiKey.length : 0
         });
       }
-      if (provider === "perplexity") {
-        const testPayload = {
-          model: "sonar-reasoning",
-          messages: [
-            {
-              role: "system",
-              content: "You are a helpful assistant. Keep your response very short."
-            },
-            {
-              role: "user",
-              content: "Test connection. Say 'CONNECTION_OK' if you can hear me."
-            }
-          ],
-          max_tokens: 20
-        };
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify(testPayload)
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          return res.status(response.status).json({
-            error: `API returned ${response.status}`,
-            details: errorText,
-            provider
-          });
-        }
-        return res.json({
-          success: true,
-          provider,
-          status: "Connected successfully"
-        });
-      }
+      
+      // Test the OpenRouter connection
       const response = await fetch(apiUrl, {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
         }
       });
+      
       if (!response.ok) {
         const errorText = await response.text();
         const apiError = parseOpenRouterError(response.status, errorText);
@@ -578,17 +543,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           provider
         });
       }
+      
       return res.json({
         success: true,
-        provider,
-        status: "Connected successfully"
+        provider: "openrouter",
+        status: "Connected successfully to OpenRouter API"
       });
     } catch (error) {
-      console.error(`Error testing ${provider} API connection:`, error);
-      const apiError = handleInternalError(error, provider);
+      console.error(`Error testing OpenRouter API connection:`, error);
+      const apiError = handleInternalError(error, "openrouter");
       return res.status(apiError.status).json({
         error: "Failed to test API connection",
-        provider,
+        provider: "openrouter",
         category: apiError.category,
         message: apiError.userMessage,
         technicalDetails: apiError.message
