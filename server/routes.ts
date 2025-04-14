@@ -287,28 +287,13 @@ const DEFAULT_MODEL_PRICING = {
   }
 };
 
-const MODEL_CONFIGS = {
-  reasoning: {
-    apiProvider: "groq",
-    modelName: "deepseek-r1-distill-llama-70b",
-    apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-    apiKey: GROQ_API_KEY,
-    pricing: DEFAULT_MODEL_PRICING.reasoning
-  },
-  search: {
-    apiProvider: "openrouter",
-    modelName: "perplexity/sonar-pro",
-    apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-    apiKey: OPENROUTER_API_KEY,
-    pricing: DEFAULT_MODEL_PRICING.search
-  },
-  multimodal: {
-    apiProvider: "openrouter",
-    modelName: "openai/gpt-4o",
-    apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-    apiKey: OPENROUTER_API_KEY,
-    pricing: DEFAULT_MODEL_PRICING.multimodal
-  }
+// Default OpenRouter configuration - only used if no modelId is provided
+const DEFAULT_OPENROUTER_CONFIG = {
+  apiProvider: "openrouter",
+  modelName: "openai/gpt-4o", // Default model if none specified
+  apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+  apiKey: OPENROUTER_API_KEY,
+  pricing: DEFAULT_MODEL_PRICING.multimodal
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -909,36 +894,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
       const isOpenRouterKeyValid = OPENROUTER_API_KEY.length > 0;
       
-      // Define model configurations
-      const MODEL_CONFIGS = {
-        reasoning: {
-          apiProvider: "perplexity",
-          modelName: "sonar-medium-chat",
-          apiUrl: "https://api.perplexity.ai/chat/completions",
-          apiKey: process.env.PERPLEXITY_API_KEY || "",
-          systemPrompt: "You are an AI assistant that helps users with concise, accurate, and professional information."
-        },
-        search: {
-          apiProvider: "perplexity",
-          modelName: "sonar-medium-online",
-          apiUrl: "https://api.perplexity.ai/chat/completions",
-          apiKey: process.env.PERPLEXITY_API_KEY || "",
-          systemPrompt: "You are an AI assistant with access to online search. Help users with current and factual information."
-        },
-        multimodal: {
-          apiProvider: "groq",
-          modelName: "llama3-70b-8192",
-          apiUrl: "https://api.groq.com/openai/v1/chat/completions",
-          apiKey: process.env.GROQ_API_KEY || "",
-          systemPrompt: "You are GloriaMundo, an AI assistant that helps users analyze images and provide information."
-        }
-      };
+      // Only use OpenRouter API
+      if (!isOpenRouterKeyValid) {
+        return res.status(401).json({ 
+          message: "OpenRouter API key is required",
+          details: "A valid OpenRouter API key is required to use this endpoint."
+        });
+      }
       
-      // Handle multimodal models
-      let effectiveModelType = modelType as keyof typeof MODEL_CONFIGS;
-      if (image) {
-        console.log("Image detected in streaming request, forcing model type to multimodal");
-        effectiveModelType = "multimodal";
+      // Default to a multimodal model if an image is present
+      if (image && (!modelId || modelId === "")) {
+        console.log("Image detected in streaming request, defaulting to GPT-4 Vision");
+        modelId = "openai/gpt-4-vision-preview";
       }
       
       if (modelId === "not set") {
@@ -946,25 +913,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         modelId = "";
       }
       
-      if (effectiveModelType === "multimodal" && (!modelId || modelId === "")) {
-        console.log("Multimodal model selected but no specific modelId provided. Using default multimodal model.");
-        modelId = "openai/gpt-4-vision-preview";
+      // Use the default model if no specific one is provided
+      if (!modelId || modelId === "") {
+        console.log("No specific modelId provided. Using default OpenRouter model.");
+        modelId = DEFAULT_OPENROUTER_CONFIG.modelName;
       }
       
-      const isOpenRouter = modelId && modelId !== "" && isOpenRouterKeyValid;
-      let modelConfig;
+      // Set up model configuration for OpenRouter
+      const modelConfig = {
+        apiProvider: "openrouter",
+        modelName: modelId,
+        apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+        apiKey: OPENROUTER_API_KEY
+      };
       
-      if (isOpenRouter) {
-        modelConfig = {
-          apiProvider: "openrouter",
-          modelName: modelId,
-          apiUrl: "https://openrouter.ai/api/v1/chat/completions",
-          apiKey: OPENROUTER_API_KEY
-        };
-        console.log(`Using OpenRouter with model: ${modelId} for streaming request`);
-      } else {
-        modelConfig = MODEL_CONFIGS[effectiveModelType] || MODEL_CONFIGS.reasoning;
-      }
+      console.log(`Using OpenRouter with model: ${modelId} for streaming request`);
       
       // Create user message in the database
       const userMessage = await storage.createMessage({
@@ -998,7 +961,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add system message with RAG context if available
       if (ragContext) {
         const systemContent = `You are an AI assistant responding to a user query. Use the following document context provided below to answer the query. Prioritize information found in the context. If the context does not contain the answer, state that.\n\nRelevant Document Context:\n${ragContext}\n\nUse the above document information to answer the query.`;
-        if (!(effectiveModelType === "multimodal" && image)) {
+        // Only add system message if there's no image (for models that don't handle both well)
+        if (!image) {
           messages.push({
             role: "system",
             content: systemContent
@@ -1007,37 +971,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Add conversation history
-      if (effectiveModelType === "search") {
-        if (filteredMessages.length > 1) {
-          const latestMessages = filteredMessages.slice(-2);
-          if (latestMessages.length === 2 && latestMessages[0].role === "user" && latestMessages[1].role === "assistant") {
+      let lastRole = "assistant";
+      for (const msg of filteredMessages) {
+        if (msg.role !== lastRole) {
+          if (msg.image) {
             messages.push({
-              role: "user",
-              content: latestMessages[0].content
+              role: msg.role,
+              content: msg.content
             });
+          } else {
             messages.push({
-              role: "assistant",
-              content: latestMessages[1].content
+              role: msg.role,
+              content: msg.content
             });
           }
-        }
-      } else {
-        let lastRole = "assistant";
-        for (const msg of filteredMessages) {
-          if (msg.role !== lastRole) {
-            if (modelType === "multimodal" && msg.image) {
-              messages.push({
-                role: msg.role,
-                content: msg.content
-              });
-            } else {
-              messages.push({
-                role: msg.role,
-                content: msg.content
-              });
-            }
-            lastRole = msg.role;
-          }
+          lastRole = msg.role;
         }
       }
       
