@@ -157,11 +157,14 @@ export const ModelPresets = () => {
     );
   };
   
-  // Helper function to check if a model is a Perplexity search model
-  const isPerplexityModel = (modelId: string): boolean => {
+  // Helper function to check if a model is a search-capable model
+  const isSearchModel = (modelId: string): boolean => {
     return (
       modelId.toLowerCase().includes('perplexity') ||
-      modelId.toLowerCase().includes('sonar')
+      modelId.toLowerCase().includes('sonar') ||
+      modelId.toLowerCase().includes('claude-3-search') ||
+      modelId.toLowerCase().includes('haiku') ||
+      modelId.toLowerCase().includes('opus')
     );
   };
   

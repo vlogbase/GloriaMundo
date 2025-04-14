@@ -31,7 +31,7 @@ export interface ModelOption {
   name: string;
   description: string;
   apiName: string;
-  apiProvider: "groq" | "perplexity" | "openrouter";
+  apiProvider: "openrouter";
 }
 
 export interface OpenRouterModel {
@@ -46,7 +46,7 @@ export interface OpenRouterModel {
   isFree?: boolean;
 }
 
-export interface PerplexityResponse {
+export interface OpenRouterResponse {
   id: string;
   model: string;
   object: string;
@@ -59,27 +59,6 @@ export interface PerplexityResponse {
       content: string;
     };
     delta?: {
-      role: string;
-      content: string;
-    };
-  }[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  citations?: string[];
-}
-
-export interface GroqResponse {
-  id: string;
-  model: string;
-  object: string;
-  created: number;
-  choices: {
-    index: number;
-    finish_reason: string;
-    message: {
       role: string;
       content: string;
     };
