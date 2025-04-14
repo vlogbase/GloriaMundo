@@ -840,15 +840,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:id/messages/stream", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id, 10);
-      const { content = "", modelType: initialModelType = "openrouter", modelId: initialModelId = "", image = "" } = req.query as {
+      const { content = "", modelId: initialModelId = "", image = "" } = req.query as {
         content?: string;
-        modelType?: string;
         modelId?: string;
         image?: string;
       };
       
-      // Create mutable copies of the query parameters
-      let modelType = initialModelType;
+      // Create mutable copy of the modelId parameter
       let modelId = initialModelId;
       
       if (!content) {
@@ -1002,30 +1000,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Clean messages for OpenRouter API
-      const cleanMessages = modelConfig.apiProvider === "openrouter"
-        ? messages.map(msg => {
-            if (typeof msg.content === "string") {
-              return {
-                role: msg.role,
-                content: msg.content
-              };
-            }
-            if (Array.isArray(msg.content)) {
-              return {
-                role: msg.role,
-                content: msg.content.map(item => {
-                  if (item.type === "text") {
-                    return { type: "text", text: item.text };
-                  } else if (item.type === "image_url") {
-                    return { type: "image_url", image_url: { url: item.image_url.url } };
-                  }
-                  return item;
-                })
-              };
-            }
-            return msg;
-          })
-        : messages;
+      const cleanMessages = messages.map(msg => {
+        if (typeof msg.content === "string") {
+          return {
+            role: msg.role,
+            content: msg.content
+          };
+        }
+        if (Array.isArray(msg.content)) {
+          return {
+            role: msg.role,
+            content: msg.content.map(item => {
+              if (item.type === "text") {
+                return { type: "text", text: item.text };
+              } else if (item.type === "image_url") {
+                return { type: "image_url", image_url: { url: item.image_url.url } };
+              }
+              return item;
+            })
+          };
+        }
+        return msg;
+      });
       
       // Prepare API request payload
       const payload = {
@@ -1053,12 +1049,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const errorText = await apiResponse.text();
         console.error(`Streaming API error from ${modelConfig.apiProvider}: ${errorText}`);
         
-        let apiError: ApiError;
-        if (modelConfig.apiProvider === "openrouter") {
-          apiError = parseOpenRouterError(apiResponse.status, errorText);
-        } else {
-          apiError = handleInternalError(new Error(`${modelConfig.apiProvider} API error: ${apiResponse.status}`));
-        }
+        // Always use OpenRouter error parsing
+        const apiError = parseOpenRouterError(apiResponse.status, errorText);
         
         // If headers haven't been sent yet, send error response
         if (!res.headersSent) {
@@ -1089,145 +1081,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      // For OpenRouter, we'll pipe the streaming response directly to the client
-      if (modelConfig.apiProvider === "openrouter") {
-        console.log("Directly piping OpenRouter SSE response to client");
-        let accumulatedContent = "";
-        
-        try {
-          // Get reader from response body stream
-          const reader = apiResponse.body.getReader();
-          
-          // Process the stream
-          while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) {
-              console.log("OpenRouter stream complete");
-              
-              // Update message in database with complete content
-              await storage.updateMessage(assistantMessage.id, {
-                content: accumulatedContent
-              });
-              
-              // Send final [DONE] marker to client
-              res.write(`data: [DONE]\n\n`);
-              break;
-            }
-            
-            // Decode the chunk and pipe directly to client
-            const chunk = new TextDecoder().decode(value);
-            
-            // Write the raw chunk directly to the client
-            res.write(chunk);
-            
-            // Also extract content for database storage
-            try {
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
-                  const data = line.substring(6);
-                  try {
-                    const jsonData = JSON.parse(data);
-                    const delta = jsonData.choices?.[0]?.delta?.content;
-                    if (delta) {
-                      accumulatedContent += delta;
-                    }
-                  } catch (e) {
-                    // Ignore parsing errors for accumulation
-                  }
-                }
-              }
-            } catch (extractError) {
-              console.error("Error extracting content for database:", extractError);
-              // Continue streaming even if accumulation fails
-            }
-          }
-        } catch (streamError) {
-          console.error("Error during OpenRouter stream piping:", streamError);
-          res.write(`event: error\ndata: ${JSON.stringify({ 
-            error: "Error processing AI response stream"
-          })}\n\n`);
-        } finally {
-          // Ensure the reader is released and response is ended
-          res.end();
-        }
-      } else {
-        // For non-OpenRouter providers, keep the original stream processing
+      // Always pipe the OpenRouter streaming response directly to client
+      console.log("Directly piping OpenRouter SSE response to client");
+      let accumulatedContent = "";
+      
+      try {
+        // Get reader from response body stream
         const reader = apiResponse.body.getReader();
-        let accumulatedContent = "";
         
-        try {
-          // Process the stream
-          while (true) {
-            const { done, value } = await reader.read();
+        // Process the stream
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            console.log("OpenRouter stream complete");
             
-            if (done) {
-              console.log("Stream complete");
-              
-              // Send final [DONE] marker to client
-              res.write(`data: [DONE]\n\n`);
-              
-              // Update message in database with complete content
-              await storage.updateMessage(assistantMessage.id, {
-                content: accumulatedContent
-              });
-              
-              break;
-            }
+            // Update message in database with complete content
+            await storage.updateMessage(assistantMessage.id, {
+              content: accumulatedContent
+            });
             
-            // Decode the chunk
-            const chunk = new TextDecoder().decode(value);
+            // Send final [DONE] marker to client
+            res.write(`data: [DONE]\n\n`);
+            break;
+          }
+          
+          // Decode the chunk and pipe directly to client
+          const chunk = new TextDecoder().decode(value);
+          
+          // Write the raw chunk directly to the client
+          res.write(chunk);
+          
+          // Also extract content for database storage
+          try {
             const lines = chunk.split('\n');
-            
-            // Process each line
             for (const line of lines) {
-              if (line.trim() === '') continue;
-              
-              // Handle SSE format (lines starting with "data: ")
-              if (line.startsWith('data: ')) {
+              if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
                 const data = line.substring(6);
-                
-                // Check for [DONE] marker
-                if (data === '[DONE]') {
-                  continue; // We'll send our own [DONE] when fully complete
-                }
-                
                 try {
-                  // Parse the JSON data
                   const jsonData = JSON.parse(data);
-                  
-                  // Extract content delta
                   const delta = jsonData.choices?.[0]?.delta?.content;
-                  
                   if (delta) {
-                    // Accumulate content
                     accumulatedContent += delta;
-                    
-                    // Forward the chunk to the client
-                    res.write(`data: ${JSON.stringify({ 
-                      id: assistantMessage.id,
-                      choices: [{ delta: { content: delta } }]
-                    })}\n\n`);
                   }
-                } catch (parseError) {
-                  console.error("Error parsing streaming chunk:", parseError, "Raw data:", data);
-                  // Forward original data to client in case it's a valid format our parser doesn't handle
-                  res.write(`${line}\n\n`);
+                } catch (e) {
+                  // Ignore parsing errors for accumulation
                 }
               }
             }
+          } catch (extractError) {
+            console.error("Error extracting content for database:", extractError);
+            // Continue streaming even if accumulation fails
           }
-        } catch (streamError) {
-          console.error("Error processing stream:", streamError);
-          res.write(`event: error\ndata: ${JSON.stringify({ 
-            error: "Error processing AI response stream"
-          })}\n\n`);
-        } finally {
-          // Always release the reader lock and end the response
-          reader.releaseLock();
-          res.end();
         }
+      } catch (streamError) {
+        console.error("Error during OpenRouter stream piping:", streamError);
+        res.write(`event: error\ndata: ${JSON.stringify({ 
+          error: "Error processing AI response stream"
+        })}\n\n`);
+      } finally {
+        // Ensure the response is ended
+        res.end();
       }
       
     } catch (error) {
@@ -1247,7 +1161,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/conversations/:id/messages", async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
-      let { content = "", modelType = "openrouter", modelId = "", image, documentContext = null } = req.body;
+      // Only accept modelId as relevant parameter, modelType is always "openrouter"
+      let { content = "", modelId = "", image, documentContext = null } = req.body;
+      const modelType = "openrouter"; // Always use OpenRouter
       content = content || "";
       if (!content && !image) {
         return res.status(400).json({ message: "Message content or image is required" });
@@ -1275,8 +1191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Set appropriate model type to OpenRouter and handle image-capable models
-      modelType = "openrouter"; // Always use OpenRouter as the provider
+      // Handle image-capable models
       
       if (image) {
         console.log("Image detected, ensuring vision-capable model is selected");
