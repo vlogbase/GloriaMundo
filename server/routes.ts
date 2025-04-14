@@ -876,15 +876,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === Fixed POST /api/conversations/:id/messages endpoint ===
   // Streaming endpoint for chat messages
-  app.get("/api/conversations/:id/messages/stream", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/conversations/:id/messages/stream", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id, 10);
-      const { content = "", modelType = "reasoning", modelId = "", image = "" } = req.query as {
+      const { content = "", modelType: initialModelType = "reasoning", modelId: initialModelId = "", image = "" } = req.query as {
         content?: string;
         modelType?: string;
         modelId?: string;
         image?: string;
       };
+      
+      // Create mutable copies of the query parameters
+      let modelType = initialModelType;
+      let modelId = initialModelId;
       
       if (!content) {
         return res.status(400).json({ message: "Message content is required" });
