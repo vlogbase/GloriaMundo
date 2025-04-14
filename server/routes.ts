@@ -216,33 +216,39 @@ declare module "express-session" {
   }
 }
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || "";
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+// Only OpenRouter API is used for chat completions
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
-const isPerplexityKeyValid = PERPLEXITY_API_KEY && PERPLEXITY_API_KEY.length > 10;
-const isGroqKeyValid = GROQ_API_KEY && GROQ_API_KEY.length > 10;
+// Validate OpenRouter API key
 const isOpenRouterKeyValid = OPENROUTER_API_KEY && OPENROUTER_API_KEY.length > 10;
 
 console.log("API Key Status:");
-console.log(`- Perplexity API Key: ${isPerplexityKeyValid ? "Valid" : "Invalid or Missing"}`);
-console.log(`- Groq API Key: ${isGroqKeyValid ? "Valid" : "Invalid or Missing"}`);
 console.log(`- OpenRouter API Key: ${isOpenRouterKeyValid ? "Valid" : "Invalid or Missing"}`);
 
 function isValidApiKey(key: string | undefined | null): boolean {
   if (!key) return false;
   if (typeof key !== "string") return false;
+  
+  // Basic validation - key must be longer than 10 characters
   const isLongEnough = key.length > 10;
-  const hasValidPrefix =
-    (key.startsWith("grk_") && key.length >= 50) ||
-    (key.startsWith("pplx-") && key.length >= 40);
+  
+  // Check for OpenRouter key format (primary provider now)
+  const isOpenRouterKey = key.startsWith("sk-or-") && key.length >= 40;
+  
+  // If key is too short, log a warning
   if (!isLongEnough) {
     console.warn(`API key validation failed: Key length less than 10 (actual: ${key.length})`);
-  } else if (!hasValidPrefix) {
-    console.warn(`API key validation warning: Key doesn't have a recognized prefix`);
+    return false;
   }
-  return isLongEnough;
+  
+  // For OpenRouter keys, perform additional validation
+  if (isOpenRouterKey) {
+    return true;
+  }
+  
+  // Allow generic API keys that pass basic validation
+  return true;
 }
 
 const loadModelPricing = () => {
@@ -1290,18 +1296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "INSUFFICIENT_CREDITS"
         });
       }
-      if (image) {
-        console.log("Image detected, forcing model type to multimodal");
-        modelType = "multimodal";
-      }
-      if (modelId === "not set") {
-        console.error("Invalid modelId received: 'not set'");
-        modelId = "";
-      }
-      if (modelType === "multimodal" && (!modelId || modelId === "")) {
-        console.log("Multimodal model selected but no specific modelId provided. Using default multimodal model.");
-        modelId = "openai/gpt-4-vision-preview";
-      }
+      
       // Always use OpenRouter API
       if (!isOpenRouterKeyValid) {
         return res.status(401).json({ 
@@ -1310,14 +1305,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Default to a multimodal model if an image is present and no modelId specified
-      if (image && (!modelId || modelId === "")) {
-        console.log("Image detected in request, defaulting to GPT-4 Vision");
-        modelId = "openai/gpt-4-vision-preview";
-      }
-      
-      // Use the default model if no specific one is provided
-      if (!modelId || modelId === "") {
+      // Set appropriate model for multimodal (image) requests
+      if (image) {
+        console.log("Image detected, forcing model type to multimodal");
+        modelType = "multimodal";
+        
+        // If no specific model is provided for image processing, use the default vision model
+        if (!modelId || modelId === "" || modelId === "not set") {
+          console.log("No specific modelId provided for image. Using default multimodal model.");
+          modelId = "openai/gpt-4-vision-preview";
+        }
+      } else if (modelId === "not set" || !modelId || modelId === "") {
+        // For non-image requests without a specific model, use the default model
         console.log("No specific modelId provided. Using default OpenRouter model.");
         modelId = DEFAULT_OPENROUTER_CONFIG.modelName;
       }
