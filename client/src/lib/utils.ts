@@ -147,6 +147,13 @@ export const cookieUtils = {
  * This enhanced version ensures Skimlinks is reprocessing links even when 
  * new content is dynamically added to the page, especially AI-generated content
  */
+// Add type declaration for window with skimlinksAPI
+declare global {
+  interface Window {
+    skimlinksAPI?: any;
+  }
+}
+
 export const refreshSkimlinks = (): void => {
   try {
     // Check if window is available (for SSR safety)

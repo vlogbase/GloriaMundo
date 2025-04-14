@@ -44,8 +44,8 @@ export const DocumentPreviewModal = ({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent 
         className="sm:max-w-md"
-        // Prevent layout shifting during opening animation
-        onAnimationComplete={() => setIsFullyMounted(true)}
+        // Use onOpenAutoFocus instead of onAnimationComplete
+        onOpenAutoFocus={() => setIsFullyMounted(true)}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

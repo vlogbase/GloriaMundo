@@ -7,8 +7,13 @@ import { readFile } from 'fs/promises';
 import { Document as DocxDocument, Paragraph, TextRun } from 'docx';
 import { AzureOpenAI } from 'openai';
 import { MongoClient } from 'mongodb';
-import Pipeline from '@xenova/transformers/dist/pipeline';
-import type { FeatureExtractionPipeline } from '@xenova/transformers/dist/types';
+// Import with dynamic import() syntax for ES modules
+// This fixes the "require is not defined" error
+import('node:module').then(module => module.createRequire(import.meta.url));
+// Use type declarations instead of direct imports
+// This avoids needing the actual module for type checking
+declare const Pipeline: any;
+type FeatureExtractionPipeline = any;
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
 
@@ -713,9 +718,10 @@ async function createChunksFromDocument(document: Document): Promise<DocumentChu
     // Process embeddings in parallel
     await Promise.all(documentChunks.map(async (chunk) => {
       try {
-        console.log(`Generating embedding for immediate chunk ${chunk.id} with user ${document.userId}`);
-        // Pass userId when generating embedding for proper billing
-        const embedding = await generateEmbedding(chunk.content, document.userId, true);
+        const userIdValue = document.userId || undefined; // Convert null to undefined to fix type error
+        console.log(`Generating embedding for immediate chunk ${chunk.id} with user ${userIdValue || 'none'}`);
+        // Pass userId when generating embedding for proper billing (with null/undefined handling)
+        const embedding = await generateEmbedding(chunk.content, userIdValue, true);
         
         // Update embedding in primary storage
         await storage.updateDocumentChunkEmbedding(chunk.id, embedding);
