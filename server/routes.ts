@@ -1415,50 +1415,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           })
         });
-        let modelParam;
-        if (modelConfig.apiProvider === "openrouter") {
-          modelParam = modelId;
-          console.log(`OpenRouter request using explicit model ID: ${modelId}`);
-        } else {
-          modelParam = modelConfig.modelName;
-        }
-        const cleanMessages = modelConfig.apiProvider === "openrouter"
-          ? messages.map(msg => {
-              if (typeof msg.content === "string") {
-                return {
-                  role: msg.role,
-                  content: msg.content
-                };
-              }
-              if (Array.isArray(msg.content)) {
-                return {
-                  role: msg.role,
-                  content: msg.content.map(item => {
-                    if (item.type === "text") {
-                      return { type: "text", text: item.text };
-                    } else if (item.type === "image_url") {
-                      return { type: "image_url", image_url: { url: item.image_url.url } };
-                    }
-                    return item;
-                  })
-                };
-              }
-              return msg;
-            })
-          : messages;
-        if (modelConfig.apiProvider === "openrouter") {
-          console.log("Created clean messages for OpenRouter API");
-          const firstMsg = cleanMessages[0];
-          const lastMsg = cleanMessages[cleanMessages.length - 1];
-          console.log("OpenRouter message format check:", {
-            messageCount: cleanMessages.length,
-            firstMessageRole: firstMsg?.role,
-            firstMessageContentType: typeof firstMsg?.content,
-            lastMessageRole: lastMsg?.role,
-            lastMessageContentType: typeof lastMsg?.content,
-            isLastMessageMixedContent: Array.isArray(lastMsg?.content) // Has both image and text
-          });
-        }
+        // Always use OpenRouter with explicit model ID
+        const modelParam = modelId;
+        console.log(`OpenRouter request using explicit model ID: ${modelId}`);
+        
+        // Clean messages for OpenRouter API format
+        const cleanMessages = messages.map(msg => {
+          if (typeof msg.content === "string") {
+            return {
+              role: msg.role,
+              content: msg.content
+            };
+          }
+          if (Array.isArray(msg.content)) {
+            return {
+              role: msg.role,
+              content: msg.content.map(item => {
+                if (item.type === "text") {
+                  return { type: "text", text: item.text };
+                } else if (item.type === "image_url") {
+                  return { type: "image_url", image_url: { url: item.image_url.url } };
+                }
+                return item;
+              })
+            };
+          }
+          return msg;
+        });
+        
+        // Debug logging for message format
+        console.log("Created clean messages for OpenRouter API");
+        const firstMsg = cleanMessages[0];
+        const lastMsg = cleanMessages[cleanMessages.length - 1];
+        console.log("OpenRouter message format check:", {
+          messageCount: cleanMessages.length,
+          firstMessageRole: firstMsg?.role,
+          firstMessageContentType: typeof firstMsg?.content,
+          lastMessageRole: lastMsg?.role,
+          lastMessageContentType: typeof lastMsg?.content,
+          isLastMessageMixedContent: Array.isArray(lastMsg?.content) // Has both image and text
+        });
         const payload = {
           model: modelParam,
           messages: cleanMessages,
@@ -1467,10 +1463,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stream: false
         };
         console.log("API request with model parameter:", {
-          apiProvider: modelConfig.apiProvider,
+          apiProvider: "openrouter", // Always using OpenRouter
           modelParameter: payload.model,
           originalModelId: modelId,
-          isOpenRouter: modelConfig.apiProvider === "openrouter"
         });
         // --- Fix: Ensure the try block is properly closed by wrapping the abort logic ---
         try {
