@@ -439,11 +439,56 @@ export const useStreamingChat = () => {
     }
   }, [activeConversationId, selectedModel, customOpenRouterModelId, setLocation, toast]);
   
+  // Function to get document context for RAG
+  const getDocumentContext = useCallback(async (conversationId: number, query: string): Promise<string | null> => {
+    if (!conversationId || !query) {
+      return null;
+    }
+    
+    try {
+      // Encode query to safely include in URL
+      const encodedQuery = encodeURIComponent(query);
+      const response = await fetch(`/api/conversations/${conversationId}/rag?query=${encodedQuery}`);
+      
+      if (!response.ok) {
+        console.warn(`RAG retrieval returned status ${response.status}`);
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      if (data && data.context) {
+        return data.context;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error retrieving document context:", error);
+      return null;
+    }
+  }, []);
+  
   // Helper function to handle non-streaming requests
   const fallbackToNonStreaming = async (conversationId: number, content: string, image?: string, originalContent?: string) => {
     // originalContent is the raw content before potential JSON parsing
     const messageContent = content; // Clean content is passed in directly now
     try {
+      // Try to get document context for this query (non-image messages only)
+      let documentContext = null;
+      if (!image) {
+        try {
+          documentContext = await getDocumentContext(conversationId, messageContent);
+          console.log('[useStreamingChat] Document context for query:', documentContext ? 'Found' : 'None');
+        } catch (contextError) {
+          console.error('[useStreamingChat] Error getting document context:', contextError);
+          // Continue without document context if there's an error
+        }
+      }
+      
+      // Determine the OpenRouter model ID to use
+      const modelId = customOpenRouterModelId || "openai/o3-mini"; // Fallback to a reliable free model
+      console.log(`[useStreamingChat] Using OpenRouter model: ${modelId}`);
+      
       const response = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: {
@@ -452,8 +497,9 @@ export const useStreamingChat = () => {
         body: JSON.stringify({ 
           content,
           image,
-          modelType: selectedModel,
-          modelId: customOpenRouterModelId || undefined
+          modelType: "openrouter", // Always use OpenRouter
+          modelId: modelId, // Always specify a model ID
+          documentContext // Include context for RAG if available
         }),
       });
       
@@ -547,7 +593,6 @@ export const useStreamingChat = () => {
     }
   };
 
-  // Start a new conversation
   const startNewConversation = useCallback(async () => {
     setMessages([]);
     setActiveConversationId(undefined);
