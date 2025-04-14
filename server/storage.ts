@@ -668,7 +668,8 @@ export class MemStorage implements IStorage {
       throw new Error("role is required");
     }
     
-    if (!data.content && !data.image) {
+    // Modified check: allow empty string content ("") but not undefined/null content without image
+    if ((data.content === undefined || data.content === null) && !data.image) {
       throw new Error("Either content or image is required");
     }
     
