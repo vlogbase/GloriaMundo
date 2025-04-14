@@ -894,6 +894,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Message content is required" });
       }
       
+      // Disable compression middleware for this route
+      res.setHeader("X-No-Compression", "true");
+      
       // Set headers for SSE
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
@@ -1161,84 +1164,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return;
       }
-      
-      // Get reader from response body stream
-      const reader = apiResponse.body.getReader();
-      let accumulatedContent = "";
-      
-      try {
-        // Process the stream
-        while (true) {
-          const { done, value } = await reader.read();
+
+      // For OpenRouter, we'll pipe the streaming response directly to the client
+      if (modelConfig.apiProvider === "openrouter") {
+        console.log("Directly piping OpenRouter SSE response to client");
+        let accumulatedContent = "";
+        
+        try {
+          // Get reader from response body stream
+          const reader = apiResponse.body.getReader();
           
-          if (done) {
-            console.log("Stream complete");
+          // Process the stream
+          while (true) {
+            const { done, value } = await reader.read();
             
-            // Send final [DONE] marker to client
-            res.write(`data: [DONE]\n\n`);
-            
-            // Update message in database with complete content
-            await storage.updateMessage(assistantMessage.id, {
-              content: accumulatedContent
-            });
-            
-            break;
-          }
-          
-          // Decode the chunk
-          const chunk = new TextDecoder().decode(value);
-          const lines = chunk.split('\n');
-          
-          // Process each line
-          for (const line of lines) {
-            if (line.trim() === '') continue;
-            
-            // Handle SSE format (lines starting with "data: ")
-            if (line.startsWith('data: ')) {
-              const data = line.substring(6);
+            if (done) {
+              console.log("OpenRouter stream complete");
               
-              // Check for [DONE] marker
-              if (data === '[DONE]') {
-                continue; // We'll send our own [DONE] when fully complete
-              }
+              // Update message in database with complete content
+              await storage.updateMessage(assistantMessage.id, {
+                content: accumulatedContent
+              });
               
-              try {
-                // Parse the JSON data
-                const jsonData = JSON.parse(data);
-                
-                // Extract content delta
-                const delta = jsonData.choices?.[0]?.delta?.content;
-                
-                if (delta) {
-                  // Accumulate content
-                  accumulatedContent += delta;
-                  
-                  // Forward the chunk to the client
-                  res.write(`data: ${JSON.stringify({ 
-                    id: assistantMessage.id,
-                    choices: [{ delta: { content: delta } }]
-                  })}\n\n`);
-                  
-                  // Ensure immediate delivery
-                  res.flush?.();
+              // Send final [DONE] marker to client
+              res.write(`data: [DONE]\n\n`);
+              break;
+            }
+            
+            // Decode the chunk and pipe directly to client
+            const chunk = new TextDecoder().decode(value);
+            
+            // Write the raw chunk directly to the client
+            res.write(chunk);
+            
+            // Also extract content for database storage
+            try {
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+                  const data = line.substring(6);
+                  try {
+                    const jsonData = JSON.parse(data);
+                    const delta = jsonData.choices?.[0]?.delta?.content;
+                    if (delta) {
+                      accumulatedContent += delta;
+                    }
+                  } catch (e) {
+                    // Ignore parsing errors for accumulation
+                  }
                 }
-              } catch (parseError) {
-                console.error("Error parsing streaming chunk:", parseError, "Raw data:", data);
-                // Forward original data to client in case it's a valid format our parser doesn't handle
-                res.write(`${line}\n\n`);
+              }
+            } catch (extractError) {
+              console.error("Error extracting content for database:", extractError);
+              // Continue streaming even if accumulation fails
+            }
+          }
+        } catch (streamError) {
+          console.error("Error during OpenRouter stream piping:", streamError);
+          res.write(`event: error\ndata: ${JSON.stringify({ 
+            error: "Error processing AI response stream"
+          })}\n\n`);
+        } finally {
+          // Ensure the reader is released and response is ended
+          res.end();
+        }
+      } else {
+        // For non-OpenRouter providers, keep the original stream processing
+        const reader = apiResponse.body.getReader();
+        let accumulatedContent = "";
+        
+        try {
+          // Process the stream
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log("Stream complete");
+              
+              // Send final [DONE] marker to client
+              res.write(`data: [DONE]\n\n`);
+              
+              // Update message in database with complete content
+              await storage.updateMessage(assistantMessage.id, {
+                content: accumulatedContent
+              });
+              
+              break;
+            }
+            
+            // Decode the chunk
+            const chunk = new TextDecoder().decode(value);
+            const lines = chunk.split('\n');
+            
+            // Process each line
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+              
+              // Handle SSE format (lines starting with "data: ")
+              if (line.startsWith('data: ')) {
+                const data = line.substring(6);
+                
+                // Check for [DONE] marker
+                if (data === '[DONE]') {
+                  continue; // We'll send our own [DONE] when fully complete
+                }
+                
+                try {
+                  // Parse the JSON data
+                  const jsonData = JSON.parse(data);
+                  
+                  // Extract content delta
+                  const delta = jsonData.choices?.[0]?.delta?.content;
+                  
+                  if (delta) {
+                    // Accumulate content
+                    accumulatedContent += delta;
+                    
+                    // Forward the chunk to the client
+                    res.write(`data: ${JSON.stringify({ 
+                      id: assistantMessage.id,
+                      choices: [{ delta: { content: delta } }]
+                    })}\n\n`);
+                  }
+                } catch (parseError) {
+                  console.error("Error parsing streaming chunk:", parseError, "Raw data:", data);
+                  // Forward original data to client in case it's a valid format our parser doesn't handle
+                  res.write(`${line}\n\n`);
+                }
               }
             }
           }
+        } catch (streamError) {
+          console.error("Error processing stream:", streamError);
+          res.write(`event: error\ndata: ${JSON.stringify({ 
+            error: "Error processing AI response stream"
+          })}\n\n`);
+        } finally {
+          // Always release the reader lock and end the response
+          reader.releaseLock();
+          res.end();
         }
-      } catch (streamError) {
-        console.error("Error processing stream:", streamError);
-        res.write(`event: error\ndata: ${JSON.stringify({ 
-          error: "Error processing AI response stream"
-        })}\n\n`);
-      } finally {
-        // Always release the reader lock and end the response
-        reader.releaseLock();
-        res.end();
       }
       
     } catch (error) {
