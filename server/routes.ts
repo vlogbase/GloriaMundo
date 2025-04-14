@@ -875,10 +875,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Default to a multimodal model if an image is present
+      // Default to a vision-capable model if an image is present and no specific model ID
       if (image && (!modelId || modelId === "")) {
-        console.log("Image detected in streaming request, defaulting to GPT-4 Vision");
-        modelId = "openai/gpt-4-vision-preview";
+        console.log("Image detected in streaming request, defaulting to GPT-4o");
+        modelId = "openai/gpt-4o"; // Using GPT-4o as it has better performance than gpt-4-vision-preview
       }
       
       if (modelId === "not set") {
@@ -966,14 +966,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (image) {
         let imageUrl = image;
         if (image.startsWith("data:")) {
-          console.log("Using provided data URL for multimodal streaming request");
+          console.log("Using provided data URL for vision-capable model via OpenRouter");
         } else if (!image.startsWith("http")) {
           if (!image.startsWith("data:image")) {
             imageUrl = `data:image/jpeg;base64,${image}`;
           }
         }
         
-        // Add multimodal message
+        // Add message with image for vision-capable models
         messages.push({
           role: "user",
           content: [
@@ -1359,7 +1359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (image) {
         let imageUrl = image;
         if (image.startsWith("data:")) {
-          console.log("Using provided data URL for multimodal request");
+          console.log("Using provided data URL for vision-capable model via OpenRouter");
         } else if (!image.startsWith("http")) {
           if (!image.startsWith("data:image")) {
             imageUrl = `data:image/jpeg;base64,${image}`;
