@@ -178,6 +178,11 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Import document routes explicitly first to ensure they're registered before Vite catch-all middleware
+  const { registerDocumentRoutes } = await import('./documentRoutes');
+  registerDocumentRoutes(app);
+  
+  // Now register the rest of the routes
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
