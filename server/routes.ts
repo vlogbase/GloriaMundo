@@ -145,7 +145,8 @@ async function generateAndSaveConversationTitle(conversationId: number): Promise
   }
 }
 
-type ModelType = "reasoning" | "search" | "multimodal" | "openrouter";
+// Now we only use OpenRouter directly - all other models are specified by their OpenRouter model ID
+type ModelType = "openrouter";
 import "express-session";
 
 declare global {

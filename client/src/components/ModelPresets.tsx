@@ -247,42 +247,34 @@ export const ModelPresets = () => {
       // Set the selected model ID
       setSelectedModelId(modelId);
       
-      // Set model type based on preset and capabilities
-      if (presetKey === 'preset3') {
-        // Preset 3 is for reasoning models
-        setSelectedModel('reasoning');
-      } else if (presetKey === 'preset4') {
-        // Preset 4 is always for multimodal models
-        setSelectedModel('multimodal');
-      } else if (presetKey === 'preset5') {
-        // Preset 5 is for search/Perplexity models
-        setSelectedModel('search');
-      } else {
-        // For presets 1 and 2 (all models), determine type based on the model's capabilities
-        const shouldSetMultimodal = isMultimodalModel(modelId);
-        setSelectedModel(shouldSetMultimodal ? 'multimodal' : 'openrouter');
-      }
+      // All model types are now "openrouter" - we only set the specific model ID
+      setSelectedModel('openrouter');
       
       // Set the custom OpenRouter model ID (important for the actual API call)
       setCustomOpenRouterModelId(modelId);
       
-      // Log for debugging purposes
-      console.log(`Model activated: ${modelId}, Type: ${presetKey === 'preset3' ? 'reasoning' : 
-                                                   presetKey === 'preset4' ? 'multimodal' :
-                                                   presetKey === 'preset5' ? 'search' :
-                                                   isMultimodalModel(modelId) ? 'multimodal' : 'openrouter'}`);
-    } else {
-      // If no model is assigned to this preset yet, set default types based on preset
+      // Log model activation with capabilities info for debugging
+      const modelCapabilities = isMultimodalModel(modelId) ? 'vision-capable' : 'text-only';
+      console.log(`Model activated: ${modelId}, Capabilities: ${modelCapabilities}, Preset: ${presetKey}`);
+      
+      // Map legacy preset types to model IDs in logs for backward compatibility tracking
       if (presetKey === 'preset3') {
-        setSelectedModel('reasoning');
+        console.log(`Legacy preset mapping: preset3 (was reasoning) → ${modelId}`);
       } else if (presetKey === 'preset4') {
-        setSelectedModel('multimodal');
+        console.log(`Legacy preset mapping: preset4 (was multimodal) → ${modelId}`);
       } else if (presetKey === 'preset5') {
-        setSelectedModel('search');
-      } else {
-        // Default for preset1 and preset2
-        setSelectedModel('openrouter');
+        console.log(`Legacy preset mapping: preset5 (was search) → ${modelId}`);
       }
+    } else {
+      // If no model is assigned to this preset yet, just set the type to openrouter
+      // We'll keep track of the preset for UX purposes but all models go through OpenRouter
+      setSelectedModel('openrouter');
+      
+      // For debugging, log which legacy preset was selected
+      console.log(`Empty model selection for preset: ${presetKey}`);
+      
+      // Clear any previous custom model ID when no specific model is selected
+      setCustomOpenRouterModelId(null);
     }
   };
 
@@ -290,13 +282,20 @@ export const ModelPresets = () => {
   const handleClick = (presetKey: 'preset1' | 'preset2' | 'preset3' | 'preset4' | 'preset5') => {
     let modelId = activatePreset(presetKey);
     
-    // Map legacy model types to actual OpenRouter model IDs
-    if (modelId === 'reasoning') {
-      modelId = 'openai/o3-mini-high'; // Map reasoning to o3 Mini
-      console.log(`Mapped legacy 'reasoning' type to OpenRouter model: ${modelId}`);
-    } else if (modelId === 'search') {
-      modelId = 'perplexity/sonar-pro'; // Map search to Sonar Pro
-      console.log(`Mapped legacy 'search' type to OpenRouter model: ${modelId}`);
+    // Handle legacy model type strings if encountered in the stored settings
+    // This provides backward compatibility with previously saved presets
+    if (typeof modelId === 'string') {
+      // Map legacy model types to actual OpenRouter model IDs
+      if (modelId === 'reasoning') {
+        modelId = 'openai/o3-mini-high'; // Map reasoning to o3 Mini
+        console.log(`Mapped legacy 'reasoning' type to OpenRouter model: ${modelId}`);
+      } else if (modelId === 'search') {
+        modelId = 'perplexity/sonar-pro'; // Map search to Sonar Pro
+        console.log(`Mapped legacy 'search' type to OpenRouter model: ${modelId}`);
+      } else if (modelId === 'multimodal') {
+        modelId = 'openai/gpt-4o'; // Map multimodal to GPT-4o (vision capable)
+        console.log(`Mapped legacy 'multimodal' type to OpenRouter model: ${modelId}`);
+      }
     }
     
     // Only proceed if there's an actual model assigned to this preset
