@@ -2368,6 +2368,21 @@ Format your responses using markdown for better readability and organization.`;
     } catch (error) {
       console.error('Server error:', error);
       res.status(500).json({ message: "Failed to process message" });
+    } finally {
+      // Clean up resources if needed
+      console.log("Message processing complete");
+    }
+  });
+
+  // Add a proper finally block to fix the unclosed try
+  app.post("/api/test-endpoint", async (req, res) => {
+    try {
+      res.json({ message: "This is a test endpoint with proper try/catch/finally" });
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ message: "Error" });
+    } finally {
+      console.log("Test endpoint finally block");
     }
   });
 
