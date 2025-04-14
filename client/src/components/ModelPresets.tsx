@@ -212,7 +212,7 @@ export const ModelPresets = () => {
       'openai/o1-mini (2024-09-12)',
       'openai/o3-mini',
       'openai/o3-mini-high',
-      'perplexity/r1-1776',
+      'anthropic/claude-3-opus',
       'anthropic/claude-3.7-sonnet-thinking',
       'deepseek/r1-zero',
       'deepseek/r1',
@@ -298,7 +298,7 @@ export const ModelPresets = () => {
       modelId = 'openai/o3-mini-high'; // Map reasoning to o3 Mini
       console.log(`Mapped legacy 'reasoning' type to OpenRouter model: ${modelId}`);
     } else if (modelId === 'search') {
-      modelId = 'perplexity/sonar-pro'; // Map search to Sonar Pro
+      modelId = 'anthropic/claude-3-haiku'; // Map search to Claude 3 Haiku
       console.log(`Mapped legacy 'search' type to OpenRouter model: ${modelId}`);
     }
     
@@ -450,7 +450,7 @@ export const ModelPresets = () => {
                   {modelId ? (
                     <span className="truncate max-w-[100px]">
                       {modelId === 'reasoning' ? 'o3 Mini H' : 
-                       modelId === 'search' ? 'Sonar Pro' : 
+                       modelId === 'search' ? 'Claude 3 Haiku' : 
                        modelId === 'openai/o3-mini-high' ? 'o3 Mini H' :
                        formatModelName(modelId)}
                     </span>

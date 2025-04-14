@@ -105,7 +105,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
     }
     
     if (modelId === 'search') {
-      return 'Sonar Pro';
+      return 'Claude 3 Haiku';
     }
     
     // Extract the model name from the fully qualified ID
@@ -127,6 +127,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
         .replace("o3-mini-high", "o3 Mini H")
         .replace("o3-mini", "o3 Mini")
         .replace("sonar-pro", "Sonar Pro")
+        .replace("claude-3-haiku", "Claude 3 Haiku")
         .replace("gpt-3.5", "GPT-3.5")
         .replace("-preview", "")
         .replace("-latest", "")
