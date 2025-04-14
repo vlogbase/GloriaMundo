@@ -232,10 +232,10 @@ export const ModelPresetsProvider: React.FC<{ children: ReactNode }> = ({ childr
       return 'Gemini 2.5 Pro'; // Added for new preset 1 default
     } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
-    } else if (normalizedId === 'perplexity/sonar-pro') {
-      return 'Sonar Pro';
-    } else if (normalizedId === 'perplexity/sonar-reasoning-pro') {
-      return 'Sonar Reasoning';
+    } else if (normalizedId === 'anthropic/claude-3-haiku') {
+      return 'Claude 3 Haiku';
+    } else if (normalizedId === 'anthropic/claude-3-opus') {
+      return 'Claude 3 Opus';
     } else if (normalizedId.includes('x-ai/grok-2-1212')) {
       return 'Grok 2';
     } else if (normalizedId.includes('openai/gpt-4o')) {
@@ -494,10 +494,10 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
       return 'Gemini 2.5 Pro'; // Added for new preset 1 default
     } else if (normalizedId.includes('google/gemini-2.0-flash-001')) {
       return 'Gemini 2.0 Flash';
-    } else if (normalizedId === 'perplexity/sonar-pro') {
-      return 'Sonar Pro';
-    } else if (normalizedId === 'perplexity/sonar-reasoning-pro') {
-      return 'Sonar Reasoning';
+    } else if (normalizedId === 'anthropic/claude-3-haiku') {
+      return 'Claude 3 Haiku';
+    } else if (normalizedId === 'anthropic/claude-3-opus') {
+      return 'Claude 3 Opus';
     } else if (normalizedId.includes('x-ai/grok-2-1212')) {
       return 'Grok 2';
     } else if (normalizedId.includes('openai/gpt-4o')) {
@@ -548,7 +548,10 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
   const activatePreset = (presetKey: keyof ModelPresets): string | null => {
     const modelId = presets[presetKey];
     setActivePreset(presetKey);
-    setActiveFreeTierModel(null); // Deactivate free tier when preset is activated
+    
+    // We don't clear the activeFreeTierModel anymore to keep track of the last used free model
+    // But we do visually deactivate it in the UI by setting activePreset
+    
     return modelId;
   };
 
@@ -556,9 +559,16 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
   const activateFreeTierModel = (modelId: string): void => {
     setActiveFreeTierModel(modelId);
     setActivePreset(null); // Deactivate preset when free tier is activated
+    
+    // Store the free model ID in a cookie for persistence
+    if (modelId) {
+      setLastUsedFreeModel(modelId);
+      cookieUtils.set(LAST_FREE_MODEL_COOKIE, modelId, { expires: 365 }); // Save for 1 year
+      console.log(`Saved free model to cookie: ${modelId}`);
+    }
   };
 
-  return {
+  const value = {
     presets,
     isLoading,
     isPending,
@@ -572,4 +582,6 @@ export const useStandaloneModelPresets = (): ModelPresetsContextType => {
     formatModelName,
     normalizeModelId
   };
+
+  return value;
 };
