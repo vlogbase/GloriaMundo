@@ -235,7 +235,7 @@ export const MessageActions = ({ message }: MessageActionsProps) => {
               <p className="font-medium mb-1">Model information</p>
               <p className="text-xs mb-2 text-muted-foreground">
                 {message.modelId === 'reasoning' ? 'openai/o3-mini-high (Reasoning)' :
-                 message.modelId === 'search' ? 'perplexity/sonar-pro (Search)' :
+                 message.modelId === 'search' ? 'anthropic/claude-3-haiku (Search)' :
                  message.modelId}
               </p>
               

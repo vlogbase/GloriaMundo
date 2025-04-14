@@ -29,7 +29,7 @@ const defaultPresets: ModelPresets = {
   preset2: 'anthropic/claude-3.7-sonnet',          // All models preset 2
   preset3: 'openai/o3-mini-high',                  // Reasoning preset
   preset4: 'openai/gpt-4o',                        // Multimodal preset
-  preset5: 'perplexity/sonar-pro'                  // Search preset
+  preset5: 'anthropic/claude-3-haiku'              // Search preset
 };
 
 interface ModelPresetsContextType {
